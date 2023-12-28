@@ -36,6 +36,13 @@
     - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
   - [Adding Babylon.js](#adding-babylonjs)
     - [Configuring Esbuild to use npm](#configuring-esbuild-to-use-npm)
+  - [Creating two esbuild targets](#creating-two-esbuild-targets)
+  - [Creating two Phoenix Layouts](#creating-two-phoenix-layouts)
+- [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
+- [Using RXJS](#using-rxjs)
+- [Adding WebRTC](#adding-webrtc)
+  - [Adding Agora](#adding-agora)
+  - [Spatial Voice Audio](#spatial-voice-audio)
 
 
 ## What this book is about
@@ -340,6 +347,7 @@ That strange looking `.link` thing looks like an HTML tag but it's actually a Ph
 
 Once we navigate to the `/rooms` page, we still see the Phoenix default header at the top of the page.  This is defined in the layout files.  Let's change those too.  My version of Phoenix, 1.7, contains two layers of layout files: `app.html.heex` and `root.html.heex`
 
+```bash
 ├── lib
 │   ├── xr_web
 │   │   ├── components
@@ -348,6 +356,7 @@ Once we navigate to the `/rooms` page, we still see the Phoenix default header a
 │   │   │   │   ├── app.html.heex
 │   │   │   │   └── root.html.heex
 │   │   │   └── layouts.ex
+```
 
 We'll want to retain important parts of it so that flash messages still work, so don't delete that.  For now I'll replace `app.html.heex` with:
 
@@ -505,7 +514,7 @@ Just add this line underneath that socket like this in `endpoint.ex`:
   socket "/live", XrWeb.UserSocket, websocket: [connect_info: [session: @session_options]]
 ```
 
-Back in user_socket.ex comment out the default `use` macro and replace with this:
+Back in user_socket.ex comment out the default `use Phoenix.Socket` macro and replace with `use Phoenix.LiveView.Socket`.  This allows `UserSocket` to share the `LiveView` Socket:
 
 ```elixir
   # use Phoenix.Socket
@@ -556,21 +565,34 @@ channel.join()
 }
 ```
 
-If you now navigate to any room you previously created and inspect the Phoenix logs you will see something like this:
+Since this code we added to `app.js` is only evaluated once during a full page load, it will not execute when LiveView uses it's clever push state navigation from `/rooms` to `/rooms/:my_room_id` because it only loads the parts of pages that change.
 
-```
-[debug] HANDLE PARAMS in XrWeb.RoomLive.Show
-  Parameters: %{"id" => "e6373f97-76cb-462b-a1b0-31b8d20cc7ce"}
-[debug] QUERY OK source="rooms" db=0.8ms idle=1610.7ms
-SELECT r0."id", r0."name", r0."description", r0."inserted_at", r0."updated_at" FROM "rooms" AS r0 WHERE (r0."id" = $1) ["e6373f97-76cb-462b-a1b0-31b8d20cc7ce"]
-↳ XrWeb.RoomLive.Show.handle_params/3, at: lib/xr_web/live/room_live/show.ex:16
-[debug] Replied in 1ms
-room_id: "e6373f97-76cb-462b-a1b0-31b8d20cc7ce"
-[info] JOINED room:e6373f97-76cb-462b-a1b0-31b8d20cc7ce in 47µs
-  Parameters: %{}
+We can see LiveView links at play by opening up the template `lib/xr_web/liv/room_live/index.html.heex` that renders a list of rooms.
+
+```html
+<:action :let={{_id, room}}>
+  <div class="sr-only">
+    <.link navigate={~p"/rooms/#{room}"}>Show</.link>
+  </div>
+  <.link patch={~p"/rooms/#{room}/edit"}>Edit</.link>
+</:action>
 ```
 
-And the browser `console.log` output will show:
+Change `navigate` to `href` and we'll get the regular full page load behavior.  Also remove the `<div class="sr-only">` tags because that hides the link, and we want it to show so we can click on the "Show" link.  And finally remove the line `row_click={fn {_id, room} -> JS.navigate(~p"/rooms/#{room}") end}` on the `<.table>` component itself because it causes any click anywhere on the row to also use a push state navigation.  You should end up with a table like this:
+
+```html
+<.table id="rooms" rows={@streams.rooms}>
+  <:col :let={{_id, room}} label="Name"><%= room.name %></:col>
+  <:col :let={{_id, room}} label="Description"><%= room.description %></:col>
+  <:action :let={{_id, room}}>
+    <.link href={~p"/rooms/#{room}"}>Show</.link>
+
+    <.link patch={~p"/rooms/#{room}/edit"}>Edit</.link>
+  </:action>
+  ...
+```
+
+If you now navigate to any room you previously created and inspect the browser's console logs you should see:
 
 ```
 Joined Successfully
@@ -580,7 +602,7 @@ Congrats!  That was a lot of stuff, but we now have our front-end connected over
 
 ### Send and Receive a Test Message
 
-We don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a dirty little test so we can be satisfied at our progress.  In app.js where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browsers console.
+We don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a dirty little test so we can be satisfied at our progress.  In `app.js` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browsers console.
 
 ```javascript
 let channel = liveSocket.channel(`room:${room_id}`, {})
@@ -626,7 +648,7 @@ If we look into room_channel.ex you'll notice that there are already two handle_
   end
 ```
 
-Let's change our message that we sent from the browsers' console to this:
+Let's change our message that we sent from the browser's console to this:
 
 ```javascript
 channel.push("shout", {time: new Date()})
@@ -653,9 +675,121 @@ We now have our first browser to browser interaction and it forms the basis of b
 
 ## Securing the WebSocket
 
+At this point we've proven that we can send messages back and forth from one browser to another.  We've sort of played it fast and loose so let's go back and tidy a few things up.  Phoenix provides a way of doing authentication in the `UserSocket`.  You may have noticed code snippets in the code generated in `user_socket.js` that tells us what to add.  The basic idea is that our backend will send a bit of encrypted data to the front-end such as the user's id.  And when we connect to the socket from the front-end we'll send that encrypted data back to the server.  In the `UserSocket` module we'll then unencrypt the data, retrieving the user_id and sticking it into the socket so that it's available in the `RoomChannel`.  But first we'll need a user_id.
 
 ### Creating a unique id per visitor
-We'll defer creating a full fledged login system until later.  But for now, we need a way give each visitor a unique id so that we can tell one person from another.
+
+We'll defer creating a full fledged login system until later.  But for now, we need a way give each visitor a unique id so that we can tell one person from another.  We'll also use the user_id as the bit of data to send back and forth for authentication.
+
+Open up `router.ex` and type the following function:
+
+```elixir
+ def maybe_assign_user_id(conn, _) do
+    case get_session(conn, :user_id) do
+      nil ->
+        user_id = Ecto.UUID.generate()
+        conn |> put_session(:user_id, user_id) |> assign(:user_id, user_id)
+
+
+      existing_id ->
+        conn |> assign(:user_id, existing_id)
+    end
+  end
+```
+
+This function takes a conn (some kind of connection struct), and some options that we don't care about.  Then creates a new conn that adds a user_id into the cookie session, but only if it wasn't there already.
+
+We'll add this plug into the browser pipeline:
+
+```elixir
+pipeline :browser do
+  plug :accepts, ["html"]
+  ...
+  #add it at the end
+  plug :maybe_assign_user_id
+end
+```
+
+Now every visitor to the website will get a unique user_id in the session that will persist unless they clear their cookies and they haven't had to login or register.
+
+Let's add another plug in `router.ex` for creating an encrypted token from the user_id
+
+```elixir
+ defp put_user_token(conn, _) do
+   if user_id = conn.assigns[:user_id] do
+     token = Phoenix.Token.sign(conn, "some salt", user_id)
+     assign(conn, :user_token, token)
+   else
+     conn
+   end
+ end
+```
+
+Again, add this plug in the browser pipeline:
+
+```elixir
+pipeline :browser do
+  plug :accepts, ["html"]
+  ...
+  #add it at the end
+  plug :maybe_assign_user_id
+  plug :put_user_token
+end
+```
+
+Now we need to pass this token to JavaScript. We could add a snippet of javascript to set the token on the window object, but I'm paranoid that the evaluation order of script tags makes this vulnerable to race conditions.  I'll side step the paranoia by just injecting the token into the HTML at `root.html.heex` layout.  This is also what Phoenix itself does with the csrf_token.
+
+```html
+<meta name="user-token" content={assigns[:user_token]} />
+```
+
+Then when we make the liveSocket in `app.js` let's grab it and pass it in the `LiveSocket` constructor options.  Again this is following what Phoenix does with the csrf_token.  Your `liveSocket` should look like this:
+
+```javascript
+let userToken = document
+  .querySelector("meta[name='user-token']")
+  .getAttribute("content");
+
+let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToken, _user_token: userToken}});
+```
+
+Now we open up `user_socket.ex` and replace the default `connect` function with this snippet that will verify the user token:
+
+```elixir
+def connect(%{"_user_token" => token}, socket, _connect_info) do
+  case Phoenix.Token.verify(socket, "some salt", token, max_age: 1_209_600) do
+    {:ok, user_id} ->
+      {:ok, assign(socket, user_id: user_id)}
+
+    {:error, _reason} ->
+      :error
+  end
+end
+```
+
+Since the socket is assigned the user_id, we should now be able to access the user_id from the `RoomChannel`.
+
+Open up `room_channel.ex` and modify `join` function to be like this:
+
+```elixir
+  def join("room:" <> room_id, _payload, socket) do
+    send(self(), :after_join)
+    {:ok, assign(socket, :room_id, room_id)}
+  end
+```
+The `join` function, on a successful operation should return a tuple with `{:ok, socket}`.  Here we are adding the room_id into the socket so we have some memory to use in other handlers.  `user_id` is already in the socket assigns thanks to the `UserSocket` putting it in there (we did that!).
+
+This `send` function is a built in function that will send a message to any process.  In this case we're sending a message to ourselves right after we've joined.  Once we've joined, (and not before) we can utilize the channel APIs like push, broadcast etc.  We need to add a new handler to handle the `:after_join` message.
+
+```elixir
+
+  @impl true
+  def handle_info(:after_join, socket) do
+    broadcast(socket, "shout", %{user_id: socket.assigns.user_id, joined: socket.assigns.room_id})
+    {:noreply, socket}
+  end
+```
+We're broadcasting to all the connected clients of this room that a new user has joined and printing out the user_id and the room_id.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  To see a different user_id, one of your browsers can use Incognito mode, or use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
 
 ## Adding Babylon.js
 
@@ -666,10 +800,10 @@ Phoenix comes with a wrapped version of esbuild with some tucked away defaults. 
 
 Esbuild will by default produce a bundle of javascript that is a single file wrapped in an immediately invoked function expression so that its internal variables cannot be accessed from the world outside.  Since we'll have other pages that do not need to contain code pertaining to 3D and Babylon, we can create two bundles.  One for immersive VR, and one for everything else.
 
-Creating two esbuild targets
+## Creating two esbuild targets
 
 
-Creating two Phoenix Layouts
+## Creating two Phoenix Layouts
 
 We'll also create two Phoenix layouts.  One to hold all the cdns of babylonjs dependencies as well as the alternate esbuild bundle.  And one for our lightweight version of our bundle.
 
@@ -682,6 +816,17 @@ Create the lighting
 Create the scene
 
 Create a box
+
+# Enabling Immersive VR Mode
+
+# Using RXJS
+
+# Adding WebRTC
+
+## Adding Agora
+
+## Spatial Voice Audio
+
 
 
 

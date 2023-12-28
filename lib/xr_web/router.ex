@@ -8,6 +8,28 @@ defmodule XrWeb.Router do
     plug :put_root_layout, html: {XrWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :maybe_assign_user_id
+    plug :put_user_token
+  end
+
+  def maybe_assign_user_id(conn, _) do
+    case get_session(conn, :user_id) do
+      nil ->
+        user_id = Ecto.UUID.generate()
+        conn |> put_session(:user_id, user_id) |> assign(:user_id, user_id)
+
+      existing_id ->
+        conn |> assign(:user_id, existing_id)
+    end
+  end
+
+  defp put_user_token(conn, _) do
+    if user_id = conn.assigns[:user_id] do
+      token = Phoenix.Token.sign(conn, "some salt", user_id)
+      assign(conn, :user_token, token)
+    else
+      conn
+    end
   end
 
   pipeline :api do

@@ -2,14 +2,9 @@ defmodule XrWeb.RoomChannel do
   use XrWeb, :channel
 
   @impl true
-  def join("room:" <> room_id, payload, socket) do
-    IO.inspect(room_id, label: "room_id")
-
-    if authorized?(payload) do
-      {:ok, socket}
-    else
-      {:error, %{reason: "unauthorized"}}
-    end
+  def join("room:" <> room_id, _payload, socket) do
+    send(self(), :after_join)
+    {:ok, assign(socket, :room_id, room_id)}
   end
 
   # Channels can be used in a request/response fashion
@@ -27,8 +22,9 @@ defmodule XrWeb.RoomChannel do
     {:noreply, socket}
   end
 
-  # Add authorization logic here as required.
-  defp authorized?(_payload) do
-    true
+  @impl true
+  def handle_info(:after_join, socket) do
+    broadcast(socket, "shout", %{user_id: socket.assigns.user_id, joined: socket.assigns.room_id})
+    {:noreply, socket}
   end
 end

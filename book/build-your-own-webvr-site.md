@@ -1,5 +1,43 @@
 # Build Your Own Immersive VR Enabled Website for Fun and Profit
 
+- [Build Your Own Immersive VR Enabled Website for Fun and Profit](#build-your-own-immersive-vr-enabled-website-for-fun-and-profit)
+  - [What this book is about](#what-this-book-is-about)
+  - [Who is this book for?](#who-is-this-book-for)
+  - [Why this particular set of technologies?](#why-this-particular-set-of-technologies)
+    - [A-frame](#a-frame)
+    - [Three.js](#threejs)
+    - [Babylon.js](#babylonjs)
+    - [Node on the backend](#node-on-the-backend)
+    - [Phoenix/Elixir backend](#phoenixelixir-backend)
+  - [Why not use off the shelf VR as a Service?](#why-not-use-off-the-shelf-vr-as-a-service)
+- [Preparing your development workstation](#preparing-your-development-workstation)
+  - [Install Elixir](#install-elixir)
+  - [Add a variable in your shell profile to preserve iex history.](#add-a-variable-in-your-shell-profile-to-preserve-iex-history)
+  - [Install docker and docker-compose.](#install-docker-and-docker-compose)
+  - [Install vscode.](#install-vscode)
+  - [Install Phoenix](#install-phoenix)
+  - [Create Your Project Directory](#create-your-project-directory)
+  - [Create a Postgres Database Server](#create-a-postgres-database-server)
+  - [Summary](#summary)
+- [Creating rooms](#creating-rooms)
+  - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
+  - [Remove the Default Heading](#remove-the-default-heading)
+  - [Enable Room Specific Communication](#enable-room-specific-communication)
+    - [Here's some basic concepts:](#heres-some-basic-concepts)
+    - [Create a User Socket](#create-a-user-socket)
+    - [Create a Room Channel](#create-a-room-channel)
+    - [Let UserSocket Know About RoomChannel](#let-usersocket-know-about-roomchannel)
+    - [Modify RoomChannel Join function](#modify-roomchannel-join-function)
+    - [Sharing the liveview socket](#sharing-the-liveview-socket)
+    - [Join the Room Channel](#join-the-room-channel)
+    - [Conditionally Join Channel When We're In a Room](#conditionally-join-channel-when-were-in-a-room)
+    - [Send and Receive a Test Message](#send-and-receive-a-test-message)
+  - [Securing the WebSocket](#securing-the-websocket)
+    - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
+  - [Adding Babylon.js](#adding-babylonjs)
+    - [Configuring Esbuild to use npm](#configuring-esbuild-to-use-npm)
+
+
 ## What this book is about
 
 This book is a step-by-step guide to building a website that is also a platform for WebXR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime that acts like an operating system), WebRTC (voice chat and video streams) and Phoenix Channels (other realtime communications).  I'll take you through the steps of starting a new project from the very first commit.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  We'll build a basic first person shooter/escape room style game from first principles.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Oculus Quest.
@@ -87,8 +125,16 @@ Read the asdf instructions for installing Erlang and Elixir, they'll have the la
 If all goes well, you should be able to open up a terminal and check which version of elixir you have installed like this:
 
 ```bash
+erl -s erlang halt
+Erlang/OTP 26 [erts-14.2] [source] [64-bit] [smp:32:32] [ds:32:32:10] [async-threads:1] [jit:ns]
+
 elixir -v
+Erlang/OTP 26 [erts-14.2] [source] [64-bit] [smp:32:32] [ds:32:32:10] [async-threads:1] [jit:ns]
+
+Elixir 1.15.7 (compiled with Erlang/OTP 26)
 ```
+
+
 
 ## Add a variable in your shell profile to preserve iex history.
 
@@ -125,7 +171,7 @@ https://hexdocs.pm/phoenix/installation.html
 mix local.hex
 mix archive.install hex phx_new
 ```
-
+I'm using Phoenix 1.7.10.  You should use the same versions as I am using if you want to follow along.  I assume the code generators will produce the same code for you as it does for me.
 
 ## Create Your Project Directory
 An empty Phoenix project will serve as the home for all of our code.  We'll start with a self-sufficient monolith, and only reach for other technologies when the need arises.
@@ -138,7 +184,7 @@ The command below will create a project folder for us.  I named my project xr, b
  mix phx.new xr --binary-id
 ```
 
-Ignore the lengthly output for just a moment.  We'll need to create a database first.
+Ignore the lengthly output for just a moment.  We'll need to make sure Phoenix has access to a Postgres database before we can proceed with the instructions it output.
 
 ## Create a Postgres Database Server
 
@@ -167,19 +213,21 @@ volumes:
 ```
 
 
-Assuming you have docker and docker-compose or docker desktop already installed, run `docker-compose up -d` 
+Assuming you have docker and docker-compose or docker desktop already installed, run `docker-compose up -d`.  This will download the postgres image from dockerhub and initialize it with the default user and password.
 
 Check that the database image container is running with `docker ps`
 
 Now you can run the rest of the project instructions:
 
- `mix ecto.create`
+```bash
+mix ecto.create
+```
 
 This will create a development database (a logical database) within your docker postgres database container.  
 
 Then start your server using `iex -S mix phx.server`
 
-If you're on linux you may also get an error about needing inotify-tools, in which case follow the links to install that for live-reload.
+If you're on linux you may also get an error about needing `inotify-tools`, in which case follow the links to install that for live-reload.
 
 ## Summary
 
@@ -251,9 +299,9 @@ If you run your server and visit http://localhost:4000/rooms you should see a CR
 
 If you go to http://localhost:4000, you'll see that the homepage still shows the Phoenix default welcome page.  We don't need that anymore.  We can customize that page by first locating the path in the `router.ex` file.
 
-This line `get "/", PageController, :home` specifies that the `PageController` module and `home` function is responsible for handling that path.  Inside that home function is a render function that specifies a `:home` template.
+This line `get "/", PageController, :home` specifies that the `PageController` module and `home` function is responsible for handling the "/" default path.  Inside that home function is a render function that specifies a `:home` template.
 
-And here I'll just say that there is some handwavy Phoenix magic happening that delegates to a view module with the same prefix as our controller, `PageHTML`, that hooks up the ability to define page templates in a folder.  Open up page_html.ex and see this line: 
+And here I'll just say that there is some handwavy Phoenix magic happening that hooks up a `home.html.heex` template to this controller by way of a `PageHTML`.  Open up `page_html.ex` and see a module containing this line: 
 
 ```elixir
 embed_templates "page_html/*"
@@ -262,13 +310,13 @@ Look for the template located at `controllers/page_html/home.html.heex` and you'
 
 Suffice to say that for any new controllers that we add, we'll just follow this directory and file naming convention and it should all "just work".  Or we can use the Phoenix controller generators and they will generate this boiler plate for us.
 
-Go ahead and replace the contents of home.html.heex with something simple like:
+Go ahead and replace the contents of `home.html.heex` with something simple like:
 
 ```html
 <h1>Welcome to the XR Space</h1>
 ```
 
-If you look at `http://localhost:4000` now, we see our homepage is now updated but it looks absolutely atrocious.  The H1 doesn't look bolded or centered, which would be the normal behavior even for an unstyled webpage since the browser adds some user-agent styling to basic elements.  The reason why we're not seeing it is because Phoenix now with tailwind by default, a css framework and it stripes out ALL default formatting for every element so even the `<h1>` tag will render as plain text only.
+If you look at `http://localhost:4000` now, we see our homepage is now updated but it looks absolutely atrocious.  The H1 doesn't look bolded or centered, which would be the normal behavior even for an unstyled webpage since the browser adds some user-agent styling to basic elements.  The reason why we're not seeing it is because Phoenix now ships with tailwind by default, a css framework and it stripes out ALL default formatting for every element so even the `<h1>` tag will render as plain text only.
 
 If we add this:
 
@@ -278,7 +326,7 @@ If we add this:
 </h1>
 ```
 
-Now it looks a little better.  I am not a CSS guru, but they say the utility classes that come with CSS help folk to learn CSS even better.  Whatevs, I'm hoping Google or ChatGPT or Codeium (vscode plugin for AI completion) can help me write tailwind.
+Now it looks a little better.  I am not a CSS guru, but they say the utility classes that ship with tailwind help folks to learn CSS even better.  Whatevs, I'm hoping Google or ChatGPT or Codeium (vscode plugin for AI completion) can help me write tailwind.
 
 For now let's at least have a basic link on our homepage link over to our rooms index page so that we can pick a room and jump into it:
 
@@ -321,13 +369,117 @@ Now that we have a landing page for a particular room at `/rooms/some-room-id-ra
 
 We don't have much of a UI in our room yet, but don't worry we don't need it yet.  Let's just get the backend mechanics set up so we can send and receive messages.
 
-Here's some basic concepts:
+### Here's some basic concepts:
 
-In javascript land we're going to connect to a web socket at an address hosted by the server.  When we connect to the socket we send some initial data from the front-end so the server can authenicate us (we wouldn't want just anybody to be able to connect to our server right?).  We're also going to join a channel which is "made" from the socket.  A channel is kind of a data/communication/connection abstraction built on top of the socket.  In fact, if we wanted to we could create multiple channels and all of them would be multiplexed over the same socket. A channel is basically an event machine.  It listens to messages directed at it, and then runs some code to update its state and either reply or maybe not reply.  The javascript side is nearly a mirror of this setup.  The javascript client joins a channel and can subscribe or listen to messages that come from the server and also push messages to the channel, so it's a two way street.
+In javascript land we're going to connect to a web socket at an address hosted by the server.  
+
+```
+clientA -> connect to -> Server Socket
+```
+
+When we connect to the socket we send some initial data from the front-end so the server can authenicate us (we wouldn't want just anybody to be able to connect to our server, right?).  We're also going to join a channel which is "made" from the socket.  
+
+```
+clientA -> join -> Channel
+clientB -> connect to -> Server Socket
+clientB -> join -> Channel
+```
+
+A channel is basically an event machine.  In Elixir it's a process for each connected client.  It's some mechanism that listens to messages directed at a specific "topic" and does something.
+
+```
+clientA -> push message -> Channel
+clientB -> push message -> Channel
+```
+
+Depending on the message, it can decide to update its state and either reply or maybe not reply.  The javascript side is nearly a mirror of this setup.  The javascript client joins a channel and can subscribe or listen to messages that come from the server and also push messages to the channel, so it's a two way street.
+
+The really cool part is that Channels also include apis for broadcasting to all clients connected to the channel.  So if there are multiple browsers connected to the same room, they all get a copy of the message.  And this happens easily do to Phoenix PubSub which can forward messages between channels (which are Elixir processes) just as easily on distributed machines as it can on one machine.  Of course you can call any kind of code you want to in the Channel, but mainly we'll be using it to sync messages between our connected players in our meeting rooms.
+
+```
+clientB <- receives message from client A <- Broadcasted message from the Channel
+```
+
+### Create a User Socket
+
+Ok, enough theory let's create this socket thing.  Fortunately phoenix includes a generator for that too.  Run this command in your terminal in your projects root folder but don't follow the instructions it spits out in the terminal.  We'll be doing something slightly different since we already have a liveview socket so we can piggy back on.  In other words the generator created a new js client and wants us to add a new endpoint, however we can just share the liveview socket that so that our front-end client doesn't need to join two different sockets.
+
+```bash
+mix phx.gen.socket User
+```
+This creates two files.  
+
+```bash
+* creating lib/xr_web/channels/user_socket.ex
+* creating assets/js/user_socket.js
+```
+We're going to merge the javascript code in `user_socket.js` into `app.js` in moment.  Right now app.js is our only entry point.  It's the only file that is included in our layout.  We'll go back and clean all this javascript up in a later chapter I promise.  For right now let's get a quick win by demonstrating we can send messages between clients.
+
+### Create a Room Channel
+
+But first, we need to create a room channel.  And wouldn't you know it, there's a generator for that too.  Run this in the terminal as well.
+
+```bash
+mix phx.gen.channel Room
+```
+The autogenerated code in the user_socket.ex and room_channel.ex are 90% there, we just need to make a few tweaks.
+
+### Let UserSocket Know About RoomChannel
+
+Open `lib/xr_web/channels/user_socket.ex` and add this line:
+
+```elixir
+  channel "room:*", XrWeb.RoomChannel
+```
+In fact, that line might be there already, just uncomment it.  This "room:*" means that the `RoomChannel` module will spawn new processes whenever a client joins a channel with the topic starting with "room:" e.g. "room:42".
+
+### Modify RoomChannel Join function
+
+Let's also modify the join function in the `room_channel.ex`
+
+The generator created code that looks like this: 
+
+```elixir
+  def join("room:lobby", payload, socket) do
+    if authorized?(payload) do
+      {:ok, socket}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
+  end
+```
+
+Notice the pattern "room:lobby".  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
+
+
+```elixir
+  def join("room:" <> room_id, payload, socket) do
+    IO.inspect(room_id, label: "room_id")
+    if authorized?(payload) do
+      {:ok, socket}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
+  end
+```
+Every new room id will launch a new process for every connected client.
+
+This `"room:" <> room_id` means we are pattern matching on a string that starts with "room:" followed by a variable that will match the rest of the string.  
+
+Here's an example of this kind of pattern matching happening for "=" operator.
+
+```elixir
+iex(1)> "room:" <> room_id = "room:42"
+"room:42"
+iex(2)> room_id
+"42"
+```
+
+The same kind of pattern matching is applied to function heads like `join` and in this case we're storing `room_id` then printing it out for fun in the `IO.inspect` part.
 
 ### Sharing the liveview socket
 
-It turns out that liveview, the same technology that is rendering the HTML for our modal that was just generated when we created the rooms Liveview CRUD pages, already comes with a web socket to send little diffs to the front-end to render components without re-rendering the whole page.
+It turns out that Phoenx Liveview already comes with a web socket to send data diffs to the front-end to render components without re-rendering the whole page.  We've been using it already, the generate that we used to create the CRUD pages for rooms uses Liveview.
 
 Look inside `assets/js/app.js`
 
@@ -336,226 +488,179 @@ let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToke
 
 ```
 
-app.js created a LiveSocket.  The "/live" part references this endpoint defined in `endpoint.ex`
+The "/live" part references this endpoint defined in `endpoint.ex`
 
 ```elixir
 socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
 
 ```
 
-We can reuse this endpoint so that our front-end javascript code does not need to create an additional web socket.
+We can reuse this endpoint so that our front-end javascript code does not need to create an additional web socket just for our `UserSocket`.
 
-
-<!--
- All channels will have their message multiplexed over the socket.
-
- this.socket.connect();
-
-    // Now that you are connected, you can join channels with a topic.
-    // Let's assume you have a channel with a topic named `room` and the
-    // subtopic is its id - in this case 42:
-    this.channel = this.socket.channel("space:" + this.xrs.config.space_id, {});
-
--->
-
-Let's define a user socket which we'll use to authenticate and also define which channels can be multiplexed over the user socket.
-
+Just add this line underneath that socket like this in `endpoint.ex`: 
 
 ```elixir
-defmodule XrWeb.UserSocket do
-  # use Phoenix.Socket
-  use Phoenix.LiveView.Socket
+  socket "/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]]
 
-  require Logger
-  # A Socket handler
-  #
-  # It's possible to control the websocket connection and
-  # assign values that can be a ccessed by your channel topics.
-
-  ## Channels
-
-  channel "room:*", XrWeb.RoomChannel
-
-  # Socket params are passed from the client and can
-  # be used to verify and authenticate a user. After
-  # verification, you can put default assigns into
-  # the socket that will be set for all channels, ie
-  #
-  #     {:ok, assign(socket, :user_id, verified_user_id)}
-  #
-  # To deny connection, return `:error`.
-  #
-  # See `Phoenix.Token` documentation for examples in
-  # performing token verification on connect.
-  @impl true
-  def connect(%{"_member_token" => token}, socket, _connect_info) do
-    case Phoenix.Token.verify(socket, "salt", token, max_age: 1_209_600) do
-      {:ok, member_id} ->
-        {:ok, assign(socket, member_id: member_id)}
-
-      {:error, reason} ->
-        Logger.error("#{__MODULE__} connect error #{inspect(reason)}")
-        :error
-    end
-  end
-
-  # Socket id's are topics that allow you to identify all sockets for a given user:
-  #
-  #     def id(socket), do: "user_socket:#{socket.assigns.user_id}"
-  #
-  # Would allow you to broadcast a "disconnect" event and terminate
-  # all active sockets and channels for a given user:
-  #
-  #     Elixir.ThexrWeb.Endpoint.broadcast("user_socket:#{user.id}", "disconnect", %{})
-  #
-  # Returning `nil` makes this socket anonymous.
-  @impl true
-  def id(_socket), do: nil
-end
+  socket "/live", XrWeb.UserSocket, websocket: [connect_info: [session: @session_options]]
 ```
 
+Back in user_socket.ex comment out the default `use` macro and replace with this:
 
+```elixir
+  # use Phoenix.Socket
+  use Phoenix.LiveView.Socket
+```
 
+That will allow the `UserSocket` to piggyback on the LiveView socket.
 
-Define our room channel
+### Join the Room Channel
 
-defmodule ThexrWeb.SpaceChannel do
-  use ThexrWeb, :channel
-  alias ThexrWeb.Presence
+Now we'll merge parts of `user_socket.js` into `app.js`
 
+I copied this portion from `user_socket.js` and pasted it into `app.js` right after the `liveSocket.connect()` line, and changed the `socket` variable to `liveSocket`.
+
+```javascript
+let channel = liveSocket.channel("room:42", {})
+channel.join()
+  .receive("ok", resp => { console.log("Joined successfully", resp) })
+  .receive("error", resp => { console.log("Unable to join", resp) })
+```
+
+This code will only ever try to connect to meeting room "42" because it was hardcoded that way.  Let's change that.
+
+### Conditionally Join Channel When We're In a Room
+
+Since our CRUDy room paths follow certain path conventions, e.g. `rooms/:room_id`, when we are navigated to a specific room, we can extract the room id from the browser URL path and pass that as the channel name we want to join, if and only if we detect that pattern in the URL.
+
+```javascript
+// Get the current URL path
+let current_path = window.location.pathname;
+
+// Define a regular expression pattern to match the UUID part
+let room_id_pattern = /^\/rooms\/([^\/]+)$/;
+
+// Use the pattern to extract the UUID
+let matches = current_path.match(room_id_pattern);
+
+// Check if there is a match and get the UUID
+if (matches && matches.length > 1) {
+    let room_id = matches[1];
+    let channel = liveSocket.channel(`room:${room_id}`, {})
+channel.join()
+  .receive("ok", resp => { console.log("Joined successfully", resp) })
+  .receive("error", resp => { console.log("Unable to join", resp) })
+
+} else {
+    console.log("UUID not found in the path.");
+}
+```
+
+If you now navigate to any room you previously created and inspect the Phoenix logs you will see something like this:
+
+```
+[debug] HANDLE PARAMS in XrWeb.RoomLive.Show
+  Parameters: %{"id" => "e6373f97-76cb-462b-a1b0-31b8d20cc7ce"}
+[debug] QUERY OK source="rooms" db=0.8ms idle=1610.7ms
+SELECT r0."id", r0."name", r0."description", r0."inserted_at", r0."updated_at" FROM "rooms" AS r0 WHERE (r0."id" = $1) ["e6373f97-76cb-462b-a1b0-31b8d20cc7ce"]
+↳ XrWeb.RoomLive.Show.handle_params/3, at: lib/xr_web/live/room_live/show.ex:16
+[debug] Replied in 1ms
+room_id: "e6373f97-76cb-462b-a1b0-31b8d20cc7ce"
+[info] JOINED room:e6373f97-76cb-462b-a1b0-31b8d20cc7ce in 47µs
+  Parameters: %{}
+```
+
+And the browser `console.log` output will show:
+
+```
+Joined Successfully
+```
+
+Congrats!  That was a lot of stuff, but we now have our front-end connected over web sockets and a room channel all the way to the backend!  We're ready to send and receive messages!
+
+### Send and Receive a Test Message
+
+We don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a dirty little test so we can be satisfied at our progress.  In app.js where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browsers console.
+
+```javascript
+let channel = liveSocket.channel(`room:${room_id}`, {})
+window.channel = channel
+```
+
+Now back in our browser, (you should be using Chrome Browser), open up the dev tools and in the console tab run this command:
+
+```javascript
+channel.push("hi there")
+```
+This tells the browser to push the message "hi there" to the  `RoomChannel`. You may notice that doing so is immedately causes this message to appear in the console:
+```
+Joined Successfully
+```
+And that's because we caused the `RoomChannel` to crash because it doesn't know how to handle a message like "hi there".  Since the RoomChannel is supervised, when it crashes it is automatically and immediately respawned and our browser simply joins it again.  How awesome is that?
+
+Take a look at the Phoenix logs and you'll see the error that caused the `RoomChannel` process to crash:
+
+```elixir
+[error] GenServer #PID<0.1280.0> terminating
+** (FunctionClauseError) no function clause matching in XrWeb.RoomChannel.handle_in/3
+    (xr 0.1.0) lib/xr_web/channels/room_channel.ex:18: XrWeb.RoomChannel.handle_in("hi there", %{},
+    ...
+    ...
+    
+```
+This error message tells us exactly what we need to do to fix this.  Add a handle_in function that takes 3 arguments where the first argument is the pattern "hi there".
+
+If we look into room_channel.ex you'll notice that there are already two handle_in examples that were autogenerated by the Phoenix generator:
+
+```elixir
+  def handle_in("ping", payload, socket) do
+    {:reply, {:ok, payload}, socket}
+  end
+
+  # It is also common to receive messages from the client and
+  # broadcast to everyone in the current topic (room:lobby).
   @impl true
-  def join("space:" <> space_id, _payload, socket) do
-    send(self(), :after_join)
-    {:ok, %{"agora_app_id" => System.get_env("AGORA_APP_ID")}, assign(socket, space_id: space_id)}
-  end
-
-  # Channels can be used in a request/response fashion
-  # by sending replies to requests from the client
-  @impl true
-  def handle_in("imoved", payload, socket) do
-    ThexrWeb.Space.Manager.process_event(
-      socket.assigns.manager_pid,
-      %{
-        "eid" => socket.assigns.member_id,
-        "set" => %{"avatar_pose" => payload},
-        "tag" => "m"
-      },
-      self()
-    )
-
-    # TODO, cache this in ETS, and then broadcast at some desired interval
-
-    # broadcast_from(socket, "stoc", %{eid: socket.assigns.member_id, set: %{avatar_pos: payload}})
-    # add_location_to_ets(socket, payload)
+  def handle_in("shout", payload, socket) do
+    broadcast(socket, "shout", payload)
     {:noreply, socket}
   end
+```
 
-  def handle_in("ctos", payload, socket) do
-    ThexrWeb.Space.Manager.process_event(socket.assigns.space_id, payload, self())
-    {:noreply, socket}
-  end
+Let's change our message that we sent from the browsers' console to this:
 
-  @impl true
-  def handle_info(:after_join, socket) do
-    case Thexr.Registry.whereis(:manager, socket.assigns.space_id) do
-      nil ->
-        # in dev if server rebooted and open tab reconnects, we should get redirected
-        push(socket, "server_lost", %{})
-        {:noreply, socket}
+```javascript
+channel.push("shout", {time: new Date()})
+```
 
-      manager_pid ->
-        {:ok, _} =
-          Presence.track(socket, socket.assigns.member_id, %{
-            online_at: inspect(System.system_time(:second))
-          })
+This time we sent a message that already had a `handle_in` defined and we added a second argument that is some arbitrary JSON payload I just made up.  The message and payload are broadcast to every connected client.  If we want to see that in javascript land let's add a javascript handler on the channel to react to the incoming message coming from the server.
 
-        # push(socket, "presence_state", Presence.list(socket))
-        socket = assign(socket, :manager_pid, manager_pid)
+Add this to code to `app.js` after the `channel` variable is defined:
+```javascript
+channel.on("shout", payload => {
+    console.log("I received a 'shout'", payload)
+})
+```
 
-        Process.send_after(self(), :send_initial_state, 10)
-        {:noreply, socket}
-    end
-  end
+When the client receives an incoming message "shout" from the server, we'll print it to the console log.
 
-  # avoid race condition between presence track and get_members
-  def handle_info(:send_initial_state, socket) do
-    push(
-      socket,
-      "existing_members",
-      ThexrWeb.Space.Manager.get_members(socket.assigns.manager_pid)
-    )
+Now open up another window/tab in your browser (or use anothe browser) and navigate to the same room URL.  Remember it has to be the same room id.  Place the windows side by side and open up the devtools console in both windows.  You should see that both window consoles show `Joined Successfully`.  Now repeat the 
+```javascript
+channel.push("shout", {time: new Date()})
+``` 
+command as before.  You see that the `I received a 'shout'` message is received across windows.  In order words, when you push a message from a client, the same message is forwarded to every connected client!
 
-    push(socket, "snapshot", ThexrWeb.Space.Manager.get_snapshot(socket.assigns.space_id))
+We now have our first browser to browser interaction and it forms the basis of being able to syncronize more complex payloads like positions and rotations etc, for our future 3D objects in a shared VR space.  We just have to define our message schemas and our handlers in both the `RoomChannel` and the javascript side.
 
-    # test to see if we receive some kind of message when the genserver timesout
-    Process.monitor(socket.assigns.manager_pid)
-    {:noreply, socket}
-  end
-
-  # the moniter
-
-  def handle_info(
-        {:DOWN, _ref, :process, _pid, :shutdown},
-        socket
-      ) do
-    push(socket, "server_lost", %{})
-
-    {:stop, "server_timeout", socket}
-  end
-
-  def handle_info(
-        {:DOWN, _ref, :process, _pid, _reason},
-        socket
-      ) do
-    # ignore other kinds of crashes, supervisor will bring it back up
-    {:noreply, socket}
-  end
-
-  @impl true
-  def terminate(_reason, socket) do
-    # tell the server the channel is disconnected
-    # SpaceServer.process_event(
-    #   socket.assigns.space_id,
-    #   %{
-    #     "eid" => socket.assigns.member_id,
-    #     "ttl" => 0
-    #   },
-    #   self()
-    # )
-
-    push(socket, "server_lost", %{})
-    {:noreply, socket}
-  end
-
-  # def add_location_to_ets(socket, payload) do
-  #   :ets.insert(socket.assigns.ets_ref, {socket.assigns.member_id, payload})
-  # end
-
-  # def lookup_member_poses(socket) do
-  #   :ets.tab2list(socket.assigns.ets_ref)
-  #   |> Enum.reduce(%{}, fn {member_id, payload}, acc ->
-  #     Map.put(acc, member_id, payload)
-  #   end)
-  # end
-end
+## Securing the WebSocket
 
 
+### Creating a unique id per visitor
+We'll defer creating a full fledged login system until later.  But for now, we need a way give each visitor a unique id so that we can tell one person from another.
+
+## Adding Babylon.js
 
 
-
-In the endpoint.ex add:
-
- socket "/live", ThexrWeb.UserSocket, websocket: [connect_info: [session: @session_options]]
-
-Our first interaction between two players in the same room/experience will be to share their physical location and draw a simple box representing each other.  When one player moves around with their cursor keys, the other player should be able to see that other player's box moving around.
-
-Adding Phoenix Presence
-
-Our First 3D Scene
-
-Now that we have landing page for entering into an experience, let's show the user at least one 3D object.  We will lay the foundation for all of our front end graphics and we will continue to build from there.
-
-Configuring Esbuild
+### Configuring Esbuild to use npm
 
 Phoenix comes with a wrapped version of esbuild with some tucked away defaults.  We're going to want to remove that so that we can customize our esbuild configuration.  That way we can load dependencies with package.json and import them into our own typescript code, and then we'll want to ignore some external dependencies so that they aren't bundled into our javascript artifact.  I prefer to download Babylon.js from their CDN.  These libraries don't change as often as our own code and therefore in prod, when we push out changes only our javascript changes would be downloaded and the user would likely already have a cached version of the CDN.
 
@@ -581,7 +686,5 @@ Create a box
 
 
 
-Creating a sticky unique id per visitor
-We'll defer creating a full fledged login system until later.  But for now, we need a way to tracking
 
 

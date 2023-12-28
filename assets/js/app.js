@@ -33,6 +33,33 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
+// Get the current URL path
+let current_path = window.location.pathname;
+
+// Define a regular expression pattern to match the UUID part
+let room_id_pattern = /^\/rooms\/([^\/]+)$/;
+
+// Use the pattern to extract the UUID
+let matches = current_path.match(room_id_pattern);
+
+// Check if there is a match and get the UUID
+if (matches && matches.length > 1) {
+    let room_id = matches[1];
+    let channel = liveSocket.channel(`room:${room_id}`, {})
+    window.channel = channel
+channel.join()
+  .receive("ok", resp => { console.log("Joined successfully", resp) })
+  .receive("error", resp => { console.log("Unable to join", resp) })
+
+channel.on("shout", payload => {
+    console.log("I received a 'shout'", payload)
+})
+
+} else {
+    console.log("UUID not found in the path.");
+}
+
+
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session

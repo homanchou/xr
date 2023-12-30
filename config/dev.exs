@@ -25,7 +25,7 @@ config :xr, XrWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "Ier81ElVhpsXryjCHTAhK0vVMW7ZfP7oCzT8g+z3K1OORBbBUJGzEWyG0f6KAkKw",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]},
+    node: ["build.js", "--watch", cd: Path.expand("../assets", __DIR__)],
     tailwind: {Tailwind, :install_and_run, [:default, ~w(--watch)]}
   ]
 

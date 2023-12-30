@@ -51,24 +51,25 @@ This book is a step-by-step guide to building a website that is also a platform 
 
 ## Who is this book for?
 
-I want to say this book is for everyone that wants to create their own VR enabled website.  Though... software developers that have some experience with full stack web development will probably have the easiest time following this guide.  
+I wish I could say this book is for everyone that wants to create their own VR enabled website.  Though... software developers that have some experience with full stack web development will probably have the easiest time following this guide.  
 
-I assume that the reader is already comfortable with using command lines at a terminal and website concepts like HTML, CSS, and Databases.  It will be helpful to know how to use Git and Docker and some working knowledge of javascript/typescript and Elixir.  I don't spend much time explaining those fundamentals because there are plenty of resources for that already.  
+I assume that the reader is already comfortable with using command lines at a terminal and website concepts like HTML, CSS, and Databases.  It will be helpful to know how to use Git and Docker and some working knowledge of javascript/typescript, Elixir and Phoenix.  I don't spend much time explaining those fundamentals because there are plenty of resources for that already.  Sometimes I explain a little more than I need to, but most times I don't otherwise this guide would be too long.  
 
-Ultimately, web development of any kind is a messy business involving a long list of different technologies that even an experienced web developer has trouble wrangling.  But if you love building experiences and are good at Googling to learn, then let's get started!
+Ultimately, web development of any kind is a messy business involving a long list of different technologies that even  experienced web developers have trouble wrangling.  We all need to Google, all the time.  Like constantly.  But if you love building experiences and are good at pushing through to learn, then let's get started!
 
 ## Why this particular set of technologies?
 
 Indeed there are many ways to accomplish a goal and this is just one possible combination of libraries, languages and tools that bring forth web enabled VR.  I can almost hear the reader asking, "Why not use Node so that you can use javascript on the front-end and the back-end?  Why not use A-frame which is very easy to learn and has a community of plugins.  Why not Three.js?  Why should I learn Elixir and Phoenix?"
 
-There is a lot I wanted to write about how my journey started with those other choices but I moved away from them for various reasons.  Suffice to say, your own mileage may vary, but this bullet list below is a small and incomplete commentary on different technologies that I have tried:
+There is a lot more I wanted to write about how my journey started with those other choices and how my experience caused me to search for alternatives, but I don't want to rant too much so I'll keep it short.  Especially since it might be my own shortcomings as a programmer that caused me to hit a wall with those other solutions.  Suffice to say, your own mileage may vary, but this bullet list below is a small and incomplete commentary on different technologies that I passed through:
 
 ### A-frame
 - Built on Three.js
-- Incredibly approachable, friendly and easy to get started with, less so when you get into advanced behaviors.  
+- Incredibly approachable, friendly and easy to get started with.
+- Great introduction to Entity Component Systems (ECS).
 - Later on I felt it was an unnecessary abstraction using HTML custom elements
 - For any advanced behavior you'll need to drop into Three.js anyway.
-- Someone on a forum stated it best this way: "It makes easy what was already easy, and makes more complex things that are already complex"
+- Someone on a forum stated it best this way: "It makes easy what was already easy, and makes more complex things that are already complex".
 - Mozilla Hubs started with A-frame and decided to move away from it.
 
 ### Three.js
@@ -78,7 +79,7 @@ There is a lot I wanted to write about how my journey started with those other c
 - By extension, the promise of A-frame's library of components failed to live up to its promise for me because I couldn't get code to work together from different A-frame components because of version issues
 
 ### Babylon.js
-- Does pretty much all the things Three.js can do but retains backward compatibility as a core tenant!
+- Does pretty much all the things Three.js can do, but (and it's a huge deal) retains backward compatibility as a core tenant!
 - Has a prototyping playground to share working code or troubleshoot with others
 - Superb community that fixes bugs within 24 hours.
 - Stitching together code from various playgrounds just works as expected.
@@ -98,11 +99,11 @@ There is a lot I wanted to write about how my journey started with those other c
 - Elixir is a language/runtime that acts like a bunch of tiny processes (servers) that can communicate with each other, be distributed etc
 - It has great patterns for supervision, resiliency, and changes the way I think about design.
 - No code can be shared between the frontend and backend.
-- Phoenix has Channels built into the framework as a way to build multiuser communications
-- Phoenix has Liveview to build interactive and pages
+- Phoenix has Channels built into the framework as a way to build multiuser communications.
+- Phoenix has Liveview to build interactive and pages.
 - If one room goes down (crashes) it can be automatically restarted by a supervisor process, and won't impact any other room
-- Mozilla Hubs uses Phoenix Channels and Elixir in their Reticulum Server
-- X-Plane flight simulator uses Elixir in their backend
+- Mozilla Hubs uses Phoenix Channels and Elixir in their Reticulum Server.
+- X-Plane flight simulator uses Elixir in their backend.
 
 
 In summary, I like these tools because I think it positions us in an attractive place to be able to start small and iterate and has features that will allow us to scale horizontally later.
@@ -115,7 +116,7 @@ But there is also a certain amount of vendor lock-in you get when choosing a pla
 
 I miss the days when making a website was simple.  All a developer needed was a server to host a webpage.  A text editor and an ftp client.  Web 1.0 days.  Then came dynamic webpages backed by databases.  Frameworks entered.  So did version control and testing and migrations.  Pretty soon the stakes got higher and so did the barrier to entry.  Web 2.0.  Now we have more realtime communications then ever with realtime messaging, notifications etc.  
 
-Though if we take a step back it's not that bad... (ok it is bad), but it's still the accumulation of tools.  Tools that work for us, and we just need a little know how to figure out how to fit them together.  Fortunately other companies have packaged some of those tools into libraries like Babylon.js and frameworks like Phoenix, that make our job so much easier.
+Though if we take a step back it's not that bad... (ok it is ... a lot of stuff), but it's still the accumulation of tools.  Tools that work for us, and we just need a little know how to figure out how to fit them together.  Fortunately other companies have packaged some of those tools into libraries like Babylon.js and frameworks like Phoenix, that make our job so much easier.
 
 # Preparing your development workstation
 
@@ -125,7 +126,7 @@ If you're on Linux you're already good to go.  If you're on Mac you're fine too.
 
 ## Install Elixir
 
-To develop, we're going to want to install Elixir.  And to install Elixir, we need to also install Erlang.  I highly recommend you install these using asdf so that you can switch versions.  At some point in the future, you'll be working on several projects, or you may check out some old code you wrote a few months back and want to work on it again, only to find that your new computer that you bought has a different version of Elixir than the old project.
+To develop, we're going to want to install Elixir.  And to install Elixir, we need to also install Erlang.  You can follow the Elixir online docs for how to install Elixir for your operating system, though I highly recommend you install these using asdf so that you can switch versions.  At some point in the future, you'll be working on several projects, or you may check out some old code you wrote a few months back and want to work on it again, only to find that your new computer that you bought has a different version of Elixir than the old project.
 
 Read the asdf instructions for installing Erlang and Elixir, they'll have the latest instructions for your system.  When I tried to install the latest Erlang I had an error regarding wxWidgets and had to do some Googling: https://github.com/asdf-vm/asdf-erlang/issues/203 and had to install some other linux dependencies first.
 
@@ -690,14 +691,13 @@ Open up `router.ex` and type the following function:
         user_id = Ecto.UUID.generate()
         conn |> put_session(:user_id, user_id) |> assign(:user_id, user_id)
 
-
       existing_id ->
         conn |> assign(:user_id, existing_id)
     end
   end
 ```
 
-This function takes a conn (some kind of connection struct), and some options that we don't care about.  Then creates a new conn that adds a user_id into the cookie session, but only if it wasn't there already.
+This function (known as a function plug), just follows a certain convention.  It takes a conn (a kind of connection struct), and second argument for some options that we don't care about now.  Then it creates a new conn that adds a user_id into the cookie session, but only if it wasn't there already.  
 
 We'll add this plug into the browser pipeline:
 
@@ -710,9 +710,9 @@ pipeline :browser do
 end
 ```
 
-Now every visitor to the website will get a unique user_id in the session that will persist unless they clear their cookies and they haven't had to login or register.
+Now every visitor to the website will get a unique user_id in their session that will persist unless they clear their cookies and they haven't even had to login or register.  How convenient!
 
-Let's add another plug in `router.ex` for creating an encrypted token from the user_id
+Let's add another function plug in `router.ex` for creating an encrypted token from the user_id
 
 ```elixir
  defp put_user_token(conn, _) do
@@ -725,7 +725,7 @@ Let's add another plug in `router.ex` for creating an encrypted token from the u
  end
 ```
 
-Again, add this plug in the browser pipeline:
+Again, add this plug in the browser pipeline, but put it after our last plug because we depend on user_id being in the `conn.assigns`:
 
 ```elixir
 pipeline :browser do
@@ -791,7 +791,176 @@ This `send` function is a built in function that will send a message to any proc
 ```
 We're broadcasting to all the connected clients of this room that a new user has joined and printing out the user_id and the room_id.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  To see a different user_id, one of your browsers can use Incognito mode, or use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
 
+We have now added basic authentication to our `UserSocket` and we can delete `user_socket.js` because we integrated its javascript code and all its advice.
+
 ## Adding Babylon.js
+
+At this point we not only have browser to browser two way communication, we also have the concept of isolated room communications as well as unique user ids assigned to each user session.  It would now be a good milestone if we can add some frontend graphics.  Let's add the Babylon.js library so that we can create a 3D scene.  We'll draw a couple of objects in the scene just so we have some reference objects.  Without them, it's hard to know if we're moving or not.  Then we'll think of some useful messages to send to the `RoomChannel` whenever we're moving our own camera.  We should be able to see some representation of each client that has joined the room.  For now we can just draw a simple box to represent a another client/user.  Then when we rotate or move ourselves using the mouse to click-and-drag or using the cursor keys, we should be able to see that movement from the other connected browser by seeing their box move around.
+
+There are a couple ways to add Babylon.js to our project:
+
+1. We could do what the babylon playground does and add script HTML tags for each babylon.js dependency into our root layout file.  This would add a global BABYLON object variable.  This is super convenient for experiementation and debugging, but it can also be tampered with.  This way of developing relies on fetching the babylon files from CDNs.  This means that if we lose internet then we can't preview our room page.  So we'll have a harder time trying to program on the plane during a long flight for example.
+2. We can install babylonjs using npm then import it into our js asset files.  That means our esbuild script would be responsible for bundling up all the javascript and creating an immediately invoked function expression (iife).  This makes BABYLON inacessible from other code defined outside of the bundle, including from the browser console.  This also has the added benefit of being able to develope and work on the project without constant internet. The Babylon.js guides also say that they have a set of npm libraries that are ES6 and support treeshaking so that should lead to smaller bundles.  
+
+Let's go with option 2 and use the newer ES6 style of npm packages and let's also use typescript for any new javascript code that we write so we can take advantage of type checking and intellisense.
+
+We'll need to make a few changes to the way Phoenix is handling esbuild.  Phoenix by default wraps esbuild in an Elixir dependency and it doesn't allow plugins.  We'll need to support plugins in order to do make esbuild run type checking.  In case ou don't have node installed yet, these are some instructions that I followed:
+
+
+Install nvm (useful for when you're working on multiple projects with different versions of node):
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+```
+
+Add this to your shell script.
+
+```bash
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+```
+
+Now install the latest node:
+
+```bash
+nvm install node
+```
+
+Now I create a .nvmrc file in this project directory so that we declare which version node we want:
+
+```bash
+echo "v21.5.0" > .nvmrc
+```
+
+That allows us to do this in the project folder:
+
+```bash
+nvm use
+Found '/home/titan/web_projects/xr/.nvmrc' with version <v21.5.0>
+Now using node v21.5.0 (npm v10.2.4)
+```
+
+The following instructions add esbuild as an npm package and replace the Elixir package with a custom build.js script.
+I've modified the instructions from the Phoenix guides to include typescript.  In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.
+
+```bash
+npm install esbuild typescript @jgoz/esbuild-plugin-typecheck --save-dev
+npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
+npm i --save-dev @types/phoenix_live_view @types/phoenix
+```
+
+Add an `assets/build.js` file like this:
+```javascript
+const esbuild = require("esbuild");
+const { typecheckPlugin } = require('@jgoz/esbuild-plugin-typecheck');
+
+
+const args = process.argv.slice(2);
+const watch = args.includes('--watch');
+const deploy = args.includes('--deploy');
+
+const loader = {
+  // Add loaders for images/fonts/etc, e.g. { '.svg': 'file' }
+};
+
+const plugins = [
+  // Add and configure plugins here
+  typecheckPlugin(),
+];
+
+// Define esbuild options
+let opts = {
+  entryPoints: ["js/app.js", "js/room.ts"],
+  bundle: true,
+  logLevel: "info",
+  target: "es2017",
+  outdir: "../priv/static/assets",
+  external: ["*.css", "fonts/*", "images/*"],
+  loader: loader,
+  plugins: plugins,
+};
+
+if (deploy) {
+  opts = {
+    ...opts,
+    minify: true,
+  };
+}
+
+if (watch) {
+  opts = {
+    ...opts,
+    sourcemap: "inline",
+  };
+  esbuild
+    .context(opts)
+    .then((ctx) => {
+      ctx.watch();
+    })
+    .catch((_error) => {
+      process.exit(1);
+    });
+} else {
+  esbuild.build(opts);
+}
+```
+
+Modify config/dev.exs so that the script runs whenever you change files, replacing the existing :esbuild configuration under watchers:
+
+```elixir
+config :hello, HelloWeb.Endpoint,
+  ...
+  watchers: [
+    node: ["build.js", "--watch", cd: Path.expand("../assets", __DIR__)]
+  ],
+  ...
+```
+
+Modify the aliases task in mix.exs to install npm packages during mix setup and use the new esbuild on mix assets.deploy:
+
+```elixir
+  defp aliases do
+    [
+      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      "assets.setup": ["tailwind.install --if-missing", "cmd --cd assets npm install"],
+      "assets.build": ["tailwind default", "cmd --cd assets node build.js"],
+      "assets.deploy": [
+        "tailwind default --minify",
+        "cmd --cd assets node build.js --deploy",
+        "phx.digest"
+      ]
+    ]
+  end
+```
+
+Remove the esbuild configuration from `config/config.exs`.  Remove the esbuild dependency from `mix.exs`.
+
+Unlock the esbuild dependency:
+
+```bash
+mix deps.unlock esbuild
+```
+
+With typescript installed in our project we can invoke it like this to generate a tsconfig.json file for us without needing to install typescript globally:
+
+```bash
+npx -p typescript tsc --init
+```
+
+Note that in the `build.js` file I added an additional entry point `js/room.ts` so we can have type checking and intellisense goodness in vscode.  Add that blank file to `assets/js/room.ts` now.
+
+```bash
+mix assets.build
+```
+
+Look inside `priv/static/assets/` and you should see the bundled js output.  Congrats!  We've just replaced the default Elixir esbuild with our custom esbuild configured for typescript checking.
+
+Now that we've finished the sidequest, that's continue with our main objective installing Babylon.js.
+
+
 
 
 ### Configuring Esbuild to use npm

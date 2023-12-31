@@ -1,14 +1,21 @@
 {
   "dependencies": {
+    "@babylonjs/core": "^6.36.1",
+    "@babylonjs/gui": "^6.36.1",
+    "@babylonjs/inspector": "^6.36.1",
+    "@babylonjs/materials": "^6.36.1",
+    "babylonjs": "^6.36.1",
+    "babylonjs-gui": "^6.36.1",
+    "babylonjs-materials": "^6.36.1",
     "phoenix": "file:../deps/phoenix",
     "phoenix_html": "file:../deps/phoenix_html",
     "phoenix_live_view": "file:../deps/phoenix_live_view"
   },
   "devDependencies": {
+    "@fal-works/esbuild-plugin-global-externals": "^2.1.2",
     "@jgoz/esbuild-plugin-typecheck": "^3.1.0",
     "@types/phoenix": "^1.6.4",
     "@types/phoenix_live_view": "^0.18.4",
-    "esbuild": "^0.19.11",
-    "typescript": "^5.3.3"
+    "esbuild": "^0.19.11"
   }
 }

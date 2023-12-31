@@ -20,6 +20,7 @@
   - [Create a Postgres Database Server](#create-a-postgres-database-server)
   - [Summary](#summary)
 - [Creating rooms](#creating-rooms)
+  - [Run Liveview Generator to Create Rooms](#run-liveview-generator-to-create-rooms)
   - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
   - [Remove the Default Heading](#remove-the-default-heading)
   - [Enable Room Specific Communication](#enable-room-specific-communication)
@@ -35,9 +36,8 @@
   - [Securing the WebSocket](#securing-the-websocket)
     - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
   - [Adding Babylon.js](#adding-babylonjs)
-    - [Configuring Esbuild to use npm](#configuring-esbuild-to-use-npm)
-  - [Creating two esbuild targets](#creating-two-esbuild-targets)
-  - [Creating two Phoenix Layouts](#creating-two-phoenix-layouts)
+    - [Install node](#install-node)
+    - [Configure esbuild custom script](#configure-esbuild-custom-script)
 - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
 - [Using RXJS](#using-rxjs)
 - [Adding WebRTC](#adding-webrtc)
@@ -247,6 +247,8 @@ In the last chapter we managed to setup a folder for our code and we can now loa
 
 Phoenix gives us a generator for writing some CRUD endpoints and databaes migration for us.  We can use that as a starting point then remove any code that we don't need.  It's a great way to get started because we can see example code and patterns that we'll be able to study and copy.
 
+## Run Liveview Generator to Create Rooms
+
 Open a terminal from your projects root folder and execute this mix task to generate a context called Rooms, a module call Room for the schema and a database migration to create a table called rooms.  The room by default will have a binary id thanks to the option we used to create the Phoenix project and will have just a name and a description for now.
 
 ```bash
@@ -301,7 +303,9 @@ Go ahead and run the migration now:
 mix ecto.migrate
 ```
 
-If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and add some and try out all the CRUD abilities.
+If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.
+
+
 
 ## Replace the default Phoenix landing page
 
@@ -795,17 +799,13 @@ We have now added basic authentication to our `UserSocket` and we can delete `us
 
 ## Adding Babylon.js
 
-At this point we not only have browser to browser two way communication, we also have the concept of isolated room communications as well as unique user ids assigned to each user session.  It would now be a good milestone if we can add some frontend graphics.  Let's add the Babylon.js library so that we can create a 3D scene.  We'll draw a couple of objects in the scene just so we have some reference objects.  Without them, it's hard to know if we're moving or not.  Then we'll think of some useful messages to send to the `RoomChannel` whenever we're moving our own camera.  We should be able to see some representation of each client that has joined the room.  For now we can just draw a simple box to represent a another client/user.  Then when we rotate or move ourselves using the mouse to click-and-drag or using the cursor keys, we should be able to see that movement from the other connected browser by seeing their box move around.
+At this point we not only have browser to browser two way communication, we also have the concept of isolated room communications as well as unique user ids assigned to each user session.  It would now be a good milestone if we can add some frontend graphics.  Let's add the Babylon.js library so that we can create a 3D scene.  We'll draw a couple of objects in the scene just so we have some reference objects.  Without some landmarks to look at, it's hard to tell if we're moving in space or not.  Then we'll think of some useful messages to send to the `RoomChannel` whenever we're moving our scene camera.  We should be able to see some representation of each client that has joined the room.  For now we can just draw a simple box to represent another client/user.  Then when we rotate or move ourselves using the mouse to click-and-drag or using the cursor keys, we should be able to see that movement from the other connected browser by seeing their box move around.
 
-There are a couple ways to add Babylon.js to our project:
+Babylonjs releases packages for all its dependencies on npm.  We'll be using the ES6 version of those packages (so we can use tree shaking) and those packages all begin with @babylon instead of just babylon.
 
-1. We could do what the babylon playground does and add script HTML tags for each babylon.js dependency into our root layout file.  This would add a global BABYLON object variable.  This is super convenient for experiementation and debugging, but it can also be tampered with.  This way of developing relies on fetching the babylon files from CDNs.  This means that if we lose internet then we can't preview our room page.  So we'll have a harder time trying to program on the plane during a long flight for example.
-2. We can install babylonjs using npm then import it into our js asset files.  That means our esbuild script would be responsible for bundling up all the javascript and creating an immediately invoked function expression (iife).  This makes BABYLON inacessible from other code defined outside of the bundle, including from the browser console.  This also has the added benefit of being able to develope and work on the project without constant internet. The Babylon.js guides also say that they have a set of npm libraries that are ES6 and support treeshaking so that should lead to smaller bundles.  
+### Install node
 
-Let's go with option 2 and use the newer ES6 style of npm packages and let's also use typescript for any new javascript code that we write so we can take advantage of type checking and intellisense.
-
-We'll need to make a few changes to the way Phoenix is handling esbuild.  Phoenix by default wraps esbuild in an Elixir dependency and it doesn't allow plugins.  We'll need to support plugins in order to do make esbuild run type checking.  In case ou don't have node installed yet, these are some instructions that I followed:
-
+Skip ahead if you already have nodm on your machine.
 
 Install nvm (useful for when you're working on multiple projects with different versions of node):
 
@@ -840,13 +840,17 @@ Found '/home/titan/web_projects/xr/.nvmrc' with version <v21.5.0>
 Now using node v21.5.0 (npm v10.2.4)
 ```
 
+Now we're ready to use npm.
+
+### Configure esbuild custom script
+
 The following instructions add esbuild as an npm package and replace the Elixir package with a custom build.js script.
-I've modified the instructions from the Phoenix guides to include typescript.  In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.
+
+In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.
 
 ```bash
-npm install esbuild typescript @jgoz/esbuild-plugin-typecheck --save-dev
+npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix --save-dev
 npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
-npm i --save-dev @types/phoenix_live_view @types/phoenix
 ```
 
 Add an `assets/build.js` file like this:
@@ -870,8 +874,10 @@ const plugins = [
 
 // Define esbuild options
 let opts = {
-  entryPoints: ["js/app.js", "js/room.ts"],
+  entryPoints: ["js/app.ts"],
   bundle: true,
+  format: "esm",
+  splitting: true,
   logLevel: "info",
   target: "es2017",
   outdir: "../priv/static/assets",
@@ -904,6 +910,7 @@ if (watch) {
   esbuild.build(opts);
 }
 ```
+
 
 Modify config/dev.exs so that the script runs whenever you change files, replacing the existing :esbuild configuration under watchers:
 
@@ -944,35 +951,33 @@ Unlock the esbuild dependency:
 mix deps.unlock esbuild
 ```
 
-With typescript installed in our project we can invoke it like this to generate a tsconfig.json file for us without needing to install typescript globally:
+Add this `assets/tsconfig.json`
 
-```bash
-npx -p typescript tsc --init
+```json
+{
+  "compilerOptions": {
+    "target": "es2016",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "noResolve": false,
+    "noImplicitAny": false,
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "preserveConstEnums":true,
+    "lib": [
+        "dom",
+        "es2020"
+    ]
+  }
+}
 ```
+Change `app.js` to `app.ts` and replace it with the following:
 
-Note that in the `build.js` file I added an additional entry point `js/room.ts` so we can have type checking and intellisense goodness in vscode.  Add that blank file to `assets/js/room.ts` now.
-
-```bash
-mix assets.build
-```
-
-Look inside `priv/static/assets/` and you should see the bundled js output.  Congrats!  We've just replaced the default Elixir esbuild with our custom esbuild configured for typescript checking.
-
-Now that we've finished the sidequest, that's continue with our main objective installing Babylon.js.
+Add type="module" to the root layout.
 
 
 
 
-### Configuring Esbuild to use npm
-
-Phoenix comes with a wrapped version of esbuild with some tucked away defaults.  We're going to want to remove that so that we can customize our esbuild configuration.  That way we can load dependencies with package.json and import them into our own typescript code, and then we'll want to ignore some external dependencies so that they aren't bundled into our javascript artifact.  I prefer to download Babylon.js from their CDN.  These libraries don't change as often as our own code and therefore in prod, when we push out changes only our javascript changes would be downloaded and the user would likely already have a cached version of the CDN.
-
-Esbuild will by default produce a bundle of javascript that is a single file wrapped in an immediately invoked function expression so that its internal variables cannot be accessed from the world outside.  Since we'll have other pages that do not need to contain code pertaining to 3D and Babylon, we can create two bundles.  One for immersive VR, and one for everything else.
-
-## Creating two esbuild targets
-
-
-## Creating two Phoenix Layouts
 
 We'll also create two Phoenix layouts.  One to hold all the cdns of babylonjs dependencies as well as the alternate esbuild bundle.  And one for our lightweight version of our bundle.
 

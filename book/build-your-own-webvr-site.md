@@ -24,7 +24,7 @@
   - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
   - [Remove the Default Heading](#remove-the-default-heading)
   - [Enable Room Specific Communication](#enable-room-specific-communication)
-    - [Here's some basic concepts:](#heres-some-basic-concepts)
+    - [Basic Socket Channel Concepts:](#basic-socket-channel-concepts)
     - [Create a User Socket](#create-a-user-socket)
     - [Create a Room Channel](#create-a-room-channel)
     - [Let UserSocket Know About RoomChannel](#let-usersocket-know-about-roomchannel)
@@ -390,7 +390,7 @@ Now that we have a landing page for a particular room at `/rooms/some-room-id-ra
 
 We don't have much of a UI in our room yet, but don't worry we don't need it yet.  Let's just get the backend mechanics set up so we can send and receive messages.
 
-### Here's some basic concepts:
+### Basic Socket Channel Concepts:
 
 In javascript land we're going to connect to a web socket at an address hosted by the server.  
 
@@ -452,7 +452,7 @@ Open `lib/xr_web/channels/user_socket.ex` and add this line:
 ```elixir
   channel "room:*", XrWeb.RoomChannel
 ```
-In fact, that line might be there already, just uncomment it.  This "room:*" means that the `RoomChannel` module will spawn new processes whenever a client joins a channel with the topic starting with "room:" e.g. "room:42".
+In fact, that line might be there already, just uncomment it.  This `room:*` pattern means that the `RoomChannel` module will spawn new processes whenever a client joins a channel with the topic starting with "room:" e.g. "room:42".
 
 ### Modify RoomChannel Join function
 
@@ -470,22 +470,16 @@ The generator created code that looks like this:
   end
 ```
 
-Notice the pattern "room:lobby".  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
+Notice the pattern "room:lobby" is currently hardcoded.  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
 
 
 ```elixir
   def join("room:" <> room_id, payload, socket) do
-    IO.inspect(room_id, label: "room_id")
-    if authorized?(payload) do
-      {:ok, socket}
-    else
-      {:error, %{reason: "unauthorized"}}
-    end
+    {:ok, assign(socket, :room_id, room_id)}
   end
 ```
-Every new room id will launch a new process for every connected client.
 
-This `"room:" <> room_id` means we are pattern matching on a string that starts with "room:" followed by a variable that will match the rest of the string.  
+This `"room:" <> room_id` means we are pattern matching on a string that starts with "room:" followed by a variable that will match the rest of the string.  It's similar to destructuring in javascript.
 
 Here's an example of this kind of pattern matching happening for "=" operator.
 
@@ -496,7 +490,7 @@ iex(2)> room_id
 "42"
 ```
 
-The same kind of pattern matching is applied to function heads like `join` and in this case we're storing `room_id` then printing it out for fun in the `IO.inspect` part.
+The same kind of pattern matching is applied to function heads like `join` and in this case we're capturing the value of `room_id` then assigning it into the socket for use later on.
 
 ### Sharing the liveview socket
 
@@ -537,12 +531,12 @@ That will allow the `UserSocket` to piggyback on the LiveView socket.
 
 ### Join the Room Channel
 
-Now we'll integrate parts of the advice in `user_socket.js` into `app.js`.  Since app.js is loaded on every page of our website, but we only want the channel to join the room when we're on a URL like `/rooms/:id` we can create a function in `app.js` that we'll then call from the `show.html.heex` template that renders when we're at that path.
+Now we'll integrate parts of the advice in `user_socket.js` into `app.js`.  Since app.js is loaded on every page of our website, but we only want the channel to join the room when we're on a URL like `/rooms/:id`.  My solution to that is that we'll create a global function called `initRoom` in `app.js` that we'll then call from the `show.html.heex`.  This gives us the behavior that I want because that template only renders when we're on the rooms `show` CRUD path.
 
-Add this snippet to `app.js` after the liveSocket is created.
+Add the following snippet to `app.js` after the liveSocket is created.  This creates an `initRoom` function that will join the `room` channel.  Notice the function takes two arguments, room_id and user_id which we can pass from the server to the browser.  This will be useful for knowing who we are.
 
 ```javascript
-window["initRoom"] = async (room_id: string) => {
+window["initRoom"] = async (room_id, user_id) => {
  
   liveSocket.connect(); // make sure we're connected first
   let channel = liveSocket.channel(`room:${room_id}`, {})
@@ -553,12 +547,12 @@ window["initRoom"] = async (room_id: string) => {
 }
 ```
 
-Now we need to call this function.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
+Now we need to call this function, but we need to make sure we wait long enough until the function is defined.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
 
 ```html
 <script>
   window.addEventListener("DOMContentLoaded", function() {
-    window.initRoom("<%= @room.id %>")
+    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
   })
 </script>
 ```
@@ -574,7 +568,9 @@ Congrats!  That was a lot of stuff, but we now have our front-end connected over
 
 ### Send and Receive a Test Message
 
-We don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a dirty little test so we can be satisfied at our progress.  In `app.js` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browsers console.
+I've you are knew to sending messages with channels, here's a quick demonstration.  Feel free to skim this section if you're already familiar with it.
+
+Since w don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a quick little test so we can be satisfied at our progress.  In `app.js` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browsers console.
 
 ```javascript
 let channel = liveSocket.channel(`room:${room_id}`, {})
@@ -600,7 +596,7 @@ Take a look at the Phoenix logs and you'll see the error that caused the `RoomCh
     (xr 0.1.0) lib/xr_web/channels/room_channel.ex:18: XrWeb.RoomChannel.handle_in("hi there", %{},
     ...
     ...
-    
+
 ```
 This error message tells us exactly what we need to do to fix this.  Add a handle_in function that takes 3 arguments where the first argument is the pattern "hi there".
 
@@ -760,7 +756,15 @@ This `send` function is a built in function that will send a message to any proc
     {:noreply, socket}
   end
 ```
-We're broadcasting to all the connected clients of this room that a new user has joined and printing out the user_id and the room_id.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  To see a different user_id, one of your browsers can use Incognito mode, or use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
+We're broadcasting to all the connected clients of this room that a new user has joined and printing out the user_id and the room_id.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  
+
+You should see something like:
+
+```javascript
+I received a 'shout' {joined: '0ba687f4-2dbc-428b-ba3a-a7699845f141', user_id: 'fe7aca02-d76f-4fc4-b92e-76cbd1b99d72'}
+```
+
+Remember that to obtain a different user_id on the same browser, one of your windows needs to use Incognito mode, or just use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
 
 We have now added basic authentication to our `UserSocket` and we can delete `user_socket.js` because we integrated its javascript code and all its advice.
 
@@ -772,7 +776,7 @@ Babylonjs releases packages for all its dependencies on npm.  We'll be using the
 
 ### Install node
 
-Skip ahead if you already have nodm on your machine.
+Skip ahead if you already have node on your machine.
 
 Install nvm (useful for when you're working on multiple projects with different versions of node):
 
@@ -816,7 +820,7 @@ The following instructions add esbuild as an npm package and replace the Elixir 
 In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.
 
 ```bash
-npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix --save-dev
+npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix @babylonjs/core @babylonjs/gui @babylonjs/materials @babylonjs/inspector --save-dev
 npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
 ```
 
@@ -878,7 +882,6 @@ if (watch) {
 }
 ```
 
-
 Modify config/dev.exs so that the script runs whenever you change files, replacing the existing :esbuild configuration under watchers:
 
 ```elixir
@@ -912,13 +915,17 @@ Modify the aliases task in mix.exs to install npm packages during mix setup and 
 
 Remove the esbuild configuration from `config/config.exs`.  Remove the esbuild dependency from `mix.exs`.
 
-Unlock the esbuild dependency:
+Unlock the esbuild dependency so that it is also removed from the lock file:
 
 ```bash
 mix deps.unlock esbuild
 ```
 
-Add this `assets/tsconfig.json`
+At this point we have successfully removed the Phoenix default esbuild mix dependency and rolled our own esbuild using node and npm.  I've also tweaked the build script a bit.
+
+If you look at `build.js`, notice that the options will use the experimental code splitting ability recently added to esbuild.  The splitting option only supports "esm" format for now and therefore and we need to add `type="module"` to the script tag that brings in `app.js` in root layout or we'll get an error like "Cannot use import statement outside a module".  
+
+Since we'll be switch to typescript, add this file `assets/tsconfig.json`
 
 ```json
 {
@@ -940,9 +947,189 @@ Add this `assets/tsconfig.json`
 ```
 Change `app.js` to `app.ts` and replace it with the following:
 
-Add type="module" to the root layout.
+```typescript
 
 
+// Include phoenix_html to handle method=PUT/DELETE in forms and buttons.
+import "phoenix_html";
+// Establish Phoenix Socket and LiveView configuration.
+import { Socket } from "phoenix";
+import { LiveSocket } from "phoenix_live_view";
+import topbar from "../vendor/topbar";
+
+let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content");
+let userToken = document
+  .querySelector("meta[name='user-token']")
+  .getAttribute("content");
+
+let liveSocket = new LiveSocket("/live", Socket, { params: { _csrf_token: csrfToken, _user_token: userToken } }) as LiveSocket & Socket;
+
+// Show progress bar on live navigation and form submits
+topbar.config({ barColors: { 0: "#29d" }, shadowColor: "rgba(0, 0, 0, .3)" });
+window.addEventListener("phx:page-loading-start", _info => topbar.show(300));
+window.addEventListener("phx:page-loading-stop", _info => topbar.hide());
+
+// connect if there are any LiveViews on the page
+liveSocket.connect();
+
+// expose liveSocket on window for web console debug logs and latency simulation:
+// >> liveSocket.enableDebug()
+// >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
+// >> liveSocket.disableLatencySim()
+window["liveSocket"] = liveSocket;
+
+window["initRoom"] = async (room_id: string, user_id: string) => {
+  const { config } = await import("./config");
+  config.room_id = room_id;
+  config.user_id = user_id;
+  config.socket = liveSocket;
+  await import("./room");
+};
+```
+You'll notice that the `initRoom` function looks completely different.  I've restructured the code to introduce a folder of systems.  Each system will be responsible for some particular feature/aspect of our game TBD.  Essentially it's just a way of partitioning the code so that it's easier to drill down and find the area to change or maintain later.  These systems will be loaded by a single point `room.ts`.  Some variables often need to be shared across systems.  For that I've created a shared module called a `config`.  
+
+At the end you should end up with a `assets/js` folder structure like this:
+
+```
+├── app.ts
+├── config.ts
+├── room.ts
+└── systems
+    ├── broker.ts
+    └── scene.ts
+```
+
+Here's the code for config.ts
+
+```typescript
+import type { Socket } from "phoenix"
+import type { Scene } from "@babylonjs/core/scene"
+
+export type Config = {
+  room_id: string
+  user_id: string
+  scene: Scene
+  socket: Socket
+}
+
+export const config: Config = {
+  room_id: "",
+  user_id: "",
+  scene: null,
+  socket: null
+}
+```
+
+systems/broker.ts
+
+```typescript
+import { config } from "../config";
+
+(() => {
+  // channel connection
+  const socket = config.socket;
+  socket.connect();
+  let channel = socket.channel(`room:${config.room_id}`, {});
+  channel.join()
+    .receive("ok", resp => { console.log("Joined successfully", resp); })
+    .receive("error", resp => { console.log("Unable to join", resp); });
+
+  channel.on("shout", payload => {
+    console.log("I received a 'shout'", payload);
+  });
+
+})();
+```
+
+systems/scene.ts
+
+```typescript
+import { config } from "../config";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
+import { Scene } from "@babylonjs/core/scene";
+
+import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
+import "@babylonjs/core/Materials/standardMaterial";
+
+(() => {
+  // create the canvas html element and attach it to the webpage
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.id = "gameCanvas";
+  document.body.appendChild(canvas);
+
+  // initialize babylon scene and engine
+  const engine = new Engine(canvas, true);
+  const scene = new Scene(engine);
+  config.scene = scene;
+  // This creates and positions a free camera (non-mesh)
+  const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
+
+  // This targets the camera to scene origin
+  camera.setTarget(Vector3.Zero());
+
+  // This attaches the camera to the canvas
+  camera.attachControl(canvas, true);
+  var light1: HemisphericLight = new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
+  var sphere = CreateSphere("sphere", { diameter: 1 }, scene);
+
+
+  // Create a grid material
+  var material = new GridMaterial("grid", scene);
+
+  // Our built-in 'sphere' shape.
+  var sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
+
+  // Move the sphere upward 1/2 its height
+  sphere.position.y = 2;
+
+  // Affect a material
+  sphere.material = material;
+
+  // Our built-in 'ground' shape.
+  var ground = CreateGround("ground1", { width: 6, height: 6, subdivisions: 2 }, scene);
+
+  // Affect a material
+  ground.material = material;
+
+  // hide/show the Inspector
+  window.addEventListener("keydown", async (ev) => {
+    // Shift+Ctrl+Alt+I
+    await import("@babylonjs/core/Debug/debugLayer");
+    await import("@babylonjs/inspector");
+
+
+    if (ev.ctrlKey && ev.key === 'b') {
+      console.log("invoking the debug layer");
+      if (scene.debugLayer.isVisible()) {
+        scene.debugLayer.hide();
+      } else {
+        scene.debugLayer.show();
+      }
+    }
+  });
+
+  // run the main render loop
+  engine.runRenderLoop(() => {
+    scene.render();
+  });
+
+})();
+```
+
+
+room.ts
+
+```typescript
+import "./systems/broker";
+import "./systems/scene";
+```
 
 
 

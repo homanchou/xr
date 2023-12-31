@@ -36,7 +36,13 @@
     - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
   - [Adding Babylon.js](#adding-babylonjs)
     - [Install node](#install-node)
-    - [Configure esbuild custom script](#configure-esbuild-custom-script)
+    - [Configure esbuild script](#configure-esbuild-script)
+    - [Remove default Phoenix Esbuild dependency](#remove-default-phoenix-esbuild-dependency)
+    - [Add tsconfig.json](#add-tsconfigjson)
+    - [Restructuring for Systems](#restructuring-for-systems)
+    - [Replace app.js with app.ts](#replace-appjs-with-appts)
+    - [Add Phoenix Presence](#add-phoenix-presence)
+    - [Movement](#movement)
 - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
 - [Using RXJS](#using-rxjs)
 - [Adding WebRTC](#adding-webrtc)
@@ -770,15 +776,13 @@ We have now added basic authentication to our `UserSocket` and we can delete `us
 
 ## Adding Babylon.js
 
-At this point we not only have browser to browser two way communication, we also have the concept of isolated room communications as well as unique user ids assigned to each user session.  It would now be a good milestone if we can add some frontend graphics.  Let's add the Babylon.js library so that we can create a 3D scene.  We'll draw a couple of objects in the scene just so we have some reference objects.  Without some landmarks to look at, it's hard to tell if we're moving in space or not.  Then we'll think of some useful messages to send to the `RoomChannel` whenever we're moving our scene camera.  We should be able to see some representation of each client that has joined the room.  For now we can just draw a simple box to represent another client/user.  Then when we rotate or move ourselves using the mouse to click-and-drag or using the cursor keys, we should be able to see that movement from the other connected browser by seeing their box move around.
-
-Babylonjs releases packages for all its dependencies on npm.  We'll be using the ES6 version of those packages (so we can use tree shaking) and those packages all begin with @babylon instead of just babylon.
+At this point we not only have browser-to-browser two way communication, we also have the concept of isolated room communications as well as unique user ids assigned to each user session.  It would now be a good milestone if we can add some frontend graphics.  Babylon.js is written in Typescript, so it would be advantageous to also use typescript for all our frontend code to take advantage of typechecking.  In this next section I'll be switching out javascript for typescript, changing out the default Phoenix Esbuild for node based esbuild, adding a custom build script for enable typechecking and code splitting, installing babylon npm packages then writing code to create a basic 3D scene.
 
 ### Install node
 
-Skip ahead if you already have node on your machine.
+In order to install esbuild and babylon packages with npm, we'll need node installed first.  Skip ahead if you already have node on your machine.
 
-Install nvm (useful for when you're working on multiple projects with different versions of node):
+I'll be installing node through `nvm` (useful for when you're working on multiple projects with different versions of node):
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
@@ -811,18 +815,18 @@ Found '/home/titan/web_projects/xr/.nvmrc' with version <v21.5.0>
 Now using node v21.5.0 (npm v10.2.4)
 ```
 
-Now we're ready to use npm.
+Now we're ready to use npm.  (In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.)
 
-### Configure esbuild custom script
-
-The following instructions add esbuild as an npm package and replace the Elixir package with a custom build.js script.
-
-In case I forget to mention it, any `mix` commands are run from the project root, whereas any `npm` commands should be run from the `assets` directory.
-
+The following command will create a package.json file and a node_modules folder that contain packages that we'll need.
 ```bash
 npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix @babylonjs/core @babylonjs/gui @babylonjs/materials @babylonjs/inspector --save-dev
+
 npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
 ```
+
+Now that we have esbuild installed, we can create a custom build script.  The reason for doing this is because the default version that comes with Phoenix does not allow you to configure  plugins.  We need the plugins in order to do typescript typechecking.  So let's just swap it out.
+
+### Configure esbuild script
 
 Add an `assets/build.js` file like this:
 ```javascript
@@ -882,6 +886,8 @@ if (watch) {
 }
 ```
 
+### Remove default Phoenix Esbuild dependency
+
 Modify config/dev.exs so that the script runs whenever you change files, replacing the existing :esbuild configuration under watchers:
 
 ```elixir
@@ -893,7 +899,7 @@ config :hello, HelloWeb.Endpoint,
   ...
 ```
 
-Modify the aliases task in mix.exs to install npm packages during mix setup and use the new esbuild on mix assets.deploy:
+Modify the `aliases` task in `mix.exs` to install npm packages during mix setup and use the new esbuild on mix assets.deploy.  You should end up with something like this:
 
 ```elixir
   defp aliases do
@@ -921,9 +927,11 @@ Unlock the esbuild dependency so that it is also removed from the lock file:
 mix deps.unlock esbuild
 ```
 
-At this point we have successfully removed the Phoenix default esbuild mix dependency and rolled our own esbuild using node and npm.  I've also tweaked the build script a bit.
+At this point we have successfully removed the Phoenix default esbuild mix dependency and rolled our own esbuild using node and npm.  
 
 If you look at `build.js`, notice that the options will use the experimental code splitting ability recently added to esbuild.  The splitting option only supports "esm" format for now and therefore and we need to add `type="module"` to the script tag that brings in `app.js` in root layout or we'll get an error like "Cannot use import statement outside a module".  
+
+### Add tsconfig.json
 
 Since we'll be switch to typescript, add this file `assets/tsconfig.json`
 
@@ -945,11 +953,157 @@ Since we'll be switch to typescript, add this file `assets/tsconfig.json`
   }
 }
 ```
-Change `app.js` to `app.ts` and replace it with the following:
+
+### Restructuring for Systems
+
+Now we can start to add our typescript files.  So far we've just been dealing with a single file `app.js` but that will become unwieldy soon.  
+
+It would be good to split the code base up into managable files with each file responsible for some particular feature/aspect of our game (TBD).  
+
+Let's create a folder in `assets/js` called `systems`.
+
+Within that folder we can create a file called `broker.ts` that is responsible for connecting to the `RoomChannel` as we did previously.  And we can have another file called `scene.ts` that is responsible for creating an HTML canvas on the page to draw our 3D scene.  
+
+We need a mechanism to share data between systems.  For example, the `broker.ts` system needs to know the room_id in order to join the channel.  The `scene.ts` will need to be able to share the `BABYLON.Scene` object that it creates because other systems may need to interact with it.
+
+To solve this, let's create a file called `assets/js/config.ts`.
 
 ```typescript
+import type { Socket } from "phoenix"
+import type { Scene } from "@babylonjs/core/scene"
 
+export type Config = {
+  room_id: string
+  user_id: string
+  scene: Scene
+  socket: Socket
+}
 
+export const config: Config = {
+  room_id: "",
+  user_id: "",
+  scene: null,
+  socket: null
+}
+```
+
+This file creates a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.
+
+Now let's create the `assets/js/systems/broker.ts`
+
+```typescript
+import { config } from "../config";
+
+// channel connection
+const socket = config.socket;
+socket.connect();
+let channel = socket.channel(`room:${config.room_id}`, {});
+channel.join()
+  .receive("ok", resp => { console.log("Joined successfully", resp); })
+  .receive("error", resp => { console.log("Unable to join", resp); });
+
+channel.on("shout", payload => {
+  console.log("I received a 'shout'", payload);
+});
+
+```
+
+You'll notice that this is just a port of the code we had before for joining a channel.  Except we are getting the socket and room_id from the config.  
+
+Now create `assets/js/systems/scene.ts`.  This file will inject a 3D scene onto the page by creating a canvas.
+
+```typescript
+import { config } from "../config";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
+import { Scene } from "@babylonjs/core/scene";
+
+import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
+import "@babylonjs/core/Materials/standardMaterial";
+
+// create the canvas html element and attach it to the webpage
+const canvas = document.createElement("canvas");
+canvas.style.width = "100%";
+canvas.style.height = "100%";
+canvas.id = "gameCanvas";
+canvas.style.zIndex = "1"; // don't put this too high, it blocks the VR button
+canvas.style.position = "absolute";
+canvas.style.top = "0";
+canvas.style.touchAction = "none";
+canvas.style.outline = "none";
+document.body.appendChild(canvas);
+
+// initialize babylon scene and engine
+const engine = new Engine(canvas, true);
+const scene = new Scene(engine);
+config.scene = scene;
+// This creates and positions a free camera (non-mesh)
+const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
+
+// This targets the camera to scene origin
+camera.setTarget(Vector3.Zero());
+
+// This attaches the camera to the canvas
+camera.attachControl(canvas, true);
+new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
+
+// Create a grid material
+const material = new GridMaterial("grid", scene);
+
+// Our built-in 'sphere' shape.
+const sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
+
+// Move the sphere upward 1/2 its height
+sphere.position.y = 2;
+
+// Our built-in 'ground' shape.
+const ground = CreateGround("ground1", { width: 6, height: 6, subdivisions: 2 }, scene);
+
+// Affect a material
+ground.material = material;
+
+// hide/show the Inspector
+window.addEventListener("keydown", async (ev) => {
+
+  if (ev.ctrlKey && ev.key === 'b') {
+    await import("@babylonjs/core/Debug/debugLayer");
+    await import("@babylonjs/inspector");
+    console.log("invoking the debug layer");
+    if (scene.debugLayer.isVisible()) {
+      scene.debugLayer.hide();
+    } else {
+      scene.debugLayer.show();
+    }
+  }
+});
+
+// run the main render loop
+engine.runRenderLoop(() => {
+  scene.render();
+});
+```
+The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging.  The scene is also shared with the `config` object.
+
+Now to execute the code in each system file we simply import them to invoke the code within them.
+
+Add this file `assets/js/room.ts` to load each system we've made so far.
+
+```typescript
+import "./systems/broker";
+import "./systems/scene";
+```
+
+Finally let's bring it all back to the entry point.
+
+### Replace app.js with app.ts
+
+Rename `app.js` to `app.ts` and replace the file contents  with the following:
+
+```typescript
 // Include phoenix_html to handle method=PUT/DELETE in forms and buttons.
 import "phoenix_html";
 // Establish Phoenix Socket and LiveView configuration.
@@ -986,9 +1140,9 @@ window["initRoom"] = async (room_id: string, user_id: string) => {
   await import("./room");
 };
 ```
-You'll notice that the `initRoom` function looks completely different.  I've restructured the code to introduce a folder of systems.  Each system will be responsible for some particular feature/aspect of our game TBD.  Essentially it's just a way of partitioning the code so that it's easier to drill down and find the area to change or maintain later.  These systems will be loaded by a single point `room.ts`.  Some variables often need to be shared across systems.  For that I've created a shared module called a `config`.  
+This typescript version has a few small changes.  I've added some type declarations here and there.  The biggest change is that the `initRoom` function is now responsible for invoking `config` for the first time, and populating some important shared data like the socket, room_id and user_id.  It also imports `room` which imports all the systems.  Notice the use of dynamic imports here which use `await/async`.  Esbuild will create chunks of javascript that are lazily loaded as needed.  That way visits to the homepage will remain fast because they do not need to load any Babylon.js code.
 
-At the end you should end up with a `assets/js` folder structure like this:
+You should end up with a `assets/js` folder structure like this:
 
 ```
 ├── app.ts
@@ -999,151 +1153,9 @@ At the end you should end up with a `assets/js` folder structure like this:
     └── scene.ts
 ```
 
-Here's the code for config.ts
+### Add Phoenix Presence
 
-```typescript
-import type { Socket } from "phoenix"
-import type { Scene } from "@babylonjs/core/scene"
-
-export type Config = {
-  room_id: string
-  user_id: string
-  scene: Scene
-  socket: Socket
-}
-
-export const config: Config = {
-  room_id: "",
-  user_id: "",
-  scene: null,
-  socket: null
-}
-```
-
-systems/broker.ts
-
-```typescript
-import { config } from "../config";
-
-(() => {
-  // channel connection
-  const socket = config.socket;
-  socket.connect();
-  let channel = socket.channel(`room:${config.room_id}`, {});
-  channel.join()
-    .receive("ok", resp => { console.log("Joined successfully", resp); })
-    .receive("error", resp => { console.log("Unable to join", resp); });
-
-  channel.on("shout", payload => {
-    console.log("I received a 'shout'", payload);
-  });
-
-})();
-```
-
-systems/scene.ts
-
-```typescript
-import { config } from "../config";
-import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
-import { Engine } from "@babylonjs/core/Engines/engine";
-import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
-import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
-import { Scene } from "@babylonjs/core/scene";
-
-import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
-import "@babylonjs/core/Materials/standardMaterial";
-
-(() => {
-  // create the canvas html element and attach it to the webpage
-  const canvas = document.createElement("canvas");
-  canvas.style.width = "100%";
-  canvas.style.height = "100%";
-  canvas.id = "gameCanvas";
-  document.body.appendChild(canvas);
-
-  // initialize babylon scene and engine
-  const engine = new Engine(canvas, true);
-  const scene = new Scene(engine);
-  config.scene = scene;
-  // This creates and positions a free camera (non-mesh)
-  const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
-
-  // This targets the camera to scene origin
-  camera.setTarget(Vector3.Zero());
-
-  // This attaches the camera to the canvas
-  camera.attachControl(canvas, true);
-  var light1: HemisphericLight = new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
-  var sphere = CreateSphere("sphere", { diameter: 1 }, scene);
-
-
-  // Create a grid material
-  var material = new GridMaterial("grid", scene);
-
-  // Our built-in 'sphere' shape.
-  var sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
-
-  // Move the sphere upward 1/2 its height
-  sphere.position.y = 2;
-
-  // Affect a material
-  sphere.material = material;
-
-  // Our built-in 'ground' shape.
-  var ground = CreateGround("ground1", { width: 6, height: 6, subdivisions: 2 }, scene);
-
-  // Affect a material
-  ground.material = material;
-
-  // hide/show the Inspector
-  window.addEventListener("keydown", async (ev) => {
-    // Shift+Ctrl+Alt+I
-    await import("@babylonjs/core/Debug/debugLayer");
-    await import("@babylonjs/inspector");
-
-
-    if (ev.ctrlKey && ev.key === 'b') {
-      console.log("invoking the debug layer");
-      if (scene.debugLayer.isVisible()) {
-        scene.debugLayer.hide();
-      } else {
-        scene.debugLayer.show();
-      }
-    }
-  });
-
-  // run the main render loop
-  engine.runRenderLoop(() => {
-    scene.render();
-  });
-
-})();
-```
-
-
-room.ts
-
-```typescript
-import "./systems/broker";
-import "./systems/scene";
-```
-
-
-
-We'll also create two Phoenix layouts.  One to hold all the cdns of babylonjs dependencies as well as the alternate esbuild bundle.  And one for our lightweight version of our bundle.
-
-Create the engine
-
-Create the camera
-
-Create the lighting
-
-Create the scene
-
-Create a box
+### Movement
 
 # Enabling Immersive VR Mode
 

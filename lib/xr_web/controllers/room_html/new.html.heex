@@ -1,0 +1,8 @@
+<.header>
+  New Room
+  <:subtitle>Use this form to manage room records in your database.</:subtitle>
+</.header>
+
+<.room_form changeset={@changeset} action={~p"/rooms"} />
+
+<.back navigate={~p"/rooms"}>Back to rooms</.back>

@@ -20,7 +20,7 @@
   - [Create a Postgres Database Server](#create-a-postgres-database-server)
   - [Summary](#summary)
 - [Creating rooms](#creating-rooms)
-  - [Run Liveview Generator to Create Rooms](#run-liveview-generator-to-create-rooms)
+  - [Run Generator to Create Rooms](#run-generator-to-create-rooms)
   - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
   - [Remove the Default Heading](#remove-the-default-heading)
   - [Enable Room Specific Communication](#enable-room-specific-communication)
@@ -31,7 +31,6 @@
     - [Modify RoomChannel Join function](#modify-roomchannel-join-function)
     - [Sharing the liveview socket](#sharing-the-liveview-socket)
     - [Join the Room Channel](#join-the-room-channel)
-    - [Conditionally Join Channel When We're In a Room](#conditionally-join-channel-when-were-in-a-room)
     - [Send and Receive a Test Message](#send-and-receive-a-test-message)
   - [Securing the WebSocket](#securing-the-websocket)
     - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
@@ -247,12 +246,12 @@ In the last chapter we managed to setup a folder for our code and we can now loa
 
 Phoenix gives us a generator for writing some CRUD endpoints and databaes migration for us.  We can use that as a starting point then remove any code that we don't need.  It's a great way to get started because we can see example code and patterns that we'll be able to study and copy.
 
-## Run Liveview Generator to Create Rooms
+## Run Generator to Create Rooms
 
 Open a terminal from your projects root folder and execute this mix task to generate a context called Rooms, a module call Room for the schema and a database migration to create a table called rooms.  The room by default will have a binary id thanks to the option we used to create the Phoenix project and will have just a name and a description for now.
 
 ```bash
-mix phx.gen.live Rooms Room rooms name:string description:string
+mix phx.gen.html Rooms Room rooms name:string description:string
 ```
 
 Go ahead and follow the instructions and paste the new lines into your lib/xr_web/router.ex.  It should look something like this:
@@ -263,17 +262,27 @@ scope "/", XrWeb do
 
   get "/", PageController, :home
 
-  # pasted these new routes
-  live "/rooms", RoomLive.Index, :index
-  live "/rooms/new", RoomLive.Index, :new
-  live "/rooms/:id/edit", RoomLive.Index, :edit
-
-  live "/rooms/:id", RoomLive.Show, :show
-  live "/rooms/:id/show/edit", RoomLive.Show, :edit
+  # pasted     
+  resources "/rooms", RoomController
 end
 ```
 
-Note the usual paths created in your typical CRUDy style.  You'll goto `/rooms` to see a list of all your rooms and `/rooms/some-id` to drill down into a particular room. 
+If you type `mix phx.routes` you'll see a table of the usual CRUD routes for `room`.
+
+```bash
+mix phx.routes
+  GET     /                                      XrWeb.PageController :home
+  GET     /rooms                                 XrWeb.RoomController :index
+  GET     /rooms/:id/edit                        XrWeb.RoomController :edit
+  GET     /rooms/new                             XrWeb.RoomController :new
+  GET     /rooms/:id                             XrWeb.RoomController :show
+  POST    /rooms                                 XrWeb.RoomController :create
+  PATCH   /rooms/:id                             XrWeb.RoomController :update
+  PUT     /rooms/:id                             XrWeb.RoomController :update
+  DELETE  /rooms/:id                             XrWeb.RoomController :delete
+```
+
+You'll goto `/rooms` to see a list of all your rooms and `/rooms/some-id` to drill down into a particular room. 
 
 The generator also created a database migration file inside your `priv/repo/migrations` folder.
 
@@ -303,9 +312,7 @@ Go ahead and run the migration now:
 mix ecto.migrate
 ```
 
-If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.
-
-
+If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.
 
 ## Replace the default Phoenix landing page
 
@@ -530,71 +537,30 @@ That will allow the `UserSocket` to piggyback on the LiveView socket.
 
 ### Join the Room Channel
 
-Now we'll merge parts of `user_socket.js` into `app.js`
+Now we'll integrate parts of the advice in `user_socket.js` into `app.js`.  Since app.js is loaded on every page of our website, but we only want the channel to join the room when we're on a URL like `/rooms/:id` we can create a function in `app.js` that we'll then call from the `show.html.heex` template that renders when we're at that path.
 
-I copied this portion from `user_socket.js` and pasted it into `app.js` right after the `liveSocket.connect()` line, and changed the `socket` variable to `liveSocket`.
-
-```javascript
-let channel = liveSocket.channel("room:42", {})
-channel.join()
-  .receive("ok", resp => { console.log("Joined successfully", resp) })
-  .receive("error", resp => { console.log("Unable to join", resp) })
-```
-
-This code will only ever try to connect to meeting room "42" because it was hardcoded that way.  Let's change that.
-
-### Conditionally Join Channel When We're In a Room
-
-Since our CRUDy room paths follow certain path conventions, e.g. `rooms/:room_id`, when we are navigated to a specific room, we can extract the room id from the browser URL path and pass that as the channel name we want to join, if and only if we detect that pattern in the URL.
+Add this snippet to `app.js` after the liveSocket is created.
 
 ```javascript
-// Get the current URL path
-let current_path = window.location.pathname;
+window["initRoom"] = async (room_id: string) => {
+ 
+  liveSocket.connect(); // make sure we're connected first
+  let channel = liveSocket.channel(`room:${room_id}`, {})
+  channel.join()
+    .receive("ok", resp => { console.log("Joined successfully", resp) })
+    .receive("error", resp => { console.log("Unable to join", resp) })
 
-// Define a regular expression pattern to match the UUID part
-let room_id_pattern = /^\/rooms\/([^\/]+)$/;
-
-// Use the pattern to extract the UUID
-let matches = current_path.match(room_id_pattern);
-
-// Check if there is a match and get the UUID
-if (matches && matches.length > 1) {
-    let room_id = matches[1];
-    let channel = liveSocket.channel(`room:${room_id}`, {})
-channel.join()
-  .receive("ok", resp => { console.log("Joined successfully", resp) })
-  .receive("error", resp => { console.log("Unable to join", resp) })
-
-} else {
-    console.log("UUID not found in the path.");
 }
 ```
 
-Since this code we added to `app.js` is only evaluated once during a full page load, it will not execute when LiveView uses it's clever push state navigation from `/rooms` to `/rooms/:my_room_id` because it only loads the parts of pages that change.
-
-We can see LiveView links at play by opening up the template `lib/xr_web/liv/room_live/index.html.heex` that renders a list of rooms.
+Now we need to call this function.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
 
 ```html
-<:action :let={{_id, room}}>
-  <div class="sr-only">
-    <.link navigate={~p"/rooms/#{room}"}>Show</.link>
-  </div>
-  <.link patch={~p"/rooms/#{room}/edit"}>Edit</.link>
-</:action>
-```
-
-Change `navigate` to `href` and we'll get the regular full page load behavior.  Also remove the `<div class="sr-only">` tags because that hides the link, and we want it to show so we can click on the "Show" link.  And finally remove the line `row_click={fn {_id, room} -> JS.navigate(~p"/rooms/#{room}") end}` on the `<.table>` component itself because it causes any click anywhere on the row to also use a push state navigation.  You should end up with a table like this:
-
-```html
-<.table id="rooms" rows={@streams.rooms}>
-  <:col :let={{_id, room}} label="Name"><%= room.name %></:col>
-  <:col :let={{_id, room}} label="Description"><%= room.description %></:col>
-  <:action :let={{_id, room}}>
-    <.link href={~p"/rooms/#{room}"}>Show</.link>
-
-    <.link patch={~p"/rooms/#{room}/edit"}>Edit</.link>
-  </:action>
-  ...
+<script>
+  window.addEventListener("DOMContentLoaded", function() {
+    window.initRoom("<%= @room.id %>")
+  })
+</script>
 ```
 
 If you now navigate to any room you previously created and inspect the browser's console logs you should see:
@@ -603,6 +569,7 @@ If you now navigate to any room you previously created and inspect the browser's
 Joined Successfully
 ```
 
+But you won't see that on any other page you navigate to, which is what we want.
 Congrats!  That was a lot of stuff, but we now have our front-end connected over web sockets and a room channel all the way to the backend!  We're ready to send and receive messages!
 
 ### Send and Receive a Test Message

@@ -22,7 +22,14 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 // connect if there are any LiveViews on the page
 liveSocket.connect()
 
-window["initRoom"] = async () => {
+window["initRoom"] = async (room_id: string) => {
+
+  liveSocket.connect()
+  let channel = liveSocket.channel(`room:${room_id}`, {})
+  channel.join()
+    .receive("ok", resp => { console.log("Joined successfully", resp) })
+    .receive("error", resp => { console.log("Unable to join", resp) })
+
   const { Room } = await import("./room")
   new Room();
 }

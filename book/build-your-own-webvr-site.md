@@ -10,20 +10,20 @@
     - [Node on the backend](#node-on-the-backend)
     - [Phoenix/Elixir backend](#phoenixelixir-backend)
   - [Why not use off the shelf VR as a Service?](#why-not-use-off-the-shelf-vr-as-a-service)
-- [Preparing your development workstation](#preparing-your-development-workstation)
-  - [Install Elixir](#install-elixir)
-  - [Add a variable in your shell profile to preserve iex history.](#add-a-variable-in-your-shell-profile-to-preserve-iex-history)
-  - [Install docker and docker-compose.](#install-docker-and-docker-compose)
-  - [Install vscode.](#install-vscode)
-  - [Install Phoenix](#install-phoenix)
-  - [Create Your Project Directory](#create-your-project-directory)
-  - [Create a Postgres Database Server](#create-a-postgres-database-server)
-  - [Summary](#summary)
-- [Creating rooms](#creating-rooms)
-  - [Run Generator to Create Rooms](#run-generator-to-create-rooms)
-  - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
-  - [Remove the Default Heading](#remove-the-default-heading)
-  - [Enable Room Specific Communication](#enable-room-specific-communication)
+  - [Preparing your development workstation](#preparing-your-development-workstation)
+    - [Install Elixir](#install-elixir)
+    - [Preserve iex history.](#preserve-iex-history)
+    - [Install docker and docker-compose.](#install-docker-and-docker-compose)
+    - [Install vscode.](#install-vscode)
+    - [Install Phoenix](#install-phoenix)
+    - [Create Your Project Directory](#create-your-project-directory)
+    - [Create a Postgres Database Server](#create-a-postgres-database-server)
+    - [Workstation Ready](#workstation-ready)
+  - [Creating Rooms](#creating-rooms)
+    - [Run Generator to Create Rooms](#run-generator-to-create-rooms)
+    - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
+    - [Remove the Default Heading](#remove-the-default-heading)
+  - [Meeting Room Communications](#meeting-room-communications)
     - [Basic Socket Channel Concepts:](#basic-socket-channel-concepts)
     - [Create a User Socket](#create-a-user-socket)
     - [Create a Room Channel](#create-a-room-channel)
@@ -34,20 +34,30 @@
     - [Send and Receive a Test Message](#send-and-receive-a-test-message)
   - [Securing the WebSocket](#securing-the-websocket)
     - [Creating a unique id per visitor](#creating-a-unique-id-per-visitor)
+    - [Add User Token to Conn](#add-user-token-to-conn)
+    - [Add User Token to Frontend](#add-user-token-to-frontend)
+    - [Add User Token to Client Side Socket Connection Code](#add-user-token-to-client-side-socket-connection-code)
+    - [Verify User Token in Server side Socket Connect Callback](#verify-user-token-in-server-side-socket-connect-callback)
+    - [Verify user\_id passed to RoomChannel](#verify-user_id-passed-to-roomchannel)
   - [Adding Babylon.js](#adding-babylonjs)
     - [Install node](#install-node)
     - [Configure esbuild script](#configure-esbuild-script)
     - [Remove default Phoenix Esbuild dependency](#remove-default-phoenix-esbuild-dependency)
     - [Add tsconfig.json](#add-tsconfigjson)
     - [Restructuring for Systems](#restructuring-for-systems)
+      - [Add config.ts](#add-configts)
+      - [Add broker.ts](#add-brokerts)
+      - [Add scene.ts](#add-scenets)
+      - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
-    - [Add Phoenix Presence](#add-phoenix-presence)
-    - [Movement](#movement)
-- [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
-- [Using RXJS](#using-rxjs)
-- [Adding WebRTC](#adding-webrtc)
-  - [Adding Agora](#adding-agora)
-  - [Spatial Voice Audio](#spatial-voice-audio)
+    - [Babylon Added](#babylon-added)
+  - [Add Phoenix Presence](#add-phoenix-presence)
+  - [Sharing Movement](#sharing-movement)
+    - [Using RXJS](#using-rxjs)
+  - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
+  - [Adding WebRTC](#adding-webrtc)
+    - [Adding Agora](#adding-agora)
+    - [Spatial Voice Audio](#spatial-voice-audio)
 
 
 ## What this book is about
@@ -123,13 +133,13 @@ I miss the days when making a website was simple.  All a developer needed was a 
 
 Though if we take a step back it's not that bad... (ok it is ... a lot of stuff), but it's still the accumulation of tools.  Tools that work for us, and we just need a little know how to figure out how to fit them together.  Fortunately other companies have packaged some of those tools into libraries like Babylon.js and frameworks like Phoenix, that make our job so much easier.
 
-# Preparing your development workstation
+## Preparing your development workstation
 
 If you're on Windows, I highly recommend you install the windows subsystem for linux.  That will give you a similar environment as production and make other activities a lot easier such as dockerizing, setting paths or environment variables.
 
 If you're on Linux you're already good to go.  If you're on Mac you're fine too.  
 
-## Install Elixir
+### Install Elixir
 
 To develop, we're going to want to install Elixir.  And to install Elixir, we need to also install Erlang.  You can follow the Elixir online docs for how to install Elixir for your operating system, though I highly recommend you install these using asdf so that you can switch versions.  At some point in the future, you'll be working on several projects, or you may check out some old code you wrote a few months back and want to work on it again, only to find that your new computer that you bought has a different version of Elixir than the old project.
 
@@ -147,9 +157,7 @@ Erlang/OTP 26 [erts-14.2] [source] [64-bit] [smp:32:32] [ds:32:32:10] [async-thr
 Elixir 1.15.7 (compiled with Erlang/OTP 26)
 ```
 
-
-
-## Add a variable in your shell profile to preserve iex history.
+### Preserve iex history.
 
 We're going to be working in the iex terminal from time to time, and surprisingly the up arrow does not bring back the previous command history between iex sessions.  I find that so annoying that that is not the default.  Luckily we can add this to our shell startup script and that will fix that annoyance.
 
@@ -158,12 +166,12 @@ We're going to be working in the iex terminal from time to time, and surprisingl
 export ERL_AFLAGS="-kernel shell_history enabled"
 ```
 
-## Install docker and docker-compose.  
+### Install docker and docker-compose.  
 
 There are two reasons for wanting to use docker.  The first reason is so that we can run a local database with ease as we develop.  For Windows and Mac users the easiest way is probably by installing Docker Desktop for Windows (and mac) respectively.  The second reason for using docker is for when it comes time for deployment to production, creating a docker image might be one of the ways we'll want to utilize.
 
 
-## Install vscode.
+### Install vscode.
 
 This is my recommended code editor.  You can install a different one if you prefer.
 
@@ -176,7 +184,7 @@ At the time of this writing I'm using:
 - phoenixframework.phoenix
 - bradlc.vscode-tailwindcss
 
-## Install Phoenix
+### Install Phoenix
 
 https://hexdocs.pm/phoenix/installation.html
 
@@ -186,7 +194,7 @@ mix archive.install hex phx_new
 ```
 I'm using Phoenix 1.7.10.  You should use the same versions as I am using if you want to follow along.  I assume the code generators will produce the same code for you as it does for me.
 
-## Create Your Project Directory
+### Create Your Project Directory
 An empty Phoenix project will serve as the home for all of our code.  We'll start with a self-sufficient monolith, and only reach for other technologies when the need arises.
 
 We'll use the mix phx.new generator to create a new project for us.  By default phoenix will come with a postgres database configuration.  I recommend setting the option for binary id, which will make any table we generate use uuid for the id column instead of incrementing integers.  This makes ids for users and rooms random, which is good for making them hard to guess and hard for people to guess how many rooms and users you have in total, as well as making it easier in the future to copy records from one database shard to another shard because you don't have to worry about id conflicts.
@@ -199,7 +207,7 @@ The command below will create a project folder for us.  I named my project xr, b
 
 Ignore the lengthly output for just a moment.  We'll need to make sure Phoenix has access to a Postgres database before we can proceed with the instructions it output.
 
-## Create a Postgres Database Server
+### Create a Postgres Database Server
 
 Docker is the easiest way to setup a hassle free and disposable database.  Getting the right drivers and dependences on your local machine and keeping them maintained when your OS needs to upgrade is a pain.  We don't really care where this data lives on our local machine, this is just a way for us to develop and test our features. 
 
@@ -242,17 +250,17 @@ Then start your server using `iex -S mix phx.server`
 
 If you're on linux you may also get an error about needing `inotify-tools`, in which case follow the links to install that for live-reload.
 
-## Summary
+### Workstation Ready
 
 If everything went well in this chapter then you should be able to visit http://localhost:4000 in your browser and see the default Phoenix welcome page.  We have all the tools we need to run a basic web site with a database on our local machine, we have our project home directory for all our files.  This would be a good point to make your first git commit.  Now that we have a humble starting point, in the next chapter we can start cranking on the next step.
 
-# Creating rooms
+## Creating Rooms
 
 In the last chapter we managed to setup a folder for our code and we can now load up the default Phoenix welcome page in a browser at http://localhost:4000.  Let's change that.  Let's make it so that we can host different meetings in meeting rooms.  So we want a URL path like http://localhost:4000/rooms/some-room-id
 
 Phoenix gives us a generator for writing some CRUD endpoints and databaes migration for us.  We can use that as a starting point then remove any code that we don't need.  It's a great way to get started because we can see example code and patterns that we'll be able to study and copy.
 
-## Run Generator to Create Rooms
+### Run Generator to Create Rooms
 
 Open a terminal from your projects root folder and execute this mix task to generate a context called Rooms, a module call Room for the schema and a database migration to create a table called rooms.  The room by default will have a binary id thanks to the option we used to create the Phoenix project and will have just a name and a description for now.
 
@@ -320,7 +328,7 @@ mix ecto.migrate
 
 If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.
 
-## Replace the default Phoenix landing page
+### Replace the default Phoenix landing page
 
 If you go to http://localhost:4000, you'll see that the homepage still shows the Phoenix default welcome page.  We don't need that anymore.  We can customize that page by first locating the path in the `router.ex` file.
 
@@ -361,7 +369,7 @@ For now let's at least have a basic link on our homepage link over to our rooms 
 
 That strange looking `.link` thing looks like an HTML tag but it's actually a Phoenix live view component.  That just means that it's a function named `link` that handles various kinds of navigation for us including clever push-state transitions that don't actually reload the page.  We don't really need to use it for this simple page transition since we're just using href which is a full page reload.  The next funky bit is the href value.  That is using a special ~p sigil which will raise a warning (vscode should underline in yellow) if we link to a non-existant path.
 
-## Remove the Default Heading
+### Remove the Default Heading
 
 Once we navigate to the `/rooms` page, we still see the Phoenix default header at the top of the page.  This is defined in the layout files.  Let's change those too.  My version of Phoenix, 1.7, contains two layers of layout files: `app.html.heex` and `root.html.heex`
 
@@ -390,9 +398,9 @@ We'll want to retain important parts of it so that flash messages still work, so
 
 The `root.html.heex` looks fine for now.  It's job is to wrap all of the HTML and include the compiled javascript and css files.  We want to keep all that.  I just replaced the backup title suffix to say "XR Space" instead of "Phoenix".
 
-## Enable Room Specific Communication
+## Meeting Room Communications
 
-Now that we have a landing page for a particular room at `/rooms/some-room-id-randomly-generated` let's see if we can send a message from that room, and in another browser, if also connected to the same room, be able to receive that message.
+Now that we have a page for a particular room at `/rooms/some-room-id-randomly-generated` let's see if we can send messages back and forth between another browser connected to the same room URL.
 
 We don't have much of a UI in our room yet, but don't worry we don't need it yet.  Let's just get the backend mechanics set up so we can send and receive messages.
 
@@ -403,53 +411,43 @@ In javascript land we're going to connect to a web socket at an address hosted b
 ```
 clientA -> connect to -> Server Socket
 ```
-
-When we connect to the socket we send some initial data from the front-end so the server can authenicate us (we wouldn't want just anybody to be able to connect to our server, right?).  We're also going to join a channel which is "made" from the socket.  
-
+The client then joins a Channel.
 ```
 clientA -> join -> Channel
+```
+Another client B, does the same.
+```
 clientB -> connect to -> Server Socket
 clientB -> join -> Channel
 ```
 
-A channel is basically an event machine.  In Elixir it's a process for each connected client.  It's some mechanism that listens to messages directed at a specific "topic" and does something.
+A channel is basically a litle machine that processes incoming messages.  Client A and Client B both connected to a little "server", an Elixir process.
 
-```
-clientA -> push message -> Channel
-clientB -> push message -> Channel
-```
-
-Depending on the message, it can decide to update its state and either reply or maybe not reply.  The javascript side is nearly a mirror of this setup.  The javascript client joins a channel and can subscribe or listen to messages that come from the server and also push messages to the channel, so it's a two way street.
-
-The really cool part is that Channels also include apis for broadcasting to all clients connected to the channel.  So if there are multiple browsers connected to the same room, they all get a copy of the message.  And this happens easily do to Phoenix PubSub which can forward messages between channels (which are Elixir processes) just as easily on distributed machines as it can on one machine.  Of course you can call any kind of code you want to in the Channel, but mainly we'll be using it to sync messages between our connected players in our meeting rooms.
-
-```
-clientB <- receives message from client A <- Broadcasted message from the Channel
-```
+The really cool part is that Phoenix comes with apis for broadcasting to all clients connected to the same channel.  In the next few sections we'll demonstrate how a client A will send a message that will be broadcast to be received by client B or any number of clients that join the same "room".
 
 ### Create a User Socket
 
-Ok, enough theory let's create this socket thing.  Fortunately phoenix includes a generator for that too.  Run this command in your terminal in your projects root folder but don't follow the instructions it spits out in the terminal.  We'll be doing something slightly different since we already have a liveview socket so we can piggy back on.  In other words the generator created a new js client and wants us to add a new endpoint, however we can just share the liveview socket that so that our front-end client doesn't need to join two different sockets.
+Ok, enough theory let's create this socket thing.  Fortunately phoenix includes a generator for that too.  Run the following command in your terminal in your projects root folder but don't follow the instructions it spits out in the terminal.  We'll be doing something slightly different since we already have a liveview socket so we can piggy back on.  In other words the generator created a new js client and wants us to add a new endpoint, however we can just share the liveview socket that so that our front-end client doesn't need to join two different sockets.
 
 ```bash
 mix phx.gen.socket User
 ```
-This creates two files.  
+This creates two files. 
 
 ```bash
 * creating lib/xr_web/channels/user_socket.ex
 * creating assets/js/user_socket.js
 ```
-We're going to merge the javascript code in `user_socket.js` into `app.js` in moment.  Right now app.js is our only entry point.  It's the only file that is included in our layout.  We'll go back and clean all this javascript up in a later chapter I promise.  For right now let's get a quick win by demonstrating we can send messages between clients.
+We're going to merge the javascript code in `user_socket.js` into `app.js` in moment.  Right now app.js is our only entry point.  It's the only js file that is included using a `<script>` tag in our root layout.  
 
 ### Create a Room Channel
 
-But first, we need to create a room channel.  And wouldn't you know it, there's a generator for that too.  Run this in the terminal as well.
+Next we need to create a channel.  Channels can be made for different kinds of communication.  This one will be for communications and happenings that occur in a Room, so let's call it a `RoomChannel`.  And wouldn't you know it, there's a generator for that too.  Run this in the terminal as well.
 
 ```bash
 mix phx.gen.channel Room
 ```
-The autogenerated code in the user_socket.ex and room_channel.ex are 90% there, we just need to make a few tweaks.
+The autogenerated code in the user_socket.ex and room_channel.ex are 90% what we want, we just need to make a few tweaks.
 
 ### Let UserSocket Know About RoomChannel
 
@@ -476,7 +474,7 @@ The generator created code that looks like this:
   end
 ```
 
-Notice the pattern "room:lobby" is currently hardcoded.  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
+We'll add authorization later, so just remove that bit for now.  Notice the pattern "room:lobby" is currently hardcoded.  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
 
 
 ```elixir
@@ -685,7 +683,9 @@ end
 
 Now every visitor to the website will get a unique user_id in their session that will persist unless they clear their cookies and they haven't even had to login or register.  How convenient!
 
-Let's add another function plug in `router.ex` for creating an encrypted token from the user_id
+### Add User Token to Conn
+
+Let's add another function plug in `router.ex` for creating an encrypted token from the user_id.  We'll then pass this to the frontend so it can be passed back to the server and verified in the `UserSocket`
 
 ```elixir
  defp put_user_token(conn, _) do
@@ -697,6 +697,8 @@ Let's add another function plug in `router.ex` for creating an encrypted token f
    end
  end
 ```
+
+This code signs a token with "some salt" for now.  And assigns it to the `conn`, so it's available in our templates.
 
 Again, add this plug in the browser pipeline, but put it after our last plug because we depend on user_id being in the `conn.assigns`:
 
@@ -710,11 +712,15 @@ pipeline :browser do
 end
 ```
 
+### Add User Token to Frontend
+
 Now we need to pass this token to JavaScript. We could add a snippet of javascript to set the token on the window object, but I'm paranoid that the evaluation order of script tags makes this vulnerable to race conditions.  I'll side step the paranoia by just injecting the token into the HTML at `root.html.heex` layout.  This is also what Phoenix itself does with the csrf_token.
 
 ```html
 <meta name="user-token" content={assigns[:user_token]} />
 ```
+
+### Add User Token to Client Side Socket Connection Code
 
 Then when we make the liveSocket in `app.js` let's grab it and pass it in the `LiveSocket` constructor options.  Again this is following what Phoenix does with the csrf_token.  Your `liveSocket` should look like this:
 
@@ -725,6 +731,8 @@ let userToken = document
 
 let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToken, _user_token: userToken}});
 ```
+
+### Verify User Token in Server side Socket Connect Callback
 
 Now we open up `user_socket.ex` and replace the default `connect` function with this snippet that will verify the user token:
 
@@ -740,7 +748,9 @@ def connect(%{"_user_token" => token}, socket, _connect_info) do
 end
 ```
 
-Since the socket is assigned the user_id, we should now be able to access the user_id from the `RoomChannel`.
+### Verify user_id passed to RoomChannel
+
+At this point we have completed authenticating the socket and we have this additional user_id in the socket we can use in `RoomChannel`.  Let's test that everything is hooked up properly by broadcasting the `room_id` and `user_id` whenever any client joins.
 
 Open up `room_channel.ex` and modify `join` function to be like this:
 
@@ -750,9 +760,9 @@ Open up `room_channel.ex` and modify `join` function to be like this:
     {:ok, assign(socket, :room_id, room_id)}
   end
 ```
-The `join` function, on a successful operation should return a tuple with `{:ok, socket}`.  Here we are adding the room_id into the socket so we have some memory to use in other handlers.  `user_id` is already in the socket assigns thanks to the `UserSocket` putting it in there (we did that!).
+The `join` function, on a successful operation should return a tuple with `{:ok, socket}`.  Here we are adding the room_id into the socket so we have some memory to use in other handlers.  `user_id` is already in the socket assigns thanks to the `UserSocket` connect callback putting it in there (we did that!).
 
-This `send` function is a built in function that will send a message to any process.  In this case we're sending a message to ourselves right after we've joined.  Once we've joined, (and not before) we can utilize the channel APIs like push, broadcast etc.  We need to add a new handler to handle the `:after_join` message.
+This `send` function is a built in function that will send a message to any Elixir process.  In this case we're sending a message to ourselves, `self`, right after we've joined.  Once we've joined, (and not before) we can utilize the channel APIs like `push` (send a message to my client and no one elses), `broadcast` (send a message to all clients) etc.  We need to add a new handler to handle the `:after_join` message.
 
 ```elixir
 
@@ -762,7 +772,7 @@ This `send` function is a built in function that will send a message to any proc
     {:noreply, socket}
   end
 ```
-We're broadcasting to all the connected clients of this room that a new user has joined and printing out the user_id and the room_id.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  
+This handler receives the `:after_join` message and will call the `broadcast` api to send an message to all the connected clients of this room.  Since our javascript code is already console.log-ing anytime the server is pushing down a message of event "shout", we can see this at play in the browser's console.  To test this, open up multiple browser windows, navigate to a specific room and view the console.logs.  
 
 You should see something like:
 
@@ -770,9 +780,9 @@ You should see something like:
 I received a 'shout' {joined: '0ba687f4-2dbc-428b-ba3a-a7699845f141', user_id: 'fe7aca02-d76f-4fc4-b92e-76cbd1b99d72'}
 ```
 
-Remember that to obtain a different user_id on the same browser, one of your windows needs to use Incognito mode, or just use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
+Yay!  We're seeing the user_id now.  Remember that to obtain a different user_id on the same browser, one of your windows needs to use Incognito mode, or just use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  
 
-We have now added basic authentication to our `UserSocket` and we can delete `user_socket.js` because we integrated its javascript code and all its advice.
+We can safely delete `user_socket.js` now because we integrated its javascript code and all its advice.
 
 ## Adding Babylon.js
 
@@ -966,6 +976,8 @@ Within that folder we can create a file called `broker.ts` that is responsible f
 
 We need a mechanism to share data between systems.  For example, the `broker.ts` system needs to know the room_id in order to join the channel.  The `scene.ts` will need to be able to share the `BABYLON.Scene` object that it creates because other systems may need to interact with it.
 
+#### Add config.ts
+
 To solve this, let's create a file called `assets/js/config.ts`.
 
 ```typescript
@@ -989,6 +1001,8 @@ export const config: Config = {
 
 This file creates a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.
 
+#### Add broker.ts
+
 Now let's create the `assets/js/systems/broker.ts`
 
 ```typescript
@@ -1009,6 +1023,8 @@ channel.on("shout", payload => {
 ```
 
 You'll notice that this is just a port of the code we had before for joining a channel.  Except we are getting the socket and room_id from the config.  
+
+#### Add scene.ts
 
 Now create `assets/js/systems/scene.ts`.  This file will inject a 3D scene onto the page by creating a canvas.
 
@@ -1090,6 +1106,8 @@ The `scene.ts` contains typical Babylon.js getting started boilerplate to setup 
 
 Now to execute the code in each system file we simply import them to invoke the code within them.
 
+#### Add room.ts
+
 Add this file `assets/js/room.ts` to load each system we've made so far.
 
 ```typescript
@@ -1153,19 +1171,24 @@ You should end up with a `assets/js` folder structure like this:
     └── scene.ts
 ```
 
-### Add Phoenix Presence
+### Babylon Added
 
-### Movement
+Open up your browser and navigate to a specific room and you should see a 3D scene.  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
 
-# Enabling Immersive VR Mode
 
-# Using RXJS
+## Add Phoenix Presence
 
-# Adding WebRTC
+## Sharing Movement
 
-## Adding Agora
+### Using RXJS
 
-## Spatial Voice Audio
+## Enabling Immersive VR Mode
+
+## Adding WebRTC
+
+### Adding Agora
+
+### Spatial Voice Audio
 
 
 

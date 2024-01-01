@@ -51,7 +51,7 @@
       - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Babylon Added](#babylon-added)
-  - [Add Phoenix Presence](#add-phoenix-presence)
+  - [Add Simple Box for Avatar](#add-simple-box-for-avatar)
   - [Sharing Movement](#sharing-movement)
     - [Using RXJS](#using-rxjs)
   - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
@@ -1097,6 +1097,11 @@ window.addEventListener("keydown", async (ev) => {
   }
 });
 
+
+window.addEventListener("resize", function () {
+  engine.resize();
+});
+
 // run the main render loop
 engine.runRenderLoop(() => {
   scene.render();
@@ -1175,8 +1180,13 @@ You should end up with a `assets/js` folder structure like this:
 
 Open up your browser and navigate to a specific room and you should see a 3D scene.  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
 
+## Add Simple Box for Avatar
 
-## Add Phoenix Presence
+Now that we have a frontend graphics library let's draw box to represent a client.  There are a couple scenarios to handle.  If we are the first one to join, we don't need to draw any box because we don't see our own "head".  If a second person joins, the first person should be able to see the second person's box.  And if a third person joins, that person should be able to see the first and second person's boxes.  If someone leaves, then everyone still in the room should see that box disappear.  
+
+That means we need to manage a kind of presence state, an ongoing accumulator of who is present.  And then we need to sync changes, for any person that joins or leaves the room.
+
+
 
 ## Sharing Movement
 

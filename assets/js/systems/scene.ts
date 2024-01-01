@@ -66,6 +66,10 @@ window.addEventListener("keydown", async (ev) => {
   }
 });
 
+window.addEventListener("resize", function () {
+  engine.resize();
+});
+
 // run the main render loop
 engine.runRenderLoop(() => {
   scene.render();

@@ -1267,11 +1267,23 @@ The channel object already implements a way to decouple the code using a publish
 
 RxJS is (from their website) a library for composing asynchronous and event-based programs by using observable sequences.  This is a fancy way of saying that not only can we do regular pub/sub of events, we can transform and combine and filter events into new events that can also be subscribed to.  This will come in handy when we need to combine multiple events to figure out new gestures, such as determining when a user is trying to grab something.
 
+The main api we will be using from rxjs is `Subject`.  We can define the shape of messages that will pass through it like this:
+
+```
+let my_bus: Subject<{my_shape: string, whatever: number}>
+```
+
+Put whatever type you want between the `< >`.  Then to push new values into the event bus you use the `next()` method.  And to subscribe to messages use the `subscribe()` method.
+
+RxJS then provides a bunch of useful ways to combine, throttle, transform events from multiple streams of data.  I often reference https://rxmarbles.com/ to visualize how the data flows.
+
+Let's install rxjs from our `assets` directory:
+
 ```bash
 npm i rxjs
 ```
 
-Extend the config object like so:
+Extend the config object like so in `config.ts`:
 
 ```typescript
 import { Subject } from "rxjs"
@@ -1289,8 +1301,6 @@ export const config: Config = {
 }
 ```
 
-A `Subject` in rxjs is basically an event bus.  We can push messages into it, and also subscribe to it.
-
 In `broker.ts` we can forward the channel subscriptions into the new rxjs Subjects we created.
 
 ```typescript
@@ -1302,7 +1312,7 @@ channel.on("presence_diff", (payload) => {
   config.$presence_diff.next(payload);
 });
 ```
-Now let's create the new presence system that will create our boxes.
+Now let's create the new presence system that will subscribe to the events and create our boxes.
 
 ```typescript
 import { config } from "../config";

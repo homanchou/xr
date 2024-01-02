@@ -17,6 +17,7 @@ defmodule Xr.Application do
       # Start a worker by calling: Xr.Worker.start_link(arg)
       # {Xr.Worker, arg},
       # Start to serve requests, typically the last entry
+      XrWeb.Presence,
       XrWeb.Endpoint
     ]
 

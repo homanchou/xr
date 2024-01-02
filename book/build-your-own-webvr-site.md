@@ -102,13 +102,11 @@ There is a lot more I wanted to write about how my journey started with those ot
 - Maintained actively by Microsoft employees.
 
 ### Node on the backend
-- It does sound appealing to be able to reuse the same code between the frontend and backend
-- Can use socket.io, express to serve up pages.  There are quite a few libraries, npm is a huge resource.
-- There exists the potential to write a server in either Three.js or Babylon.js that has access to the same physics engine that can keep everything in sync on the clients.
-- Depending on how important your physics state is, that may be something you want to do.
-- If there is an unhandled bug, there is no room isolation.
-- Etherial Engine uses this approach and the stack seems to involve Kubernetes and docker to deploy and scale your stack, which seems like overkill at first if you just want to launch a small private space.
-- My feeling is, we should solve cheap small rooms first.  Make that an engaging experience on a single node that is easy to deploy, before worrying about massive scalability.  The reason people aren't coming isn't because we can't fit massive amounts of people.
+- Appealing to be able to reuse the same code between the frontend and backend
+- Can use socket.io, express to serve up pages.  There are quite a few libraries, npm is a huge resource, but didn't find the same Phoenix like framework available.
+- There exists the potential to write a server in either Three.js or Babylon.js that has access to the same physics engine that can operate as a server-side source of truth.
+- Etherial Engine supposedly uses node on the server-side.
+- I didn't explore this option more, because Phoenix provided a good enought framework.  I didn't feel as supported by any js framework, and running a full server side babylon or three.js headless engine seemed like overkill for what I wanted to do.
 
 ### Phoenix/Elixir backend
 - Elixir is a language/runtime that acts like a bunch of tiny processes (servers) that can communicate with each other, be distributed etc
@@ -121,7 +119,7 @@ There is a lot more I wanted to write about how my journey started with those ot
 - X-Plane flight simulator uses Elixir in their backend.
 
 
-In summary, I like these tools because I think it positions us in an attractive place to be able to start small and iterate and has features that will allow us to scale horizontally later.
+In summary, I chose particular tools because I think these selections positions the project in an attractive place to be able to start small and iterate yet has enough features that will allow us to scale horizontally later.
 
 ## Why not use off the shelf VR as a Service?
 
@@ -1182,23 +1180,197 @@ Open up your browser and navigate to a specific room and you should see a 3D sce
 
 ## Add Simple Box for Avatar
 
-Now that we have a frontend graphics library let's draw box to represent a client.  There are a couple scenarios to handle.  If we are the first one to join, we don't need to draw any box because we don't see our own "head".  If a second person joins, the first person should be able to see the second person's box.  And if a third person joins, that person should be able to see the first and second person's boxes.  If someone leaves, then everyone still in the room should see that box disappear.  
+Now that we have a frontend graphics library let's draw a simple box to represent a user.  There are a couple scenarios to handle.  If we are the first one to join, we don't need to draw any box because we don't see our own "head".  If a second person joins, the first person should be able to see the second person's box.  And if a third person joins, that person should be able to see the first and second person's boxes.  If someone leaves, then everyone still in the room should see that box disappear.  
 
-That means we need to manage a kind of presence state, an ongoing accumulator of who is present.  And then we need to sync changes, for any person that joins or leaves the room.
+That means whenever any person joins the channel they should get the current presence state, a full list of who is present.  And then we need to sync changes whenever any person joins or leaves the room.
 
+Fortunately, Phoenix Presence has solved this.  Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  And wouldn't you know it?  There is a generator for this too.  Gotta love them generators!
 
+```bash
+mix phx.gen.presence
+```
+
+Add your new module to your supervision tree, in `lib/xr/application.ex`, it must be after `PubSub` and before `Endpoint`:
+
+```elixir
+
+    children = [
+      {Phoenix.PubSub, name: Xr.PubSub},
+      ... 
+      XrWeb.Presence,
+      ...
+      XrWeb.Endpoint
+    ]
+
+```
+
+Modify `xr_web/channels/room_channel.ex` and add ` alias XrWeb.Presence` near the top of the file and also redefine the `after_join` handler:
+
+```elixir
+def handle_info(:after_join, socket) do
+    {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{
+      online_at: inspect(System.system_time(:second))
+    })
+
+    push(socket, "presence_state", Presence.list(socket))
+    {:noreply, socket}
+  end
+```
+
+When any user joins the room channel they will receive a `presence_state` message that lists all the users in the room.  They will also receive a `presence_diff` message any time a person joins or leaves the room.  
+
+We can console log all the different kinds of messages coming from the `RoomChannel` by adding this snippet to `broker.ts`:
+
+```typescript
+channel.onMessage = (event, payload, _) => {
+  if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
+    console.debug(event, payload);
+  }
+  return payload;
+};
+```
+
+Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like.  You should see something like:
+
+```
+presence_diff {joins: {…}, leaves: {…}}
+presence_state {13a92fdc-9f90-4779-9796-5327dd8f8e6e: {…}}
+```
+
+To properly subscribe for these messages we would use something like this:
+
+```typescript
+channel.on("presence_state", payload => { 
+    // for each user_id in payload
+    // check if box named user_id exists
+    // if not exists, create it
+ })
+channel.on("presence_diff", payload => { 
+   // for each user_id in payload.joins
+   // create box if not exists
+   // for each user_id in payload.leaves
+   // delete box if exists
+ })
+```
+
+There is no guaranteed order in which we get these messages, so our code should not depend on order.  
+
+This seems like a reasonable first approach to making a simple "avatar" presence.  Let's add a new system file at `assets/js/systems/presence.ts` in order to handle this feature.  That way we aren't polluting the `broker.ts` file with graphics and other logic.  In fact, I named the `broker` system after the fact that I wanted it to be simply responsible for forwarding messages between the channel.
+
+How then will the `presence` system receive messages from `broker`?
+
+## Sharing messages between services
+
+The channel object already implements a way to decouple the code using a publish/subscribe pattern.  If we shared the `channel` object in our `config` object, then any system can self subscribe using `config.channel.on("my_event")` etc and write a handler for the event.  However, before we go down that road, if we're going to fully embrace event-based programming, then I think we should standardize on RxJS as our API for all events.
+
+### Adding RXJS
+
+RxJS is (from their website) a library for composing asynchronous and event-based programs by using observable sequences.  This is a fancy way of saying that not only can we do regular pub/sub of events, we can transform and combine and filter events into new events that can also be subscribed to.  This will come in handy when we need to combine multiple events to figure out new gestures, such as determining when a user is trying to grab something.
+
+```bash
+npm i rxjs
+```
+
+Extend the config object like so:
+
+```typescript
+import { Subject } from "rxjs"
+
+export type Config = {
+  ...
+  $presence_state: Subject<{[user_id: string]: any }>
+  $presence_diff: Subject<{joins: {[user_id: string]: any }, leaves: {[user_id: string]: any }}>
+}
+
+export const config: Config = {
+  ...
+  $presence_state: new Subject<{[user_id: string]: any }>(),
+  $presence_diff: new Subject<{joins: {[user_id: string]: any }, leaves: {[user_id: string]: any }}>
+}
+```
+
+A `Subject` in rxjs is basically an event bus.  We can push messages into it, and also subscribe to it.
+
+In `broker.ts` we can forward the channel subscriptions into the new rxjs Subjects we created.
+
+```typescript
+channel.on("presence_state", (payload) => {
+  config.$presence_state.next(payload);
+});
+
+channel.on("presence_diff", (payload) => {
+  config.$presence_diff.next(payload);
+});
+```
+Now let's create the new presence system that will create our boxes.
+
+```typescript
+import { config } from "../config";
+import { TransformNode } from "@babylonjs/core";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+
+const { scene } = config;
+
+config.$presence_state.subscribe((payload) => {
+  for (const user_id in payload) {
+    createSimpleUser(user_id);
+  }
+});
+
+config.$presence_diff.subscribe((payload) => {
+  for (const user_id in payload.joins) {
+    createSimpleUser(user_id);
+  }
+  for (const user_id in payload.leaves) {
+    removeUser(user_id);
+  }
+});
+
+const removeUser = (user_id: string) => {
+  const user = scene.getTransformNodeByName(user_id);
+  if (user) {
+    user.dispose();
+  }
+};
+
+const createSimpleUser = (user_id: string) => {
+  if (user_id !== config.user_id) {
+    const user = scene.getTransformNodeByName(user_id);
+    if (!user) {
+      const transform = new TransformNode(user_id, scene);
+      const box = CreateBox("head");
+      box.parent = transform;
+    }
+  }
+};
+
+```
+
+Now if you test this in two browser windows you should see a box appear at the origin when there is a second client connected to the room.  And the box should disappear when all other clients have disconnected.  We have a slight problem though, we're not specifying where the box should be drawn so by default it's drawn at the origin.  Our own camera is not even at the origin, so we're not drawing the boxes at the location where our camera currently is in the shared space.  What we want is to draw the box at our camera position and if we move our camera the box that represents us should move to the new position.
 
 ## Sharing Movement
 
-### Using RXJS
+## Persistence of Scene State
 
-## Enabling Immersive VR Mode
+## Event Sourcing
 
 ## Adding WebRTC
 
 ### Adding Agora
 
 ### Spatial Voice Audio
+
+## Enabling Immersive VR Mode
+
+### Sharing Hand Movement
+
+### Grab and Throw objects
+
+## Making VR GUIs
+
+
+
+
 
 
 

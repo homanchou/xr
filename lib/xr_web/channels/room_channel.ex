@@ -1,5 +1,6 @@
 defmodule XrWeb.RoomChannel do
   use XrWeb, :channel
+  alias XrWeb.Presence
 
   @impl true
   def join("room:" <> room_id, _payload, socket) do
@@ -24,7 +25,9 @@ defmodule XrWeb.RoomChannel do
 
   @impl true
   def handle_info(:after_join, socket) do
-    broadcast(socket, "shout", %{user_id: socket.assigns.user_id, joined: socket.assigns.room_id})
+    {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
+
+    push(socket, "presence_state", Presence.list(socket))
     {:noreply, socket}
   end
 end

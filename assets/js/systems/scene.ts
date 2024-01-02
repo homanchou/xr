@@ -61,7 +61,7 @@ window.addEventListener("keydown", async (ev) => {
     if (scene.debugLayer.isVisible()) {
       scene.debugLayer.hide();
     } else {
-      scene.debugLayer.show();
+      scene.debugLayer.show({embedMode: true});
     }
   }
 });

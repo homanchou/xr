@@ -1365,7 +1365,7 @@ const createSimpleUser = (user_id: string) => {
 
 ```
 
-Now if you test this in two browser windows you should see a box appear at the origin when there is a second client connected to the room.  And the box should disappear when all other clients have disconnected.  
+Now if you navigate to a specific room URL in two browser windows you should see a box appear at the origin when there is a second client connected to the room.  And the box should disappear when all other clients have disconnected.  
 
 We have a slight problem though, we're not specifying where the box should be drawn so by default it's drawn at the origin.  Our own camera is not even at the origin, so we're not drawing the boxes at the location where our camera currently is in the shared space.  What we want is to draw the box at our camera position and if we move our camera the box that represents us should move to the new position.
 
@@ -1373,9 +1373,85 @@ We have a slight problem though, we're not specifying where the box should be dr
 
 Right now when we load a room URL, we immediately create the scene and add a camera in the `scene.ts` system.  Every browser that loads that same room URL creates a camera at exactly the same location so we're all on-top of each other!  Each user would not be able to see each other because we are all looking out the same way.
 
-Multiplayer games solve this problem by using a spawn point.  A spawn point has a position in 3D space, usually located on the ground of some surface.  Then when a user joins the room, we spawn the user near the spawn point with some randomness in position and maybe orientation too.  That way when multiple users join the room at the same time they're not as likely to be intersecting with each other.
+Multiplayer games solve this problem by using a spawn point.  A spawn point has a position in 3D space, usually located on the ground of some surface.  Then when a user joins the room, we spawn the user near the spawn point with some randomness in position and maybe orientation too.  That way when multiple users join the room at the same time they're not as likely to be intersecting with each other.  Let's put a pin in that idea for now, we'll come back to this spawn point concept later.  For now, let's assume that our default scene has a spawn point a the origin (0,0,0).
+
+In `scene.ts`, when we create our camera, we could initialize it in a slightly random position around the origin. 
+
+```typescript
+// create a random position around the origin
+const random_position = new Vector3(Math.random() * 10 - 5, 2, Math.random() * 10 - 5);
+const camera = new FreeCamera("my head", random_position, scene);
+```
+
+Then we can listen for any camera movement and then push that data into an RxJS Subject in order to decide what to do with it somewhere else.
+```typescript
+// when the camera moves, push data to eventbus
+camera.onViewMatrixChangedObservable.add(cam => {
+  config.$camera_moved.next([cam.position, cam.absoluteRotation])
+})
+```
+
+Let's define that new RxJS Subject on `config.ts`:
+```typescript
+export const config: Config = {
+  ...
+  $camera_moved: new Subject<[Vector3, Quaternion]>(),
+}
+```
+
+Since `broker.ts` is responsible for talking to the server through the channel, we'll have broker.ts subscribe and push the data to the server:
+
+```typescript
+// forward my camera movement to the room
+// not more frequently then every 200ms
+config.$camera_moved
+  .pipe(throttleTime(200))
+  .subscribe(([position, rotation]) => {
+    channel.push("i_moved", { position: position.asArray(), rotation: rotation.asArray() });
+  });
+```
+Here we start to see some convenient operators of RxJS.  When wearing a VR headset the VR camera rig is moving constantly even if you hold your head very still.  We will produce a message every single frame unless we throttle the data we're sending out.  I've decided that we don't need that level of resolution for imperceivable motion.  Using RxJS pipes we can transform the stream of data that is happening at 60fps to just 5 times a second using throttleTime 200 ms.  Since the Babylon.js camera position and absoluteRotation properties are actually rich objects that have many methods, we don't want to send that over to the channel because it's too complex.  Instead we convert the data to arrays of numbers because that's much less complicated to send.
+
+Next we need to do something with that message on the server side.  Let's add a handler for "i_moved", but for now just broadcast it to everyone else but ourselves (the sender).
+
+```elixir
+def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
+  broadcast_from(socket, "user_moved", %{
+    user_id: socket.assigns.user_id,
+    position: position,
+    rotation: rotation
+  })
+
+  {:noreply, socket}
+end
+```
+Next we need to add some channel code to receive the new "user_moved" message broadcast from the server to inform us of the movement of any other person that is moving.
+
+```typescript
+// receive other users movements from the server
+channel.on("user_moved", (payload) => {
+  config.$user_moved.next(payload)
+})
+```
+
+Again let's add the new RxJS Subject we just defined in `config.ts`:
+```typescript
+  ...
+  $user_moved: new Subject<{user_id: string, position: number[], rotation: number[]}>(),
+```
+
+hhhhhmmm... do we really need rxjs for all these one use messages?  Maybe you can inject rxjs for throttling once you make a subscription.
+
+make common code to make Observable from babylon observable.  make rxjs observable from a channel subscription as well.
+
+This handler pattern matches the incoming message on the "i_moved" event as well as the contents of the message having to contain the keys position and rotation and destructures them into variables all in one line.  We then simply use the broadcast_from API to send a new message "user_moved" to all other clients connected to this room.  The message we send forwards the position and rotation data and enhances the payload with the user_id.
+
+But when other clients join the room and render our box, how will they know that position?  When a client joins the room they will get a phoenix_state message that informs us all the user_ids that are in the room, but that message doesn't contain position data.  
+
+We can join the channel and push down some initial position to the server.  Phoenix presence tracking could theoretically keep that position as some metadata.  However, since players move around a lot, and Phoenix presence data is replicated across all nodes, I feel like that is too chatty to place data that is changing all the time in metadata.  Instead we need some kind of database to store rapidly changing data and be able to query all users positions when clients join.
 
 
+## Assets, Interactables, Non-player Related Items
 
 ## Persistence of Scene State
 
@@ -1397,7 +1473,15 @@ Multiplayer games solve this problem by using a spawn point.  A spawn point has 
 
 ## Deployment
 
+## Optimizations
 
+Truncate precision in position and rotation
+
+Eliminate duplicate or nearly identical position or rotation messages
+
+Batch send all messages every 200 ms.
+
+Group all movement data from the server into 200 ms batches.
 
 
 

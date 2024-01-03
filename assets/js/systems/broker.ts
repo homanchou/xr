@@ -1,3 +1,4 @@
+import { throttleTime } from "rxjs";
 import { config } from "../config";
 
 // channel connection
@@ -32,3 +33,16 @@ channel.on("presence_state", (payload) => {
 channel.on("presence_diff", (payload) => {
   config.$presence_diff.next(payload);
 });
+
+// forward my camera movement to the room
+// not more frequently then every 200ms
+config.$camera_moved
+  .pipe(throttleTime(200))
+  .subscribe(([position, rotation]) => {
+    channel.push("i_moved", { position: position.asArray(), rotation: rotation.asArray() });
+  });
+
+// receive other users movements from the server
+channel.on("user_moved", (payload) => {
+  config.$user_moved.next(payload)
+})

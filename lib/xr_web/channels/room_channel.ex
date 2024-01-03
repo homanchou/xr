@@ -18,8 +18,13 @@ defmodule XrWeb.RoomChannel do
   # It is also common to receive messages from the client and
   # broadcast to everyone in the current topic (room:lobby).
   @impl true
-  def handle_in("shout", payload, socket) do
-    broadcast(socket, "shout", payload)
+  def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
+    broadcast_from(socket, "user_moved", %{
+      user_id: socket.assigns.user_id,
+      position: position,
+      rotation: rotation
+    })
+
     {:noreply, socket}
   end
 

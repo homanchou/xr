@@ -27,7 +27,15 @@ const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
 config.scene = scene;
 // This creates and positions a free camera (non-mesh)
-const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
+
+// create a random position around the origin
+const random_position = new Vector3(Math.random() * 10 - 5, 2, Math.random() * 10 - 5);
+const camera = new FreeCamera("my head", random_position, scene);
+
+// when the camera moves, push data to eventbus
+camera.onViewMatrixChangedObservable.add(cam => {
+  config.$camera_moved.next([cam.position, cam.absoluteRotation])
+})
 
 // This targets the camera to scene origin
 camera.setTarget(Vector3.Zero());

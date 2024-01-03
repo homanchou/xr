@@ -9,6 +9,7 @@
     - [Babylon.js](#babylonjs)
     - [Node on the backend](#node-on-the-backend)
     - [Phoenix/Elixir backend](#phoenixelixir-backend)
+  - [Why not Unity?](#why-not-unity)
   - [Why not use off the shelf VR as a Service?](#why-not-use-off-the-shelf-vr-as-a-service)
   - [Preparing your development workstation](#preparing-your-development-workstation)
     - [Install Elixir](#install-elixir)
@@ -52,12 +53,19 @@
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Babylon Added](#babylon-added)
   - [Add Simple Box for Avatar](#add-simple-box-for-avatar)
-  - [Sharing Movement](#sharing-movement)
-    - [Using RXJS](#using-rxjs)
-  - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
+  - [Sharing messages between services](#sharing-messages-between-services)
+    - [Adding RXJS](#adding-rxjs)
+  - [Sharing Position and Movement](#sharing-position-and-movement)
+  - [Persistence of Scene State](#persistence-of-scene-state)
+  - [Event Sourcing](#event-sourcing)
   - [Adding WebRTC](#adding-webrtc)
     - [Adding Agora](#adding-agora)
     - [Spatial Voice Audio](#spatial-voice-audio)
+  - [Enabling Immersive VR Mode](#enabling-immersive-vr-mode)
+    - [Sharing Hand Movement](#sharing-hand-movement)
+    - [Grab and Throw objects](#grab-and-throw-objects)
+  - [Making VR GUIs](#making-vr-guis)
+  - [Deployment](#deployment)
 
 
 ## What this book is about
@@ -121,15 +129,16 @@ There is a lot more I wanted to write about how my journey started with those ot
 
 In summary, I chose particular tools because I think these selections positions the project in an attractive place to be able to start small and iterate yet has enough features that will allow us to scale horizontally later.
 
+## Why not Unity?
+
+While Unity also has an HTML5 export which can target the browser, it has certain strengths and weaknesses.  If you are already a Unity developer than you will feel right at home using the toolchain and exporting a new target build for the web makes a lot of sense.  You'll also be able to take advantage of a lot of pre-build tooling, asset store, etc.  But if you are a web developer first, then switching over to use Unity is to leave the comfort of web developing to build a game and inject it into your website later, instead of building your game in javascript in the first place.  It's like when folks used to use Adobe Flash and put them in their pages.  That's what the pipeline would be like.  Unity exports a kind of transpiled artifact using emscriptem which creates large downloads, slaps its logo on the splash page it and its also not really free.  
+
 ## Why not use off the shelf VR as a Service?
 
-We now have a couple of companies that provide turn key solutions to hold meetings and classes in VR.  I've tried Mozilla Hubs and FrameVR that provide login mechanisms, different avatars and environments to choose from, tools like street view, laser pointers, white boarding etc.  Both of them seem to be doing well and continuing to add new features.  I would say, if you are an end-user looking for a VR platform, these might be great choices for you.  It would be like a merchant choosing Shopify instead of creating their own ecommerce website from scratch, which can save them a lot of effort in not rebuilding the same tooling.  
+We now have a couple of companies that provide turn key solutions to hold meetings and classes in VR.  I've tried Mozilla Hubs and FrameVR that provide login mechanisms, different avatars and environments to choose from, tools like street view, laser pointers, white boarding etc.  Both of them seem to be doing well and continuing to add new features.  I would say, if you are an end-user looking for a VR platform to hang out with friends, host an event, teach a lecture, play a game etc, these might be great choices for you.  It would be like a merchant choosing Shopify instead of creating their own ecommerce website from scratch, which can save them a lot of effort in not rebuilding the same tooling.  
 
-But there is also a certain amount of vendor lock-in you get when choosing a platform.  These platforms are also rather purpose built to hold Zoom/Skype like classes for students in VR.  There are plenty of built in menus for screen sharing, taking a screenshot, posting something to social media etc.  Plenty of built in functionality that you might not need or want.  You are also limited in how much you can customize an experience for your own visitors including the menus and login and management just outside of the VR experience.  Being able to build your own platform from the ground up will allow you to have complete control over your own customers and your own features.
+But there is also a certain amount of vendor lock-in you get when choosing a platform and you have to agree to their terms and conditions.  These platforms are also rather purpose built to hold Zoom/Skype like classes for students in VR.  There are plenty of built in menus for screen sharing, taking a screenshot, posting something to social media etc.  Plenty of built in functionality that you might not need or want.  You are also limited in how much you can customize an experience for your own visitors including the menus and login and management just outside of the VR experience.  Being able to build your own platform from the ground up will allow you to have complete control over your own customers and your own features.
 
-I miss the days when making a website was simple.  All a developer needed was a server to host a webpage.  A text editor and an ftp client.  Web 1.0 days.  Then came dynamic webpages backed by databases.  Frameworks entered.  So did version control and testing and migrations.  Pretty soon the stakes got higher and so did the barrier to entry.  Web 2.0.  Now we have more realtime communications then ever with realtime messaging, notifications etc.  
-
-Though if we take a step back it's not that bad... (ok it is ... a lot of stuff), but it's still the accumulation of tools.  Tools that work for us, and we just need a little know how to figure out how to fit them together.  Fortunately other companies have packaged some of those tools into libraries like Babylon.js and frameworks like Phoenix, that make our job so much easier.
 
 ## Preparing your development workstation
 
@@ -1356,9 +1365,17 @@ const createSimpleUser = (user_id: string) => {
 
 ```
 
-Now if you test this in two browser windows you should see a box appear at the origin when there is a second client connected to the room.  And the box should disappear when all other clients have disconnected.  We have a slight problem though, we're not specifying where the box should be drawn so by default it's drawn at the origin.  Our own camera is not even at the origin, so we're not drawing the boxes at the location where our camera currently is in the shared space.  What we want is to draw the box at our camera position and if we move our camera the box that represents us should move to the new position.
+Now if you test this in two browser windows you should see a box appear at the origin when there is a second client connected to the room.  And the box should disappear when all other clients have disconnected.  
 
-## Sharing Movement
+We have a slight problem though, we're not specifying where the box should be drawn so by default it's drawn at the origin.  Our own camera is not even at the origin, so we're not drawing the boxes at the location where our camera currently is in the shared space.  What we want is to draw the box at our camera position and if we move our camera the box that represents us should move to the new position.
+
+## Sharing Position and Movement
+
+Right now when we load a room URL, we immediately create the scene and add a camera in the `scene.ts` system.  Every browser that loads that same room URL creates a camera at exactly the same location so we're all on-top of each other!  Each user would not be able to see each other because we are all looking out the same way.
+
+Multiplayer games solve this problem by using a spawn point.  A spawn point has a position in 3D space, usually located on the ground of some surface.  Then when a user joins the room, we spawn the user near the spawn point with some randomness in position and maybe orientation too.  That way when multiple users join the room at the same time they're not as likely to be intersecting with each other.
+
+
 
 ## Persistence of Scene State
 
@@ -1378,7 +1395,7 @@ Now if you test this in two browser windows you should see a box appear at the o
 
 ## Making VR GUIs
 
-
+## Deployment
 
 
 

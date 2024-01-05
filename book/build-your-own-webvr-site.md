@@ -10,7 +10,7 @@
     - [Node on the backend](#node-on-the-backend)
     - [Phoenix/Elixir backend](#phoenixelixir-backend)
   - [Why not Unity?](#why-not-unity)
-  - [Why not use off the shelf VR as a Service?](#why-not-use-off-the-shelf-vr-as-a-service)
+  - [Why not use off the shelf WebVR Services?](#why-not-use-off-the-shelf-webvr-services)
   - [Preparing your development workstation](#preparing-your-development-workstation)
     - [Install Elixir](#install-elixir)
     - [Preserve iex history.](#preserve-iex-history)
@@ -51,13 +51,16 @@
       - [Add scene.ts](#add-scenets)
       - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
-    - [Babylon Added](#babylon-added)
-  - [Add Simple Box for Avatar](#add-simple-box-for-avatar)
-  - [Sharing messages between services](#sharing-messages-between-services)
-    - [Adding RXJS](#adding-rxjs)
-  - [Sharing Position and Movement](#sharing-position-and-movement)
+    - [Babylon Added Summary](#babylon-added-summary)
+  - [Simple Objects](#simple-objects)
+  - [Simple Presence](#simple-presence)
+    - [Event Sourcing](#event-sourcing)
+    - [Phoenix Presence](#phoenix-presence)
+    - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
+    - [Add avatar.ts](#add-avatarts)
+    - [Users Snapshot](#users-snapshot)
+  - [Assets, Interactables, Non-player Related Items](#assets-interactables-non-player-related-items)
   - [Persistence of Scene State](#persistence-of-scene-state)
-  - [Event Sourcing](#event-sourcing)
   - [Adding WebRTC](#adding-webrtc)
     - [Adding Agora](#adding-agora)
     - [Spatial Voice Audio](#spatial-voice-audio)
@@ -66,6 +69,15 @@
     - [Grab and Throw objects](#grab-and-throw-objects)
   - [Making VR GUIs](#making-vr-guis)
   - [Deployment](#deployment)
+  - [Optimizations](#optimizations)
+    - [Truncate precision in position and rotation](#truncate-precision-in-position-and-rotation)
+    - [Eliminate duplicate or nearly identical position or rotation messages](#eliminate-duplicate-or-nearly-identical-position-or-rotation-messages)
+    - [Batch send all messages every 200 ms.](#batch-send-all-messages-every-200-ms)
+    - [Group all movement data from the server into 200 ms batches.](#group-all-movement-data-from-the-server-into-200-ms-batches)
+    - [Shorten the UUIDs in room and user](#shorten-the-uuids-in-room-and-user)
+    - [Use pids instead of registry](#use-pids-instead-of-registry)
+  - [Scaling](#scaling)
+    - [Replacing Registry with Syn](#replacing-registry-with-syn)
 
 
 ## What this book is about
@@ -131,9 +143,11 @@ In summary, I chose particular tools because I think these selections positions 
 
 ## Why not Unity?
 
-While Unity also has an HTML5 export which can target the browser, it has certain strengths and weaknesses.  If you are already a Unity developer than you will feel right at home using the toolchain and exporting a new target build for the web makes a lot of sense.  You'll also be able to take advantage of a lot of pre-build tooling, asset store, etc.  But if you are a web developer first, then switching over to use Unity is to leave the comfort of web developing to build a game and inject it into your website later, instead of building your game in javascript in the first place.  It's like when folks used to use Adobe Flash and put them in their pages.  That's what the pipeline would be like.  Unity exports a kind of transpiled artifact using emscriptem which creates large downloads, slaps its logo on the splash page it and its also not really free.  
+While Unity an HTML5 export which can target the browser, it has certain strengths and weaknesses.  If you are already a Unity developer than you will feel right at home using the environment and therefore exporting a new build target should be easy and makes a lot of sense.  You'll also be able to take advantage of a lot of pre-built tooling, asset store, etc.  But if you are a web developer already, then switching over to use Unity is to leave the comfort of Javascript to build a self-contained game then export and embed it into your website.  
 
-## Why not use off the shelf VR as a Service?
+The most powerful distinction I think I can make is that web native tech like Three.js or Babylon.js was made for the web to start with so you can freely intermingle regular web development-y code along side WebXR.  The web is already interconnected computers and networks.  In native website, jumping to another world is simply clicking on a link.  Web native sites are a webpage first, and a game second.  Unity is a game first, and a webpage second.
+
+## Why not use off the shelf WebVR Services?
 
 We now have a couple of companies that provide turn key solutions to hold meetings and classes in VR.  I've tried Mozilla Hubs and FrameVR that provide login mechanisms, different avatars and environments to choose from, tools like street view, laser pointers, white boarding etc.  Both of them seem to be doing well and continuing to add new features.  I would say, if you are an end-user looking for a VR platform to hang out with friends, host an event, teach a lecture, play a game etc, these might be great choices for you.  It would be like a merchant choosing Shopify instead of creating their own ecommerce website from scratch, which can save them a lot of effort in not rebuilding the same tooling.  
 
@@ -988,7 +1002,7 @@ We need a mechanism to share data between systems.  For example, the `broker.ts`
 To solve this, let's create a file called `assets/js/config.ts`.
 
 ```typescript
-import type { Socket } from "phoenix"
+import type { Socket, Channel } from "phoenix"
 import type { Scene } from "@babylonjs/core/scene"
 
 export type Config = {
@@ -996,6 +1010,7 @@ export type Config = {
   user_id: string
   scene: Scene
   socket: Socket
+  channel: Channel
 }
 
 export const config: Config = {
@@ -1003,6 +1018,7 @@ export const config: Config = {
   user_id: "",
   scene: null,
   socket: null
+  channel: null
 }
 ```
 
@@ -1019,6 +1035,7 @@ import { config } from "../config";
 const socket = config.socket;
 socket.connect();
 let channel = socket.channel(`room:${config.room_id}`, {});
+config.channel = channel;
 channel.join()
   .receive("ok", resp => { console.log("Joined successfully", resp); })
   .receive("error", resp => { console.log("Unable to join", resp); });
@@ -1183,21 +1200,68 @@ You should end up with a `assets/js` folder structure like this:
     └── scene.ts
 ```
 
-### Babylon Added
+### Babylon Added Summary
 
-Open up your browser and navigate to a specific room and you should see a 3D scene.  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
+Open up your browser and navigate to a specific room and you should see a 3D scene.  Our camera is also already integrated with the keyboard and mouse so you can travel around in the scene.  To open up the Babylon.js inspector we've added a short-cut (CTRL-b), so that we can inspect the meshes in the scene.  
 
-## Add Simple Box for Avatar
+Congratuations!  We have successfully integrated a 3D rendering engine into our front-end.  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
 
-Now that we have a frontend graphics library let's draw a simple box to represent a user.  There are a couple scenarios to handle.  If we are the first one to join, we don't need to draw any box because we don't see our own "head".  If a second person joins, the first person should be able to see the second person's box.  And if a third person joins, that person should be able to see the first and second person's boxes.  If someone leaves, then everyone still in the room should see that box disappear.  
+##  Simple Objects
 
-That means whenever any person joins the channel they should get the current presence state, a full list of who is present.  And then we need to sync changes whenever any person joins or leaves the room.
+The objects we are seeing in the 3D scene were hardcoded in `scene.ts`.  But we'd like the ability to customize each room with some different meshes so that each room looks differently.  
 
-Fortunately, Phoenix Presence has solved this.  Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  And wouldn't you know it?  There is a generator for this too.  Gotta love them generators!
+Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.
+
+```bash
+mix phx.gen.schema Rooms.Entity room_entities room_id:uuid component_name:string component_value:map
+
+```
+
+
+
+In fact, without first knowing where we are allowed to place the camera (we wouldn't want to appear in the middle of a wall for example), we shouldn't be able to join the room.  A requirement of joining should be to first download some information about the environment.
+
+
+
+## Simple Presence
+
+Presence is the notion of seeing each other's avatars in a shared space.  The first thing we need to figure out is where we are supposed to place our camera when we enter a room.  Since rooms can contain different kinds of environments, we might be in a maze or on a spaceship, we can't just assume we can place our camera at the origin (0,0,0).
+
+
+If we join a room at a certain location (usually called a spawn point), then our avatar should appear on or near the spawn point.  When we move forward, we want other people to see that movement applied to our avatar.  When we log out of a room, then other people should see our avatar disappear.  This means there are two basic things that need to be solved at the same time: Visiblity, which is whether to draw an avatar or not based on a user joining or leaving a room, and Position/Orientation, because we can't draw the avatar unless we also know where to draw it and how it's facing!
+
+We would be able to do something like that if we were to receive messages that looked something like this:
+
+```
+{event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_left", payload: {user_id: "tom"}}
+
+```
+
+### Event Sourcing
+
+There is a pattern called Event Sourcing that treats a stream of events as the source of truth.  This stream of events can be persisted or processed in real time to transform the data into alternate forms that suite particular use cases.  We modified data is called projections.  The classic example of event sourcing is an accountant's ledger.  Each event in the ledger has a date (a timestamp), a description and whether it is a credit or debit from some account in the ledger.  With this data we can build up different projections such as, sum over all the credits and debits to come up with how much balance we have in an account. 
+
+Our 3D scene is like a projection too.  Each connected browser can process a stream of events like the one above and any time we received "user_joined", we can draw a simple avatar at the given position and rotation.  For now we can start with a simple gray box.  The same principles should be applicable to more complicated avatars later.  If we get the "user_moved" message we'll just update that box's position and rotation.  Finally if we receive the "user_left" message then we delete that 3D object from the scene.
+
+In event sourcing, the projections are built up by processing every message in order from the beginning.  But if a client connects to the room later then the others, or had to disconnect and then reconnect later, they would have missed out on any messages sent while they were not connected to the channel.  To remedy this, as soon as a client connects to the room we need to catch them up on all the missing users that have already joined by either sending all the previous missing messages or just a list of all the users present now.
+
+It's more practical to send a snapshot of the current state because sending a log of all the missing messages would be a waste of data transfer.  Usually this is because when we enter a room, we only care where things and people are right now.  We don't need to know where they were a few moments ago let alone since the beginning of time.  On the other hand, if we wanted to create a re-play feature to relive the experience of a party or game that we were not able to attend in realtime, we can use the event stream can replay the events so we can experience all the original movements again.
+
+### Phoenix Presence
+
+To help us with the join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.  It also sends a "presence_state" message that is pushed to the client upon joining to send them the current users in the room.  
+
+Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  
+
+Let's get started!  And wouldn't you know it?  There is a generator for this too.  Gotta love them generators!
 
 ```bash
 mix phx.gen.presence
 ```
+
+This creates a new file for us `xr_web/channels/presence.ex`.
 
 Add your new module to your supervision tree, in `lib/xr/application.ex`, it must be after `PubSub` and before `Endpoint`:
 
@@ -1233,6 +1297,7 @@ We can console log all the different kinds of messages coming from the `RoomChan
 ```typescript
 channel.onMessage = (event, payload, _) => {
   if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
+    // since this is debug level you'll need to set you browser's log level accordingly
     console.debug(event, payload);
   }
   return payload;
@@ -1241,10 +1306,281 @@ channel.onMessage = (event, payload, _) => {
 
 Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like.  You should see something like:
 
-```
+```javascript
 presence_diff {joins: {…}, leaves: {…}}
 presence_state {13a92fdc-9f90-4779-9796-5327dd8f8e6e: {…}}
 ```
+
+Ok, great... but, didn't we want messages that looked more like?:
+
+```javascript
+{event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_left", payload: {user_id: "tom"}}
+```
+
+The Phoenix Presence is helping us tracking joins and leaves and we even get the current list of users in a room, but we're missing positions and rotations and also the format of the messages is not to our liking.  
+
+### Phoenix Presence handle_metas Callback
+
+It turns out that we can add a callback to our `channels/presence.ex` that will get triggered everytime someone joins or leaves the room.  From that callback we could shape the kind of event that we want.  For now let's broadcast messages to all connected users of the room using a broadcast.  Since we're not broadcasting from within the channel we're using a slightly different api `XrWeb.Endpoint.broadcast`.
+
+```elixir
+@doc """
+  Presence is great for external clients, such as JavaScript applications,
+  but it can also be used from an Elixir client process to keep track of presence changes
+  as they happen on the server. This can be accomplished by implementing the optional init/1
+   and handle_metas/4 callbacks on your presence module.
+  """
+  def init(_opts) do
+    # user-land state
+    {:ok, %{}}
+  end
+
+  def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
+    for {user_id, _} <- joins do
+      IO.inspect(user_id, label: "joined")
+
+      # we don't know the user's position, so let's default to 0,0,0 for now
+      XrWeb.Endpoint.broadcast!("room:#{room_id}", "user_joined", %{
+        user_id: user_id,
+        position: [0,0,0],
+        rotation: [0,0,0,1]
+      })
+    end
+
+    for {user_id, _} <- leaves do
+      XrWeb.Endpoint.broadcast!("room:#{room_id}", "user_left", %{user_id: user_id})
+    end
+
+    {:ok, state}
+  end
+```
+
+We're cheating a little bit, because it's not clear how we get the initial position and rotation of a connected client.  We'll come back to that later.  For now, you can test with two browsers and see if you see these new types of messages in the browser's (debug level) console when you join and leave a room.  
+
+### Add avatar.ts
+
+Let's add a new system file dedicated to drawing and moving the avatars at `systems/avatar.ts`.  This file will do all the things we talked about:
+1. Create a box when we get "user_join"
+2. Remove the box when we get "user_left"
+3. Listen to camera movement and send it to the channel (when we move).
+4. Receive "user_moved" data (when others move) from the channel and update the box position and rotation.
+
+```typescript
+import { config } from "../config";
+import { Quaternion, TransformNode } from "@babylonjs/core";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+
+const { scene, channel } = config;
+
+let lastSyncTime = 0;
+const throttleTime = 200; // ms
+// when the camera moves, push data to channel but limit to every 200ms
+scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
+  console.log("camera moved");
+  if (Date.now() - lastSyncTime > throttleTime) {
+    config.channel.push("i_moved", {
+      position: cam.position.asArray(),
+      rotation: cam.absoluteRotation.asArray(),
+    });
+    lastSyncTime = Date.now();
+  }
+});
+
+
+channel.on("user_joined", (payload: { user_id: string, position: number[], rotation: number[]; }) => {
+  console.log("user_joined", payload);
+  createSimpleUser(payload.user_id, payload.position, payload.rotation);
+});
+
+channel.on("user_left", (payload: { user_id: string; }) => {
+  console.log("user_left", payload);
+  removeUser(payload.user_id);
+});
+
+channel.on("user_moved", (payload: { user_id: string, position: number[], rotation: number[]; }) => {
+  console.log("user_moved", payload);
+  poseUser(payload.user_id, payload.position, payload.rotation);
+});
+
+
+const removeUser = (user_id: string) => {
+  const user = scene.getTransformNodeByName(user_id);
+  if (user) {
+    user.dispose();
+  }
+};
+
+const createSimpleUser = (user_id: string, position: number[], rotation: number[]) => {
+  if (user_id !== config.user_id) {
+    const user = scene.getTransformNodeByName(user_id);
+    if (!user) {
+      const transform = new TransformNode(user_id, scene);
+      const box = CreateBox("head");
+      box.parent = transform;
+      poseUser(user_id, position, rotation);
+    }
+  }
+};
+
+const poseUser = (user_id: string, position: number[], rotation: number[]) => {
+  const transform = scene.getTransformNodeByName(user_id);
+  if (transform) {
+    transform.position.fromArray(position);
+    if (!transform.rotationQuaternion) { 
+      transform.rotationQuaternion = Quaternion.FromArray(rotation); 
+    } else {
+      transform.rotationQuaternion.x = rotation[0];
+      transform.rotationQuaternion.y = rotation[1];
+      transform.rotationQuaternion.z = rotation[2];
+      transform.rotationQuaternion.w = rotation[3];
+    }
+  }
+};
+```
+Remember to add `import "./systems/avatar";` to `rooms.ts` in order to import the new system.
+
+We're sending a new message to the room channel "i_moved" whenever the camera moves.  We need to handle that and transform it to the event we want.  We're doing a bit of throttling just so we don't slam the server with every tiny bit of movement.  5 times a second should be plenty.
+
+Add this handler in `room_channel.ex` and broadcast this message to everyone but ourselves as "user_moved":
+
+```elixir
+  @impl true
+  def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
+    broadcast_from(socket, "user_moved", %{
+      user_id: socket.assigns.user_id,
+      position: position,
+      rotation: rotation
+    })
+
+    {:noreply, socket}
+  end
+
+```
+The handler pattern matches the incoming message "i_moved", then broadcasts to all other connected clients a message of event type "user_moved".
+
+Open two browsers windows and try moving around the space with your cursor keys in each window and see if you can see the box of the other avatar.  If you only see a box in one window and not the other, you may have encountered the issue I talked about earlier.  One of the browsers, the one that joins much later may miss the "user_joined" message generated for the first browser and therefore doesn't draw its box.
+
+The room channel could send down a list of all users with positions and rotations if it kept this data.  The Phoenix Presence is already tracking user_ids.  We  need to save positions and rotations somewhere too.
+
+### Users Snapshot
+
+We can create a serverside snapshot of where every user is in 3D space.  Then whenever a user joins or rejoins we push the snapshot down to the client so they can draw any previously joined users.
+
+We can make a map of users like so:
+
+```elixir
+users = %{}
+```
+
+Then whenever a user moves we'll just store the last known position and rotation into the map like this:
+
+```elixir
+%{"tom" => %{"position" => [...], "rotation" => [...]}}
+```
+
+We can't create this map inside the `RoomChannel` because each connected client gets their own independent `RoomChannel` process.  We need to store this map somewhere else, some place that is listening to events happening for a room from the very beginning.  We could use a proper database like mysql or postgres but the round trip to a external database is slow and expensive for the amount of frequent user movement we will be getting.  Let's just store it in memory.
+
+Elixir has this really nifty way of creating a tiny server called a GenServer.  Let's create one now to wrap our users snapshot.  Create a folder `servers` and file at `lib/xr/servers/user_snapshot.ex`
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+
+  def start_link() do
+    GenServer.start_link(__MODULE__, [])
+  end
+
+  def init([]) do
+    {:ok, %{users: %{}}}
+  end
+end
+```
+
+This boiler plate just uses the GenServer behavior and allows us to create a genserver with an initial state of an empty users map.
+
+Try this out in the elixir iex terminal, (Since I run `iex -S mix phx.server` I always have one running in my vscode terminal window):
+
+```elixir
+{:ok, pid } = Xr.Servers.UserSnapshot.start_link()
+iex> pid
+#PID<0.1742.0>
+iex> :sys.get_state(pid)
+%{users: %{}}
+```
+
+We get a pid, a process id for our server, and we can inspect the state inside that pid.
+
+Next we need our server to be able to react to "user_moved" etc to store the user position and rotation in the map.  The genserver has two kinds of APIs, one for dealing with calling GenServer functions to passing a message to the pid that is the genserver, and a set of handlers for reacting to receiving the messages inside the GenServer.  Add these lines to the `user_snapshot.ex` file:
+
+```elixir
+  def user_moved(pid, payload) do
+    GenServer.cast(pid, {:user_moved, payload})
+  end
+
+  @impl true
+  def handle_cast(
+        {:user_moved, %{"user_id" => user_id, "position" => position, "rotation" => rotation}},
+        state
+      ) do
+    {:noreply,
+     %{
+       state
+       | users: Map.put(state.users, user_id, %{"position" => position, "rotation" => rotation})
+     }}
+  end
+```
+You can test this in iex (you'll need to get a new pid after recompiling the changes):
+
+```elixir
+Xr.Servers.UserSnapshot.user_moved(pid, %{"user_id" => "tom", "position" => [1,2,3], "rotation" => [45,65,66,1]})
+:ok
+iex> :sys.get_state(pid)
+%{users: %{"tom" => %{"position" => [1, 2, 3], "rotation" => [45, 65, 66, 1]}}}
+```
+
+Now we need to start this GenServer whenever someone visits the room URL and we need a way to know what the pid is from other parts of the code.
+
+
+<!-- 
+### Share user movement
+
+Now for sharing our camera movement data.  The boiler plate `scene.ts` code we added earlier already hooks up basic mouse and cursor keys.  If you press your up, left, right, down arrows keys your POV will change.  We want to take the new camera position and rotation and push it to the room channel.
+
+Let's a camera listener to `system/avatar.ts`:
+
+```typescript
+
+const { scene } = config;
+
+let lastSyncTime = 0;
+const throttleTime = 200; // ms
+// when the camera moves, push data to channel but limit to every 200ms
+scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
+  if (Date.now() - lastSyncTime < throttleTime) return;
+  config.channel.push("i_moved", {
+    position: cam.position.asArray(),
+    rotation: cam.absoluteRotation.asArray(),
+  });
+  lastSyncTime = Date.now();
+});
+
+```
+
+
+To see this message in the browser javascript console, add this in our `avatar.ts` file:
+
+```typescript
+config.channel.on("user_moved", (payload: { user_id: string, position: number[], rotation: number[]; }) => {
+  console.log("user_moved", payload);
+});
+```
+
+Now we should be getting the event shapes that we wanted.  Test it out!
+
+
+
 
 To properly subscribe for these messages we would use something like this:
 
@@ -1448,14 +1784,12 @@ This handler pattern matches the incoming message on the "i_moved" event as well
 
 But when other clients join the room and render our box, how will they know that position?  When a client joins the room they will get a phoenix_state message that informs us all the user_ids that are in the room, but that message doesn't contain position data.  
 
-We can join the channel and push down some initial position to the server.  Phoenix presence tracking could theoretically keep that position as some metadata.  However, since players move around a lot, and Phoenix presence data is replicated across all nodes, I feel like that is too chatty to place data that is changing all the time in metadata.  Instead we need some kind of database to store rapidly changing data and be able to query all users positions when clients join.
+We can join the channel and push down some initial position to the server.  Phoenix presence tracking could theoretically keep that position as some metadata.  However, since players move around a lot, and Phoenix presence data is replicated across all nodes, I feel like that is too chatty to place data that is changing all the time in metadata.  Instead we need some kind of database to store rapidly changing data and be able to query all users positions when clients join. -->
 
 
 ## Assets, Interactables, Non-player Related Items
 
 ## Persistence of Scene State
-
-## Event Sourcing
 
 ## Adding WebRTC
 
@@ -1475,17 +1809,20 @@ We can join the channel and push down some initial position to the server.  Phoe
 
 ## Optimizations
 
-Truncate precision in position and rotation
+### Truncate precision in position and rotation
 
-Eliminate duplicate or nearly identical position or rotation messages
+### Eliminate duplicate or nearly identical position or rotation messages
 
-Batch send all messages every 200 ms.
+### Batch send all messages every 200 ms.
 
-Group all movement data from the server into 200 ms batches.
+### Group all movement data from the server into 200 ms batches.
 
+### Shorten the UUIDs in room and user
 
+### Use pids instead of registry
 
+## Scaling
 
-
+### Replacing Registry with Syn
 
 

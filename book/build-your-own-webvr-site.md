@@ -56,6 +56,7 @@
     - [Escape Room](#escape-room)
     - [Preparing Room To Supply Data](#preparing-room-to-supply-data)
     - [Create some random obstacles](#create-some-random-obstacles)
+    - [Add some color](#add-some-color)
     - [Spawn Point](#spawn-point)
   - [Simple Objects](#simple-objects)
   - [Simple Presence](#simple-presence)
@@ -1425,6 +1426,68 @@ Now let's pass this data to the front-end via the room channel.  After we join t
 ```
 
 Now lets make a new system on the front-end to consume this message and draw the boxes.  Create a file at `assets/js/systems/snapshot.ts`:
+
+```typescript
+import { CreateBox } from "@babylonjs/core/Meshes/Builders";
+import { config } from "../config";
+
+const { scene, channel } = config;
+
+channel.on("snapshot", (payload) => {
+  // payload is an object of entities, let's go through every one of them
+  Object.entries(payload).forEach(([key, value]) => {
+    process_entity(key, value as any);
+  });
+});
+
+const process_entity = (entity_id: string, components: object) => {
+  // only react if the mesh_builder component is present in components
+  if (components["mesh_builder"]) {
+    const [mesh_type, mesh_args] = components["mesh_builder"];
+    // currently only handling box type at the moment
+    if (mesh_type === "box") {
+      const box = CreateBox(entity_id, mesh_args, scene);
+      if (components["position"]) {
+        box.position.fromArray(components["position"]);
+      }
+    }
+  }
+};
+```
+
+We're basically just passing the arguments that the Babylon.js Meshbuilder CreateBox already takes and invoking it on the frontend.  
+
+### Add some color
+
+If you now visit your browser and create some different rooms you will see some random boxes spread about.  They are pretty boring looking though.  Let's try adding some color.
+
+Open up `rooms.ex` and add a color component in our random box generator:
+
+```elixir
+  for _ <- 1..Enum.random(5..20) do
+    create_entity(room.id, Ecto.UUID.generate(), %{
+      ...
+      # add this
+      "color" => create_random_color()
+    })
+  end
+```
+
+Also define a function that can create a random hex color:
+
+```elixir
+  def create_random_color() do
+    # make a random hex number 3 times and join the array into a string
+
+    arr =
+      for _ <- 1..3 do
+        Enum.random(0..255) |> Integer.to_string(16) |> String.pad_leading(2, ["0"])
+      end
+
+    "#" <> Enum.join(arr, "")
+  end
+```
+We'll listen to that component inside `snapshot.ts`
 
 
 

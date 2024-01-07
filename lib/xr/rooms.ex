@@ -59,7 +59,8 @@ defmodule Xr.Rooms do
     for _ <- 1..Enum.random(5..20) do
       create_entity(room.id, Ecto.UUID.generate(), %{
         "mesh_builder" => ["box", create_random_box_args()],
-        "position" => create_random_position()
+        "position" => create_random_position(),
+        "color" => create_random_color()
       })
     end
 
@@ -69,6 +70,17 @@ defmodule Xr.Rooms do
 
   def create_random_position() do
     [Enum.random(-25..25), Enum.random(-2..2), Enum.random(-25..25)]
+  end
+
+  def create_random_color() do
+    # make a random hex number 3 times and join the array into a string
+
+    arr =
+      for _ <- 1..3 do
+        Enum.random(0..255) |> Integer.to_string(16) |> String.pad_leading(2, ["0"])
+      end
+
+    "#" <> Enum.join(arr, "")
   end
 
   def create_random_box_args() do

@@ -1,5 +1,7 @@
 import { CreateBox } from "@babylonjs/core/Meshes/Builders";
 import { config } from "../config";
+import { StandardMaterial } from "@babylonjs/core/Materials";
+import { Color3 } from "@babylonjs/core";
 
 const { scene, channel } = config;
 
@@ -20,6 +22,13 @@ const process_entity = (entity_id: string, components: object) => {
       if (components["position"]) {
         box.position.fromArray(components["position"]);
       }
+      if (components["color"]) {
+        let material = new StandardMaterial(components["color"], scene);
+        material.alpha = 1;
+        material.diffuseColor = Color3.FromHexString(components["color"]);
+        box.material = material;
+      }
     }
+
   }
 };

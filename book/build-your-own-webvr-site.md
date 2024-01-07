@@ -52,6 +52,11 @@
       - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Babylon Added Summary](#babylon-added-summary)
+  - [Design an Experience](#design-an-experience)
+    - [Escape Room](#escape-room)
+    - [Preparing Room To Supply Data](#preparing-room-to-supply-data)
+    - [Create some random obstacles](#create-some-random-obstacles)
+    - [Spawn Point](#spawn-point)
   - [Simple Objects](#simple-objects)
   - [Simple Presence](#simple-presence)
     - [Event Sourcing](#event-sourcing)
@@ -82,7 +87,7 @@
 
 ## What this book is about
 
-This book is a step-by-step guide to building a website that is also a platform for WebXR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime that acts like an operating system), WebRTC (voice chat and video streams) and Phoenix Channels (other realtime communications).  I'll take you through the steps of starting a new project from the very first commit.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  We'll build a basic first person shooter/escape room style game from first principles.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Oculus Quest.
+This book is a step-by-step guide to building a website that is also a platform for VR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime that acts like an operating system), WebRTC (voice chat and video streams) and Phoenix Channels (other realtime communications).  I'll take you through the steps of starting a new project from the very first commit.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  I'll be building something specific for my platform, but hopefully it gives you some ideas for building your own worlds.  Or give you a deep understanding of this particular stack so that you can contribute back to my open-source project.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Oculus Quest.
 
 ## Who is this book for?
 
@@ -1202,21 +1207,242 @@ You should end up with a `assets/js` folder structure like this:
 
 ### Babylon Added Summary
 
-Open up your browser and navigate to a specific room and you should see a 3D scene.  Our camera is also already integrated with the keyboard and mouse so you can travel around in the scene.  To open up the Babylon.js inspector we've added a short-cut (CTRL-b), so that we can inspect the meshes in the scene.  
+Open up your browser and navigate to a specific room URL and you should see a 3D scene.  Our camera is also already integrated with the keyboard and mouse so you can travel around in the scene, by clicking and dragging your mouse and then using the cursor keys to move forward or backward.  To open up the Babylon.js inspector we've added a short-cut (CTRL-b), so that we can inspect the meshes in the scene.  
 
-Congratuations!  We have successfully integrated a 3D rendering engine into our front-end.  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
+A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
 
-##  Simple Objects
+## Design an Experience
 
-The objects we are seeing in the 3D scene were hardcoded in `scene.ts`.  But we'd like the ability to customize each room with some different meshes so that each room looks differently.  
+At this point we're ready to start coding up our idea.  But what IS the idea?  Part of the appeal of a website is that every page holds different content.  We can have every room URL be a different experience.  That means that every room has to load some data.  That data will govern how the room should look and behave.
+
+### Escape Room
+
+For my first experience I will design an escape room.  There is a starting point and an ending point.  The game ends when the user reaches the ending point.  There also need to be some walls and obstacles.
+
+### Preparing Room To Supply Data
+
+The objects we are currently seeing in the 3D scene were hardcoded in `scene.ts`.  But we'd like the ability to customize each room with some different meshes so that each room looks differently.  Babylon.js has prebuilt functions for many primative objects such as sphere, box, plane, column, etc.  Additionally these objects can be scaled, positioned and rotated in the scene.  
+
+If we were able to store some room data and pass it to the front-end like this:
+
+```json
+{
+  "entity1": {"position": [...], "rotation": [...], "scaling": [...], "mesh_builder": ...},
+  "entity2": {"position": [...], "rotation": [...], "scaling": [...], "mesh_builder": ...},
+}
+```
+
+We could then take advantage of the Babylon.js mesh builder functions to create these meshes in the scene and place them at the right spots.  Modeling the data this way is a take on the Entity, Component, System (ECS) architectural pattern.  In the payload above, each key/value pair represents a "thing".  Each key is an entity_id (randomly generated name of a thing), and each value is a JSON object of components (data for the thing).  A component is just another key/value pair.  For example "position" is a component name with [1,2,3] as the component value.  Components are just data, and entities are just ids.  To make sense of the data we use Systems.  We already have a folder we have created for systems.  Each system listens for incoming messages and will react accordingly to change the scene.
+
+If we were to store this data in a database, there are lots of ways we could design the schema.  I'm opting for a simple single table for component name and value pairs in each row.  That way if only one component is updated for an entity then only one row needs to change.  In the above example, "entity1" has 4 components so it would occupy 4 rows in the database.  Each of the 4 rows will also have the same entity_id so they know what entity they are associated with, as well as a room_id because entities are tied to a particular room.
 
 Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.
 
 ```bash
-mix phx.gen.schema Rooms.Entity room_entities room_id:uuid component_name:string component_value:map
+ mix phx.gen.schema Rooms.Entity room_entities room_id:uuid entity:uuid component_name:string component:map
+```
+
+This will create two files:
+
+```bash
+* creating lib/xr/rooms/entity.ex
+* creating priv/repo/migrations/20240105030950_create_room_entities.exs
+```
+Open the migration file and add two indexes to the change function.  This will aid us when we want to query all entities that belong to a room_id, as well as ensure that no two components that have the same name can exist on the same entity (it wouldn't make sense for an entity to have two "position" components for example).
+
+```elixir
+defmodule Xr.Repo.Migrations.CreateRoomEntities do
+  use Ecto.Migration
+
+  def change do
+    create table(:room_entities, primary_key: false) do
+      add :id, :binary_id, primary_key: true
+      add :room_id, :uuid
+      add :entity_id, :uuid
+      add :component_name, :string
+      add :component, :map
+
+      timestamps(type: :utc_datetime)
+    end
+    
+    create index(:room_entities, [:room_id, :entity_id])
+    create index(:room_entities, [:entity_id, :component_name], unique: true)
+  end
+end
 
 ```
 
+Run `mix ecto.migrate` to run the migration and create the table.
+
+### Create some random obstacles
+
+Now that we have a database table to hold some entity and components, let's create some random obstacles whenever a room is created.  
+Currently the room creation happens at the database level inside `lib/xr/rooms.ex`.
+
+```elixir
+def create_room(attrs \\ %{}) do
+  %Room{}
+  |> Room.changeset(attrs)
+  |> Repo.insert()
+end
+```
+
+Let's make ourselves a helper function to create an entity from a map:
+
+```elixir
+@doc """
+Insert entity from a map.  Our entities table actually contains individual components so we'll loop through
+the components map and insert an entity record for each pair.
+"""
+def create_entity(room_id, entity_id, components = %{}) do
+  # loop through components
+  for {component_name, component_value} <- components do
+    %Xr.Rooms.Entity{
+      room_id: room_id,
+      entity_id: entity_id,
+      component_name: component_name,
+      component: %{component_name => component_value}
+    }
+    |> Xr.Repo.insert!()
+  end
+end
+```
+
+We'll also create some functions to retrieve the entities back from the database:
+
+```elixir
+ @doc """
+  Get all components for a room, sorted by entity_id so all components for entities are next to each other
+  """
+
+  def components(room_id) do
+    Repo.all(from e in Xr.Rooms.Entity, where: e.room_id == ^room_id, order_by: e.entity_id)
+  end
+
+  @doc """
+  Get a map of entities and their components for a room
+  """
+
+  def entities(room_id) do
+    components(room_id)
+    |> Enum.reduce(%{}, fn record, acc ->
+      new_components =
+        case acc[record.entity_id] do
+          nil -> record.component
+          _ -> Map.merge(acc[record.entity_id], record.component)
+        end
+
+      Map.put(acc, record.entity_id, new_components)
+    end)
+  end
+```
+
+Now let's update the `room_test.exs` with the following:
+
+```elixir
+defmodule Xr.RoomsTest do
+  use Xr.DataCase
+
+  alias Xr.Rooms
+
+  ...
+
+  describe "entities" do
+    alias Xr.Rooms.Room
+
+    import Xr.RoomsFixtures
+
+    test "create_entity/3 with valid data creates a entity" do
+      room = room_fixture()
+
+      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+        "mesh_builder" => "box",
+        "position" => [1, 2, 3]
+      })
+
+      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+        "mesh_builder" => "floor",
+        "position" => [4, 0, -1]
+      })
+
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
+    end
+  end
+end
+
+```
+
+Run the test with `mix test`.  (I haven't been updating tests along the way during every change, if you get some broken tests, just remove them like I did.  They no longer test valid things.  If I have time I'll go back and change this book to modify the tests as we go along TDD style)
+
+Ok, now let's go modify the `create_room` function to insert some random obstacles:
+
+```elixir
+  def create_room(attrs \\ %{}) do
+    {:ok, room} =
+      %Room{}
+      |> Room.changeset(attrs)
+      |> Repo.insert()
+
+    # run this a few random times to create random entities
+    for _ <- 1..Enum.random(1..10) do
+      create_entity(room.id, Ecto.UUID.generate(), %{
+        "mesh_builder" => ["box", create_random_box_args()],
+        "position" => create_random_position()
+      })
+    end
+
+    # need to return {:ok, room} at the end because controller is expecting it
+    {:ok, room}
+  end
+
+  def create_random_position() do
+    [Enum.random(-25..25), Enum.random(-25..25), Enum.random(-25..25)]
+  end
+
+  def create_random_box_args() do
+    %{
+      "depth" => Enum.random(1..10),
+      "height" => Enum.random(1..10),
+      "width" => Enum.random(1..10)
+    }
+  end
+```
+
+Reset all your data in your dev database using `mix ecto.reset`.  Run your server again and create a new room and this time some random objects should be created.  We can check in the iex terminal using:
+
+```elixir
+Xr.Rooms.entities("453b6858-9403-4dd9-a58e-17d25737be84") # get your room_id from your browser's URL bar
+```
+
+Now let's pass this data to the front-end via the room channel.  After we join the room let's push the entities map down to the client.  Open up `room_channel.ex` and modify the handler for `after_join`.
+
+```elixir
+  def handle_info(:after_join, socket) do
+    entities = Xr.Rooms.entities(socket.assigns.room_id)
+    push(socket, "snapshot", entities)
+    {:noreply, socket}
+  end
+```
+
+Now lets make a new system on the front-end to consume this message and draw the boxes.  Create a file at `assets/js/systems/snapshot.ts`:
+
+
+
+### Spawn Point
+
+Let's start with a spawn point.  This will just be a coordinate in 3D space that every person will start off in when they join the room.  
+
+
+
+Well I've always loved the holodeck on Startrek the Next Generation.  What if each room on the website was a different holodeck bay?  They were large empty rooms like hanger bays and they had unique ids.  Crew members would say "Meet me in Holodeck 3" and they would have some rest and relaxation by loading up a program in the room.  Sometimes they would add something to the running program or make a change to it.  And they could save the program or change the program, even rewind the program to a prior state!  
+
+ So I'm think of this concept of rooms, and rooms load "programs", which are basically content and perhaps some different rules
+
+##  Simple Objects
+
+
+
+Now we'll add some query functions to the `lib/rooms.ex` context module for adding
 
 
 In fact, without first knowing where we are allowed to place the camera (we wouldn't want to appear in the middle of a wall for example), we shouldn't be able to join the room.  A requirement of joining should be to first download some information about the environment.

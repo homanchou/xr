@@ -58,4 +58,26 @@ defmodule Xr.RoomsTest do
       assert %Ecto.Changeset{} = Rooms.change_room(room)
     end
   end
+
+  describe "entities" do
+    alias Xr.Rooms.Room
+
+    import Xr.RoomsFixtures
+
+    test "create_entity/3 with valid data creates a entity" do
+      room = room_fixture()
+
+      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+        "mesh_builder" => "box",
+        "position" => [1, 2, 3]
+      })
+
+      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+        "mesh_builder" => "floor",
+        "position" => [4, 0, -1]
+      })
+
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
+    end
+  end
 end

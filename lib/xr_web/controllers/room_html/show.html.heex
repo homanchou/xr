@@ -3,3 +3,4 @@
     window.initRoom("<%= @room.id %>", "<%= @user_id %>")
   })
 </script>
+<%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>

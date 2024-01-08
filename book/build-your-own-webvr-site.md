@@ -58,8 +58,12 @@
     - [Create some random obstacles](#create-some-random-obstacles)
     - [Add some color](#add-some-color)
     - [Spawn Point](#spawn-point)
-  - [Simple Objects](#simple-objects)
-  - [Simple Presence](#simple-presence)
+    - [Using the Spawn Point](#using-the-spawn-point)
+    - [Ask for User First Interaction](#ask-for-user-first-interaction)
+    - [Create the liveview for the menu](#create-the-liveview-for-the-menu)
+    - [Create the template for the modal](#create-the-template-for-the-modal)
+    - [Take Action When Modal Clicked](#take-action-when-modal-clicked)
+    - [Simple Presence](#simple-presence)
     - [Event Sourcing](#event-sourcing)
     - [Phoenix Presence](#phoenix-presence)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
@@ -1005,7 +1009,7 @@ We need a mechanism to share data between systems.  For example, the `broker.ts`
 
 #### Add config.ts
 
-To solve this, let's create a file called `assets/js/config.ts`.
+To solve this, let's create a file called `assets/js/config.ts` and define a type called Config that will contain variables that we need to share between systems.
 
 ```typescript
 import type { Socket, Channel } from "phoenix"
@@ -1028,7 +1032,7 @@ export const config: Config = {
 }
 ```
 
-This file creates a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.
+This file creates initializes a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.  This this is typescript we cannot add new properties at will.  Anytime we feel the urge to add a new property we'll need to add it to the Config type.  That may be a chore but the benefit is that we have types and intellisense will help remind us what common shared variables are available.
 
 #### Add broker.ts
 
@@ -1141,13 +1145,11 @@ engine.runRenderLoop(() => {
 
 
 ```
-The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging.  The scene is also shared with the `config` object.
-
-Now to execute the code in each system file we simply import them to invoke the code within them.
+The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging (notice we use async imports in order to keep the bundle size smaller by taking advantage of esbuild's code splitting feature).  The scene is created in this file and then assigned to the `scene` key in the `config` object.  It's important that any systems that need to make use of `config.scene` be evaluated after `config.scene` is available.
 
 #### Add room.ts
 
-Add this file `assets/js/room.ts` to load each system we've made so far.
+To tie everything together, we need to import each system in the correct order.  Add this file `assets/js/room.ts` to load each system we've made so far.
 
 ```typescript
 import "./systems/broker";
@@ -1197,7 +1199,7 @@ window["initRoom"] = async (room_id: string, user_id: string) => {
   await import("./room");
 };
 ```
-This typescript version has a few small changes.  I've added some type declarations here and there.  The biggest change is that the `initRoom` function is now responsible for invoking `config` for the first time, and populating some important shared data like the socket, room_id and user_id.  It also imports `room` which imports all the systems.  Notice the use of dynamic imports here which use `await/async`.  Esbuild will create chunks of javascript that are lazily loaded as needed.  That way visits to the homepage will remain fast because they do not need to load any Babylon.js code.
+This typescript version has a few small changes.  I've added some type declarations here and there.  The biggest change is that the `initRoom` function is now responsible for invoking `config` for the first time, and populating some important shared data like the socket, room_id and user_id.  It also imports `room` which imports all the systems.  Again we use dynamic imports so that if initRoom is not called none of the Babylon.js and room related code needs to be loaded, which keeps the rest of the pages super fast.
 
 You should end up with a `assets/js` folder structure like this:
 
@@ -1212,9 +1214,11 @@ You should end up with a `assets/js` folder structure like this:
 
 ### Babylon Added Summary
 
+Whew!  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
+
 Open up your browser and navigate to a specific room URL and you should see a 3D scene.  Our camera is also already integrated with the keyboard and mouse so you can travel around in the scene, by clicking and dragging your mouse and then using the cursor keys to move forward or backward.  To open up the Babylon.js inspector we've added a short-cut (CTRL-b), so that we can inspect the meshes in the scene.  
 
-A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
+
 
 ## Design an Experience
 
@@ -1237,9 +1241,9 @@ If we were able to store some room data and pass it to the front-end like this:
 }
 ```
 
-We could then take advantage of the Babylon.js mesh builder functions to create these meshes in the scene and place them at the right spots.  Modeling the data this way is a take on the Entity, Component, System (ECS) architectural pattern.  In the payload above, each key/value pair represents a "thing".  Each key is an entity_id (randomly generated name of a thing), and each value is a JSON object of components (data for the thing).  A component is just another key/value pair.  For example "position" is a component name with [1,2,3] as the component value.  Components are just data, and entities are just ids.  To make sense of the data we use Systems.  We already have a folder we have created for systems.  Each system listens for incoming messages and will react accordingly to change the scene.
+We could then take advantage of the Babylon.js mesh builder functions to create these meshes in the scene and place them at corresponding locations and orientations as described by the data.  Modeling the data this way is inspired by the Entity, Component, System (ECS) architectural pattern.  In the payload above, each key/value pair represents a "thing".  Each key is an entity_id (randomly generated name of a thing), and each value is a JSON object of components (data for the thing).  A component is just another key/value pair.  For example "position" is a component name with [1,2,3] as the component value.  Components are just data, and entities are just ids.  To make sense of the data we use Systems.  We already have a folder we have created for systems.  Each system listens for incoming messages and will react accordingly to change the scene.
 
-If we were to store this data in a database, there are lots of ways we could design the schema.  I'm opting for a simple single table for component name and value pairs in each row.  That way if only one component is updated for an entity then only one row needs to change.  In the above example, "entity1" has 4 components so it would occupy 4 rows in the database.  Each of the 4 rows will also have the same entity_id so they know what entity they are associated with, as well as a room_id because entities are tied to a particular room.
+There are lots of ways we could design the schema for a database to persist this data.  I'm opting for a simple single table for each component in a row.  That way if only one component is updated for an entity then only one row needs to change.  In the above example, "entity1" has 4 components so it would occupy 4 rows in the database.  Each of the 4 rows would share the same entity_id, as well as a room_id because entities are tied to a particular room.
 
 Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.
 
@@ -1389,7 +1393,7 @@ Ok, now let's go modify the `create_room` function to insert some random obstacl
       |> Repo.insert()
 
     # run this a few random times to create random entities
-    for _ <- 1..Enum.random(1..10) do
+    for _ <- 1..Enum.random(5..20) do
       create_entity(room.id, Ecto.UUID.generate(), %{
         "mesh_builder" => ["box", create_random_box_args()],
         "position" => create_random_position()
@@ -1401,7 +1405,7 @@ Ok, now let's go modify the `create_room` function to insert some random obstacl
   end
 
   def create_random_position() do
-    [Enum.random(-25..25), Enum.random(-25..25), Enum.random(-25..25)]
+    [Enum.random(-25..25), Enum.random(0..4), Enum.random(-25..25)]
   end
 
   def create_random_box_args() do
@@ -1461,9 +1465,11 @@ const process_entity = (entity_id: string, components: object) => {
 
 We're basically just passing the arguments that the Babylon.js Meshbuilder CreateBox already takes and invoking it on the frontend.  
 
-### Add some color
+If you now visit your browser and create some different rooms you will see some random boxes spread about.  We have successfully created different content for each room and we're seeing the differences in the browser.
 
-If you now visit your browser and create some different rooms you will see some random boxes spread about.  They are pretty boring looking though.  Let's try adding some color.
+The boxes are pretty bland though.  Let's try adding some color.
+
+### Add some color
 
 Open up `rooms.ex` and add a color component in our random box generator:
 
@@ -1538,9 +1544,11 @@ const process_entity = (entity_id: string, components: object) => {
 };
 ```
 
+Give it another test in the browser.  
+
 ### Spawn Point
 
-At this point we have some mechanism for loading objects into a scene.  One of the most important objects is the spawn point.  Up until now we've hardcoded where we create the camera, but a better place to put the camera is where the spawn point will be.  That way when we join the room we'll be in the correct spot.
+Moving on, one of the most important objects we need is the spawn point.  Up until now we've hardcoded where we create the camera, but a better place to put the camera is where the spawn point will be.  That way when we join the room we'll be in the correct spot according the room design.
 
 Let's create a new entity for the spawn_point in the `create_room` function:
 
@@ -1585,28 +1593,111 @@ const process_entity = (entity_id: string, components: object) => {
 };
 ```
 
+In the snippet above all we're doing is listening for the "snapshot" channel event and then going through each entity in the payload and if there is a component with name "spawn_point" then we create a BABYLON.TransformNode with the entity name and tag it "spawn_point" so we can find it by the tag easily later if we need to.
+
 ### Using the Spawn Point
 
-Now that the front end has a spawn_point location we can move the camera to the spawn_point.  Let's try it.  Add this after the spawn_point position is set:
+Now that the front end has a spawn_point location we can move the camera to the spawn_point. Add this after the spawn_point position is set:
 
 ```typescript
 scene.activeCamera.position.fromArray(components["position"]);
 ```
 Now when we load the scene for a room we consistently start at the spawn point.  You may have noticed a quick flicker of content because our camera is created at a default spot and it takes some time for us to connect to the room channel and then receive the entities snapshot data.  It then takes some more time to draw all the objects in the scene until we finally come to the spawn point and move our camera to the new location.  
 
+### Ask for User First Interaction
 
-##  Simple Objects
+Instead of immediately connecting to the room channel as soon as the page loads, let's pop up a modal to ask the user if they want to "enter" the room in the first place.  The first benefit is that we get rid of that flicker of camera repositioning that seemed like an accident.  Instead the camera will be purposefully repositioned as a result of us taking an action.  The second, even more important benefit is that we get our "first user interaction" out of the way, which is required to have the user click something, anything, in order to unblock us from obtaining user permissions for immersive VR or to check what audio devices they have like microphone etc.  Without the first interaction, most browsers prevent code from executing certain browser APIs.  The third benefit is that if someone  arrives on a room webpage by accident or is some kind of internet bot crawling our pages, we don't waste channel resources if they don't join until after a click.  Later we can add to this modal more features, perhaps a form to ask for a nickname prompt or an avatar selector or a captcha to prove they are human etc, or an error when the user is not allowed entry.
+
+Since we get to use HTML to build interactive experiences, we can modify the room controllers `show.html.heex` page to drop in a Phoenix liveview.
+
+```elixir
+<script>
+  window.addEventListener("DOMContentLoaded", function() {
+    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
+  })
+</script>
+<%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>
+
+```
+
+### Create the liveview for the menu
+
+Add a file at `lib/xr_web/live/room_menu/index.ex`
+
+```elixir
+defmodule XrWeb.RoomMenu.Index do
+  use XrWeb, :live_view
+
+  @impl true
+  def mount(_params, %{"user_id" => user_id, "room_id" => room_id}, socket) do
+    {:ok,
+     assign(socket,
+       user_id: user_id,
+       room_id: room_id,
+       entered: false
+     ), layout: false}
+  end
+end
+```
+
+This creates a liveview process and is mounted with some initial state.
+
+### Create the template for the modal
+
+Create a template file at `lib/xr_web/live/room_menu/index.html.heex`
+
+```html
+<div class="z-20 absolute top-0 right-0">
+  <button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
+    Click here to enter
+  </button>
+</div>
+```
+When we create a template of the same name then it is automatically rendered.  I've styled the modal to appear ontop of everything.
+
+### Take Action When Modal Clicked
+
+We want the modal to disappear when the button is clicked.  But we also want to trigger the front-end to connect to the channel. Phoenix Liveview is considered server-side code written in Elixir, rendered as HTML and sent to the frontend on mount.  Typically Phoenix Liveview can receive information from the front-end, clicks for example through the use of special HTML attributes like `phx-click`.  That would then send a message to the server and the mounted liveview can modify its state and the diffs are sent down the wire for the front-end to weave in the changes.
+
+However in this case there is no point to send a message to the server because we actually want to send a message the the rest of our javascript to simply call `channel.join` located in our `broker.ts`.  Fortunately Phoenix provides a way to trigger certain common tasks purely in the front-end without involving the server.
+
+Phoenix provides an Elixir module called JS for javascript interop.  There is a function called JS.dispatch that when rendered and mounted will invoke some javascript that creates a window custom event when clicked.
+
+If we do something like this for example:
+```elixir
+<button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
+    Click here to enter
+  </button>
+```
+
+A custom javascript event will bubble to the window object.  The event name is "live_to_xr" and the event will have a detail object that contains any parameters we want to include with the event.
+
+Then to subscribe to this event we can open up our `broker.ts` and the following:
+
+```typescript
+window.addEventListener("live_to_xr", e => {
+  if (e["details"]["event"] == "enter_room") {
+
+    channel
+      .join()
+      .receive("ok", (resp) => {
+        console.log("Joined successfully", resp);
+      })
+      .receive("error", (resp) => {
+        console.log("Unable to join", resp);
+      });
+
+  }
+
+});
+```
+
+Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked. 
+
+Give this a test.
 
 
-
-Now we'll add some query functions to the `lib/rooms.ex` context module for adding
-
-
-In fact, without first knowing where we are allowed to place the camera (we wouldn't want to appear in the middle of a wall for example), we shouldn't be able to join the room.  A requirement of joining should be to first download some information about the environment.
-
-
-
-## Simple Presence
+### Simple Presence
 
 Presence is the notion of seeing each other's avatars in a shared space.  The first thing we need to figure out is where we are supposed to place our camera when we enter a room.  Since rooms can contain different kinds of environments, we might be in a maze or on a spaceship, we can't just assume we can place our camera at the origin (0,0,0).
 

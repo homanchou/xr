@@ -3,7 +3,7 @@ import { config } from "../config";
 import { StandardMaterial } from "@babylonjs/core/Materials";
 import { Color3 } from "@babylonjs/core";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
-import { Tags } from "@babylonjs/core"
+import { Tags } from "@babylonjs/core";
 
 const { scene, channel } = config;
 
@@ -43,6 +43,6 @@ const process_entity = (entity_id: string, components: object) => {
       new TransformNode(entity_id, scene);
     Tags.AddTagsTo(spawn_point, "spawn_point");
     spawn_point.position.fromArray(components["position"]);
-    // scene.activeCamera.position.fromArray(components["position"]);
+    scene.activeCamera.position.fromArray(components["position"]);
   }
 };

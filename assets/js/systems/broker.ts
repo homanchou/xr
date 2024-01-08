@@ -7,14 +7,7 @@ socket.connect();
 let channel = socket.channel(`room:${config.room_id}`, {});
 config.channel = channel;
 
-channel
-  .join()
-  .receive("ok", (resp) => {
-    console.log("Joined successfully", resp);
-  })
-  .receive("error", (resp) => {
-    console.log("Unable to join", resp);
-  });
+
 
 channel.on("shout", (payload) => {
   console.log("I received a 'shout'", payload);
@@ -56,3 +49,20 @@ channel.on("user_left", (payload) => {
 // channel.on("user_moved", (payload) => {
 //   config.$user_moved.next(payload);
 // });
+
+window.addEventListener("live_to_xr", e => {
+  console.log("live_to_xr", e);
+  if (e["detail"]["event"] == "enter_room") {
+
+    channel
+      .join()
+      .receive("ok", (resp) => {
+        console.log("Joined successfully", resp);
+      })
+      .receive("error", (resp) => {
+        console.log("Unable to join", resp);
+      });
+
+  }
+
+});

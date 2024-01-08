@@ -1,0 +1,7 @@
+<div id="room_modal" class="z-20 absolute top-0 right-0">
+  <button phx-click={
+    JS.hide(to: "#room_modal") |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
+  }>
+    Click here to enter
+  </button>
+</div>

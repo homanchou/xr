@@ -1088,7 +1088,10 @@ const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
 config.scene = scene;
 // This creates and positions a free camera (non-mesh)
-const camera = new FreeCamera("camera1", new Vector3(0, 5, -10), scene);
+
+// create a birds-eye-view pointed at the origin
+const default_position = new Vector3(0, 15, 50);
+const camera = new FreeCamera("my head", default_position, scene);
 
 // This targets the camera to scene origin
 camera.setTarget(Vector3.Zero());
@@ -1107,7 +1110,7 @@ const sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
 sphere.position.y = 2;
 
 // Our built-in 'ground' shape.
-const ground = CreateGround("ground1", { width: 6, height: 6, subdivisions: 2 }, scene);
+const ground = CreateGround("ground1", { width: 100, height: 100, subdivisions: 2 }, scene);
 
 // Affect a material
 ground.material = material;
@@ -1122,11 +1125,10 @@ window.addEventListener("keydown", async (ev) => {
     if (scene.debugLayer.isVisible()) {
       scene.debugLayer.hide();
     } else {
-      scene.debugLayer.show();
+      scene.debugLayer.show({ embedMode: true });
     }
   }
 });
-
 
 window.addEventListener("resize", function () {
   engine.resize();
@@ -1136,6 +1138,8 @@ window.addEventListener("resize", function () {
 engine.runRenderLoop(() => {
   scene.render();
 });
+
+
 ```
 The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging.  The scene is also shared with the `config` object.
 
@@ -1464,42 +1468,132 @@ If you now visit your browser and create some different rooms you will see some 
 Open up `rooms.ex` and add a color component in our random box generator:
 
 ```elixir
+def create_room(attrs \\ %{}) do
+  {:ok, room} =
+    %Room{}
+    |> Room.changeset(attrs)
+    |> Repo.insert()
+
+  # pick a random color
+  color = create_random_color()
+  # run this a few random times to create random entities
   for _ <- 1..Enum.random(5..20) do
     create_entity(room.id, Ecto.UUID.generate(), %{
-      ...
-      # add this
-      "color" => create_random_color()
+      "mesh_builder" => ["box", create_random_box_args()],
+      "position" => create_random_position(),
+      "color" => shift_color(color)
     })
   end
+
+  # need to return {:ok, room} at the end because controller is expecting it
+  {:ok, room}
+end 
 ```
 
-Also define a function that can create a random hex color:
+Also define a function that can create a random color:
 
 ```elixir
-  def create_random_color() do
-    # make a random hex number 3 times and join the array into a string
+def create_random_position() do
+  [Enum.random(-25..25), Enum.random(-2..2), Enum.random(-25..25)]
+end
 
-    arr =
-      for _ <- 1..3 do
-        Enum.random(0..255) |> Integer.to_string(16) |> String.pad_leading(2, ["0"])
-      end
-
-    "#" <> Enum.join(arr, "")
+def shift_color(color) do
+  # color is a list with 3 elements
+  # pick one of the element positions
+  position = Enum.random(0..2)
+  # modify the value at that position
+  offset = case Enum.at(color, position) + Enum.random(-50..50) do
+    offset when offset < 0 -> 0
+    offset when offset > 255 -> 255
+    offset -> offset
   end
+
+  List.replace_at(color, position, offset)
+end
 ```
-We'll listen to that component inside `snapshot.ts`
 
+I pick one base random color for a room, then just color shift all the other colors for the boxes.  That way each room tends to have a similar hue rather than having every room look like confetti.
 
+We'll listen to that component inside `snapshot.ts` and add a material for that color.
+
+```typescript
+const process_entity = (entity_id: string, components: object) => {
+  // only react if the mesh_builder component is present in components
+  if (components["mesh_builder"]) {
+    const [mesh_type, mesh_args] = components["mesh_builder"];
+    // currently only handling box type at the moment
+    if (mesh_type === "box") {
+      const box = CreateBox(entity_id, mesh_args, scene);
+      if (components["position"]) {
+        box.position.fromArray(components["position"]);
+      }
+      if (components["color"]) {
+        let material = new StandardMaterial(components["color"], scene);
+        material.alpha = 1;
+        material.diffuseColor = new Color3(components["color"][0]/255, components["color"][1]/255, components["color"][2]/255); 
+        box.material = material;
+      }
+    }
+  }
+};
+```
 
 ### Spawn Point
 
-Let's start with a spawn point.  This will just be a coordinate in 3D space that every person will start off in when they join the room.  
+At this point we have some mechanism for loading objects into a scene.  One of the most important objects is the spawn point.  Up until now we've hardcoded where we create the camera, but a better place to put the camera is where the spawn point will be.  That way when we join the room we'll be in the correct spot.
 
+Let's create a new entity for the spawn_point in the `create_room` function:
 
+```elixir
+ # create spawn_point
+  create_entity(room.id, Ecto.UUID.generate(), %{"spawn_point" => true, "position" => create_random_position()})
 
-Well I've always loved the holodeck on Startrek the Next Generation.  What if each room on the website was a different holodeck bay?  They were large empty rooms like hanger bays and they had unique ids.  Crew members would say "Meet me in Holodeck 3" and they would have some rest and relaxation by loading up a program in the room.  Sometimes they would add something to the running program or make a change to it.  And they could save the program or change the program, even rewind the program to a prior state!  
+```
+Then in the `snapshot.ts`
 
- So I'm think of this concept of rooms, and rooms load "programs", which are basically content and perhaps some different rules
+```typescript
+const process_entity = (entity_id: string, components: object) => {
+  // only react if the mesh_builder component is present in components
+  if (components["mesh_builder"]) {
+    const [mesh_type, mesh_args] = components["mesh_builder"];
+    // currently only handling box type at the moment
+    if (mesh_type === "box") {
+      const box =
+        scene.getMeshByName(entity_id) ||
+        CreateBox(entity_id, mesh_args, scene);
+      if (components["position"]) {
+        box.position.fromArray(components["position"]);
+      }
+      if (components["color"]) {
+        let material = new StandardMaterial(components["color"], scene);
+        material.alpha = 1;
+        material.diffuseColor = new Color3(
+          components["color"][0] / 255,
+          components["color"][1] / 255,
+          components["color"][2] / 255
+        );
+        box.material = material;
+      }
+    }
+  } else if (components["spawn_point"]) {
+    let spawn_point =
+      scene.getTransformNodeByName(entity_id) ||
+      new TransformNode(entity_id, scene);
+    Tags.AddTagsTo(spawn_point, "spawn_point");
+    spawn_point.position.fromArray(components["spawn_point"]);
+  }
+};
+```
+
+### Using the Spawn Point
+
+Now that the front end has a spawn_point location we can move the camera to the spawn_point.  Let's try it.  Add this after the spawn_point position is set:
+
+```typescript
+scene.activeCamera.position.fromArray(components["position"]);
+```
+Now when we load the scene for a room we consistently start at the spawn point.  You may have noticed a quick flicker of content because our camera is created at a default spot and it takes some time for us to connect to the room channel and then receive the entities snapshot data.  It then takes some more time to draw all the objects in the scene until we finally come to the spawn point and move our camera to the new location.  
+
 
 ##  Simple Objects
 

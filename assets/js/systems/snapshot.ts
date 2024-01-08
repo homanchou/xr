@@ -2,6 +2,8 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders";
 import { config } from "../config";
 import { StandardMaterial } from "@babylonjs/core/Materials";
 import { Color3 } from "@babylonjs/core";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import { Tags } from "@babylonjs/core"
 
 const { scene, channel } = config;
 
@@ -18,17 +20,29 @@ const process_entity = (entity_id: string, components: object) => {
     const [mesh_type, mesh_args] = components["mesh_builder"];
     // currently only handling box type at the moment
     if (mesh_type === "box") {
-      const box = CreateBox(entity_id, mesh_args, scene);
+      const box =
+        scene.getMeshByName(entity_id) ||
+        CreateBox(entity_id, mesh_args, scene);
       if (components["position"]) {
         box.position.fromArray(components["position"]);
       }
       if (components["color"]) {
         let material = new StandardMaterial(components["color"], scene);
         material.alpha = 1;
-        material.diffuseColor = Color3.FromHexString(components["color"]);
+        material.diffuseColor = new Color3(
+          components["color"][0] / 255,
+          components["color"][1] / 255,
+          components["color"][2] / 255
+        );
         box.material = material;
       }
     }
-
+  } else if (components["spawn_point"]) {
+    let spawn_point =
+      scene.getTransformNodeByName(entity_id) ||
+      new TransformNode(entity_id, scene);
+    Tags.AddTagsTo(spawn_point, "spawn_point");
+    spawn_point.position.fromArray(components["position"]);
+    // scene.activeCamera.position.fromArray(components["position"]);
   }
 };

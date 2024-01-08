@@ -28,9 +28,9 @@ const scene = new Scene(engine);
 config.scene = scene;
 // This creates and positions a free camera (non-mesh)
 
-// create a random position around the origin
-const random_position = new Vector3(Math.random() * 10 - 5, 2, Math.random() * 10 - 5);
-const camera = new FreeCamera("my head", random_position, scene);
+// create a birds-eye-view pointed at the origin
+const default_position = new Vector3(0, 15, 50);
+const camera = new FreeCamera("my head", default_position, scene);
 
 // This targets the camera to scene origin
 camera.setTarget(Vector3.Zero());
@@ -49,7 +49,7 @@ const sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
 sphere.position.y = 2;
 
 // Our built-in 'ground' shape.
-const ground = CreateGround("ground1", { width: 6, height: 6, subdivisions: 2 }, scene);
+const ground = CreateGround("ground1", { width: 100, height: 100, subdivisions: 2 }, scene);
 
 // Affect a material
 ground.material = material;

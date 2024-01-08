@@ -55,14 +55,19 @@ defmodule Xr.Rooms do
       |> Room.changeset(attrs)
       |> Repo.insert()
 
+    # pick a random color
+    color = create_random_color()
     # run this a few random times to create random entities
     for _ <- 1..Enum.random(5..20) do
       create_entity(room.id, Ecto.UUID.generate(), %{
         "mesh_builder" => ["box", create_random_box_args()],
         "position" => create_random_position(),
-        "color" => create_random_color()
+        "color" => shift_color(color)
       })
     end
+
+    # create spawn_point
+    create_entity(room.id, Ecto.UUID.generate(), %{"spawn_point" => true, "position" => create_random_position()})
 
     # need to return {:ok, room} at the end because controller is expecting it
     {:ok, room}
@@ -72,15 +77,24 @@ defmodule Xr.Rooms do
     [Enum.random(-25..25), Enum.random(-2..2), Enum.random(-25..25)]
   end
 
+  def shift_color(color) do
+    # color is a list with 3 elements
+    # pick one of the element positions
+    position = Enum.random(0..2)
+    # modify the value at that position
+    offset = case Enum.at(color, position) + Enum.random(-50..50) do
+      offset when offset < 0 -> 0
+      offset when offset > 255 -> 255
+      offset -> offset
+    end
+
+    List.replace_at(color, position, offset)
+  end
+
   def create_random_color() do
-    # make a random hex number 3 times and join the array into a string
-
-    arr =
-      for _ <- 1..3 do
-        Enum.random(0..255) |> Integer.to_string(16) |> String.pad_leading(2, ["0"])
-      end
-
-    "#" <> Enum.join(arr, "")
+    for _ <- 1..3 do
+      Enum.random(0..255)
+    end
   end
 
   def create_random_box_args() do

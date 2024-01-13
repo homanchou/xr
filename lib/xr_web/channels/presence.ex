@@ -17,12 +17,13 @@ defmodule XrWeb.Presence do
   """
   def init(_opts) do
     # user-land state
-    {:ok, %{}}
+    {:ok, %{"me" => Enum.random(-5000..5000)}}
   end
 
   def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
     for {user_id, _} <- joins do
       IO.inspect(user_id, label: "joined")
+      IO.inspect(state, label: "state")
 
       XrWeb.Endpoint.broadcast!("room:#{room_id}", "user_joined", %{
         user_id: user_id,

@@ -2,15 +2,15 @@
 
 - [Build Your Own Immersive VR Enabled Website for Fun and Profit](#build-your-own-immersive-vr-enabled-website-for-fun-and-profit)
   - [What this book is about](#what-this-book-is-about)
-  - [Who is this book for?](#who-is-this-book-for)
-  - [Why this particular set of technologies?](#why-this-particular-set-of-technologies)
-    - [A-frame](#a-frame)
-    - [Three.js](#threejs)
-    - [Babylon.js](#babylonjs)
-    - [Node on the backend](#node-on-the-backend)
-    - [Phoenix/Elixir backend](#phoenixelixir-backend)
-  - [Why not Unity?](#why-not-unity)
-  - [Why not use off the shelf WebVR Services?](#why-not-use-off-the-shelf-webvr-services)
+    - [Who is this book for?](#who-is-this-book-for)
+    - [Why this particular set of technologies?](#why-this-particular-set-of-technologies)
+      - [A-frame](#a-frame)
+      - [Three.js](#threejs)
+      - [Babylon.js](#babylonjs)
+      - [Node on the backend](#node-on-the-backend)
+      - [Phoenix/Elixir backend](#phoenixelixir-backend)
+    - [Why not Unity?](#why-not-unity)
+    - [Why not use off the shelf WebVR Services?](#why-not-use-off-the-shelf-webvr-services)
   - [Preparing your development workstation](#preparing-your-development-workstation)
     - [Install Elixir](#install-elixir)
     - [Preserve iex history.](#preserve-iex-history)
@@ -22,7 +22,9 @@
     - [Workstation Ready](#workstation-ready)
   - [Creating Rooms](#creating-rooms)
     - [Run Generator to Create Rooms](#run-generator-to-create-rooms)
-    - [Replace the default Phoenix landing page](#replace-the-default-phoenix-landing-page)
+    - [Create Room Routes](#create-room-routes)
+    - [Create Rooms Database Table](#create-rooms-database-table)
+    - [Replace the Default Phoenix Home Page](#replace-the-default-phoenix-home-page)
     - [Remove the Default Heading](#remove-the-default-heading)
   - [Meeting Room Communications](#meeting-room-communications)
     - [Basic Socket Channel Concepts:](#basic-socket-channel-concepts)
@@ -52,23 +54,31 @@
       - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Babylon Added Summary](#babylon-added-summary)
-  - [Design an Experience](#design-an-experience)
-    - [Escape Room](#escape-room)
-    - [Preparing Room To Supply Data](#preparing-room-to-supply-data)
-    - [Create some random obstacles](#create-some-random-obstacles)
+  - [Simple Obstacles](#simple-obstacles)
+    - [Database Supplied Obstacles](#database-supplied-obstacles)
+    - [Design a Snapshot Payload](#design-a-snapshot-payload)
+    - [Create the Components Table](#create-the-components-table)
+    - [Add Functions To Create and Query Entities for a Room](#add-functions-to-create-and-query-entities-for-a-room)
+    - [Add Random Obstacles To A Room Upon Creation](#add-random-obstacles-to-a-room-upon-creation)
+    - [Push Snapshot to Client After Join](#push-snapshot-to-client-after-join)
     - [Add some color](#add-some-color)
-    - [Spawn Point](#spawn-point)
-    - [Using the Spawn Point](#using-the-spawn-point)
+  - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
+    - [Create Spawn Point Entity](#create-spawn-point-entity)
+    - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
+    - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
     - [Ask for User First Interaction](#ask-for-user-first-interaction)
     - [Create the liveview for the menu](#create-the-liveview-for-the-menu)
     - [Create the template for the modal](#create-the-template-for-the-modal)
     - [Take Action When Modal Clicked](#take-action-when-modal-clicked)
+      - [Summary](#summary)
     - [Simple Presence](#simple-presence)
     - [Event Sourcing](#event-sourcing)
     - [Phoenix Presence](#phoenix-presence)
+    - [Client vs Server Dictates Position?](#client-vs-server-dictates-position)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
     - [Add avatar.ts](#add-avatarts)
     - [Users Snapshot](#users-snapshot)
+    - [Testing Multiplayer Without Deploying](#testing-multiplayer-without-deploying)
   - [Assets, Interactables, Non-player Related Items](#assets-interactables-non-player-related-items)
   - [Persistence of Scene State](#persistence-of-scene-state)
   - [Adding WebRTC](#adding-webrtc)
@@ -94,7 +104,7 @@
 
 This book is a step-by-step guide to building a website that is also a platform for VR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime that acts like an operating system), WebRTC (voice chat and video streams) and Phoenix Channels (other realtime communications).  I'll take you through the steps of starting a new project from the very first commit.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  I'll be building something specific for my platform, but hopefully it gives you some ideas for building your own worlds.  Or give you a deep understanding of this particular stack so that you can contribute back to my open-source project.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Oculus Quest.
 
-## Who is this book for?
+### Who is this book for?
 
 I wish I could say this book is for everyone that wants to create their own VR enabled website.  Though... software developers that have some experience with full stack web development will probably have the easiest time following this guide.  
 
@@ -102,13 +112,13 @@ I assume that the reader is already comfortable with using command lines at a te
 
 Ultimately, web development of any kind is a messy business involving a long list of different technologies that even  experienced web developers have trouble wrangling.  We all need to Google, all the time.  Like constantly.  But if you love building experiences and are good at pushing through to learn, then let's get started!
 
-## Why this particular set of technologies?
+### Why this particular set of technologies?
 
 Indeed there are many ways to accomplish a goal and this is just one possible combination of libraries, languages and tools that bring forth web enabled VR.  I can almost hear the reader asking, "Why not use Node so that you can use javascript on the front-end and the back-end?  Why not use A-frame which is very easy to learn and has a community of plugins.  Why not Three.js?  Why should I learn Elixir and Phoenix?"
 
 There is a lot more I wanted to write about how my journey started with those other choices and how my experience caused me to search for alternatives, but I don't want to rant too much so I'll keep it short.  Especially since it might be my own shortcomings as a programmer that caused me to hit a wall with those other solutions.  Suffice to say, your own mileage may vary, but this bullet list below is a small and incomplete commentary on different technologies that I passed through:
 
-### A-frame
+#### A-frame
 - Built on Three.js
 - Incredibly approachable, friendly and easy to get started with.
 - Great introduction to Entity Component Systems (ECS).
@@ -117,13 +127,13 @@ There is a lot more I wanted to write about how my journey started with those ot
 - Someone on a forum stated it best this way: "It makes easy what was already easy, and makes more complex things that are already complex".
 - Mozilla Hubs started with A-frame and decided to move away from it.
 
-### Three.js
+#### Three.js
 - Large community, well known library.
 - You can find lots of demos written in Three.js
 - The demos were hard for me to build upon because Three.js breaks backward compatibility on each version.
 - By extension, the promise of A-frame's library of components failed to live up to its promise for me because I couldn't get code to work together from different A-frame components because of version issues
 
-### Babylon.js
+#### Babylon.js
 - Does pretty much all the things Three.js can do, but (and it's a huge deal) retains backward compatibility as a core tenant!
 - Has a prototyping playground to share working code or troubleshoot with others
 - Superb community that fixes bugs within 24 hours.
@@ -131,14 +141,13 @@ There is a lot more I wanted to write about how my journey started with those ot
 - FrameVR chose Babylon.js for their immersive VR experience.
 - Maintained actively by Microsoft employees.
 
-### Node on the backend
+#### Node on the backend
 - Appealing to be able to reuse the same code between the frontend and backend
 - Can use socket.io, express to serve up pages.  There are quite a few libraries, npm is a huge resource, but didn't find the same Phoenix like framework available.
 - There exists the potential to write a server in either Three.js or Babylon.js that has access to the same physics engine that can operate as a server-side source of truth.
-- Etherial Engine supposedly uses node on the server-side.
-- I didn't explore this option more, because Phoenix provided a good enought framework.  I didn't feel as supported by any js framework, and running a full server side babylon or three.js headless engine seemed like overkill for what I wanted to do.
+- I didn't explore this option more, because Phoenix provided a good enough framework for client heavy rendering and just using the server to bounce messages.  It's entirely possible that writing the server-side engine in Three.js or Babylon.js and then syncing the scene differences to the client could be another fruitful alternative approach.  
 
-### Phoenix/Elixir backend
+#### Phoenix/Elixir backend
 - Elixir is a language/runtime that acts like a bunch of tiny processes (servers) that can communicate with each other, be distributed etc
 - It has great patterns for supervision, resiliency, and changes the way I think about design.
 - No code can be shared between the frontend and backend.
@@ -151,13 +160,16 @@ There is a lot more I wanted to write about how my journey started with those ot
 
 In summary, I chose particular tools because I think these selections positions the project in an attractive place to be able to start small and iterate yet has enough features that will allow us to scale horizontally later.
 
-## Why not Unity?
+### Why not Unity?
 
-While Unity an HTML5 export which can target the browser, it has certain strengths and weaknesses.  If you are already a Unity developer than you will feel right at home using the environment and therefore exporting a new build target should be easy and makes a lot of sense.  You'll also be able to take advantage of a lot of pre-built tooling, asset store, etc.  But if you are a web developer already, then switching over to use Unity is to leave the comfort of Javascript to build a self-contained game then export and embed it into your website.  
+While Unity has an HTML5 export which can target the browser, it has certain strengths and weaknesses.  Unity compiles it's code to run in the browser as a stand-alone artifact, so changes are you aren't developing in the browser most of the time, nor will you be calling the browser's APIs which would normally be readily available to you as a web developer.  
+
+However, if you are already a Unity developer than you will feel right at home using the Unity IDE and therefore exporting a new build target should be easy and makes a lot of sense.  You'll also be able to take advantage of a lot of pre-built tooling, workflows, asset store, etc.  
 
 The most powerful distinction I think I can make is that web native tech like Three.js or Babylon.js was made for the web to start with so you can freely intermingle regular web development-y code along side WebXR.  The web is already interconnected computers and networks.  In native website, jumping to another world is simply clicking on a link.  Web native sites are a webpage first, and a game second.  Unity is a game first, and a webpage second.
 
-## Why not use off the shelf WebVR Services?
+### Why not use off the shelf WebVR Services?
+
 
 We now have a couple of companies that provide turn key solutions to hold meetings and classes in VR.  I've tried Mozilla Hubs and FrameVR that provide login mechanisms, different avatars and environments to choose from, tools like street view, laser pointers, white boarding etc.  Both of them seem to be doing well and continuing to add new features.  I would say, if you are an end-user looking for a VR platform to hang out with friends, host an event, teach a lecture, play a game etc, these might be great choices for you.  It would be like a merchant choosing Shopify instead of creating their own ecommerce website from scratch, which can save them a lot of effort in not rebuilding the same tooling.  
 
@@ -299,6 +311,8 @@ Open a terminal from your projects root folder and execute this mix task to gene
 mix phx.gen.html Rooms Room rooms name:string description:string
 ```
 
+### Create Room Routes
+
 Go ahead and follow the instructions and paste the new lines into your lib/xr_web/router.ex.  It should look something like this:
 
 ```elixir
@@ -328,6 +342,8 @@ mix phx.routes
 ```
 
 You'll goto `/rooms` to see a list of all your rooms and `/rooms/some-id` to drill down into a particular room. 
+
+### Create Rooms Database Table
 
 The generator also created a database migration file inside your `priv/repo/migrations` folder.
 
@@ -359,7 +375,7 @@ mix ecto.migrate
 
 If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.
 
-### Replace the default Phoenix landing page
+### Replace the Default Phoenix Home Page
 
 If you go to http://localhost:4000, you'll see that the homepage still shows the Phoenix default welcome page.  We don't need that anymore.  We can customize that page by first locating the path in the `router.ex` file.
 
@@ -390,7 +406,7 @@ If we add this:
 </h1>
 ```
 
-Now it looks a little better.  I am not a CSS guru, but they say the utility classes that ship with tailwind help folks to learn CSS even better.  Whatevs, I'm hoping Google or ChatGPT or Codeium (vscode plugin for AI completion) can help me write tailwind.
+Now it looks a little better.  
 
 For now let's at least have a basic link on our homepage link over to our rooms index page so that we can pick a room and jump into it:
 
@@ -585,11 +601,13 @@ window["initRoom"] = async (room_id, user_id) => {
 Now we need to call this function, but we need to make sure we wait long enough until the function is defined.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
 
 ```html
+<body>
 <script>
   window.addEventListener("DOMContentLoaded", function() {
     window.initRoom("<%= @room.id %>", "<%= @user_id %>")
   })
 </script>
+</body>
 ```
 
 If you now navigate to any room you previously created and inspect the browser's console logs you should see:
@@ -1220,19 +1238,25 @@ Open up your browser and navigate to a specific room URL and you should see a 3D
 
 
 
-## Design an Experience
+## Simple Obstacles
 
-At this point we're ready to start coding up our idea.  But what IS the idea?  Part of the appeal of a website is that every page holds different content.  We can have every room URL be a different experience.  That means that every room has to load some data.  That data will govern how the room should look and behave.
+At this point we're able to draw something 3D on the screen.  We should have in mind a general concept of the experience we want to craft and generally work toward that direction.  
 
-### Escape Room
+Here's an outline:
 
-For my first experience I will design an escape room.  There is a starting point and an ending point.  The game ends when the user reaches the ending point.  There also need to be some walls and obstacles.
+- Every room URL can host a different visual experience.  
+- The experience has a starting point and ends when you reach an ending point.  
+- There are walls and obstacles.
 
-### Preparing Room To Supply Data
+Sounds pretty familiar right?  Like a maze or maybe a simple escape room.  Let's get started with some obstacles in the room.
 
-The objects we are currently seeing in the 3D scene were hardcoded in `scene.ts`.  But we'd like the ability to customize each room with some different meshes so that each room looks differently.  Babylon.js has prebuilt functions for many primative objects such as sphere, box, plane, column, etc.  Additionally these objects can be scaled, positioned and rotated in the scene.  
+### Database Supplied Obstacles
 
-If we were able to store some room data and pass it to the front-end like this:
+The objects we are currently seeing in the 3D scene were hardcoded in `scene.ts`.  But we'd like the ability to customize each room with some different meshes so that each room looks unique.  Babylon.js has prebuilt functions for many primative objects such as sphere, box, plane, column, etc.  Additionally these objects can be scaled, positioned and rotated in the scene.  
+
+### Design a Snapshot Payload
+
+If we were able to send the front-end a "snapshot" of all items in our seen, it might look something like this:
 
 ```json
 {
@@ -1241,60 +1265,50 @@ If we were able to store some room data and pass it to the front-end like this:
 }
 ```
 
-We could then take advantage of the Babylon.js mesh builder functions to create these meshes in the scene and place them at corresponding locations and orientations as described by the data.  Modeling the data this way is inspired by the Entity, Component, System (ECS) architectural pattern.  In the payload above, each key/value pair represents a "thing".  Each key is an entity_id (randomly generated name of a thing), and each value is a JSON object of components (data for the thing).  A component is just another key/value pair.  For example "position" is a component name with [1,2,3] as the component value.  Components are just data, and entities are just ids.  To make sense of the data we use Systems.  We already have a folder we have created for systems.  Each system listens for incoming messages and will react accordingly to change the scene.
+In the payload above, each key/value pair represents a "thing" and "it's data".  Each key is an entity_id (randomly generated id, and each value is a JSON object of components (data for the thing).  A component is just another key/value pair.  For example "position" is a component name with [1,2,3] as the component value.  Components are just data, and entities are just ids.  To make sense of the data we use Systems.  We already have a folder we have created for systems.  Each system listens for incoming messages and will react accordingly to change the scene.
 
 There are lots of ways we could design the schema for a database to persist this data.  I'm opting for a simple single table for each component in a row.  That way if only one component is updated for an entity then only one row needs to change.  In the above example, "entity1" has 4 components so it would occupy 4 rows in the database.  Each of the 4 rows would share the same entity_id, as well as a room_id because entities are tied to a particular room.
 
-Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.
+### Create the Components Table
+
+Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.  Execute this Phoenix generator command:
 
 ```bash
- mix phx.gen.schema Rooms.Entity room_entities room_id:uuid entity:uuid component_name:string component:map
+ mix phx.gen.schema Rooms.Component components room_id:references:rooms entity_id:uuid component_name:string component:map
 ```
 
-This will create two files:
+This will create two files, a schema and a migration:
 
 ```bash
-* creating lib/xr/rooms/entity.ex
-* creating priv/repo/migrations/20240105030950_create_room_entities.exs
+* creating lib/xr/rooms/component.ex
+* creating priv/repo/migrations/20240105030950_create_components.exs
 ```
-Open the migration file and add two indexes to the change function.  This will aid us when we want to query all entities that belong to a room_id, as well as ensure that no two components that have the same name can exist on the same entity (it wouldn't make sense for an entity to have two "position" components for example).
+Open the migration file and add two indexes to the change function.  This will aid us when we want to query all entities that belong to a room_id, as well as ensure that no two components that have the same name can exist on the same entity (it wouldn't make sense for an entity to have two "position" components for example).  Also change the references on_delete to :delete_all.  This will make it so whenever we delete a room, all the entities/components will be deleted as well.
 
 ```elixir
-defmodule Xr.Repo.Migrations.CreateRoomEntities do
+defmodule Xr.Repo.Migrations.CreateComponents do
   use Ecto.Migration
 
   def change do
-    create table(:room_entities, primary_key: false) do
+    create table(:components, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :room_id, :uuid
       add :entity_id, :uuid
       add :component_name, :string
       add :component, :map
+      add :room_id, references(:rooms, on_delete: :delete_all, type: :binary_id)
 
       timestamps(type: :utc_datetime)
     end
-    
-    create index(:room_entities, [:room_id, :entity_id])
-    create index(:room_entities, [:entity_id, :component_name], unique: true)
+
+    create index(:components, [:room_id, :entity_id])
+    create index(:components, [:entity_id, :component_name], unique: true)
   end
 end
-
 ```
 
 Run `mix ecto.migrate` to run the migration and create the table.
 
-### Create some random obstacles
-
-Now that we have a database table to hold some entity and components, let's create some random obstacles whenever a room is created.  
-Currently the room creation happens at the database level inside `lib/xr/rooms.ex`.
-
-```elixir
-def create_room(attrs \\ %{}) do
-  %Room{}
-  |> Room.changeset(attrs)
-  |> Repo.insert()
-end
-```
+### Add Functions To Create and Query Entities for a Room
 
 Let's make ourselves a helper function to create an entity from a map:
 
@@ -1334,6 +1348,11 @@ We'll also create some functions to retrieve the entities back from the database
 
   def entities(room_id) do
     components(room_id)
+    |> components_to_map()
+  end
+
+  def components_to_map(components) when is_list(components) do
+    components
     |> Enum.reduce(%{}, fn record, acc ->
       new_components =
         case acc[record.entity_id] do
@@ -1346,7 +1365,7 @@ We'll also create some functions to retrieve the entities back from the database
   end
 ```
 
-Now let's update the `room_test.exs` with the following:
+To makes sure these functions work let's right a test.  Let's update the `room_test.exs` with the following:
 
 ```elixir
 defmodule Xr.RoomsTest do
@@ -1383,25 +1402,19 @@ end
 
 Run the test with `mix test`.  (I haven't been updating tests along the way during every change, if you get some broken tests, just remove them like I did.  They no longer test valid things.  If I have time I'll go back and change this book to modify the tests as we go along TDD style)
 
-Ok, now let's go modify the `create_room` function to insert some random obstacles:
+### Add Random Obstacles To A Room Upon Creation
+
+Let's create a function that takes a room_id and adds some random sized boxes at random positions:
 
 ```elixir
-  def create_room(attrs \\ %{}) do
-    {:ok, room} =
-      %Room{}
-      |> Room.changeset(attrs)
-      |> Repo.insert()
-
-    # run this a few random times to create random entities
+  def generate_random_content(room_id) do
+     # run this a few random times to create random entities
     for _ <- 1..Enum.random(5..20) do
       create_entity(room.id, Ecto.UUID.generate(), %{
         "mesh_builder" => ["box", create_random_box_args()],
-        "position" => create_random_position()
+        "position" => create_random_position(),
       })
     end
-
-    # need to return {:ok, room} at the end because controller is expecting it
-    {:ok, room}
   end
 
   def create_random_position() do
@@ -1417,11 +1430,34 @@ Ok, now let's go modify the `create_room` function to insert some random obstacl
   end
 ```
 
+Open up `room_controller.ex` and modify the `create` room function to look like the following:
+
+```elixir
+  def create(conn, %{"room" => room_params}) do
+    case Rooms.create_room(room_params) do
+      {:ok, room} ->
+        Xr.Rooms.generate_random_content(room.id)
+
+        conn
+        |> put_flash(:info, "Room created successfully.")
+        |> redirect(to: ~p"/rooms")
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        render(conn, :new, changeset: changeset)
+    end
+  end
+```
+
+I added the call to `generate_random_content` as well as made the redirect go to the index instead of putting us in the room when the room is created, which is the behavior I prefer.
+
+
 Reset all your data in your dev database using `mix ecto.reset`.  Run your server again and create a new room and this time some random objects should be created.  We can check in the iex terminal using:
 
 ```elixir
 Xr.Rooms.entities("453b6858-9403-4dd9-a58e-17d25737be84") # get your room_id from your browser's URL bar
 ```
+
+### Push Snapshot to Client After Join
 
 Now let's pass this data to the front-end via the room channel.  After we join the room let's push the entities map down to the client.  Open up `room_channel.ex` and modify the handler for `after_join`.
 
@@ -1473,34 +1509,28 @@ The boxes are pretty bland though.  Let's try adding some color.
 
 Open up `rooms.ex` and add a color component in our random box generator:
 
-```elixir
-def create_room(attrs \\ %{}) do
-  {:ok, room} =
-    %Room{}
-    |> Room.changeset(attrs)
-    |> Repo.insert()
-
+```elixir 
+def generate_random_content(room_id) do
   # pick a random color
   color = create_random_color()
   # run this a few random times to create random entities
   for _ <- 1..Enum.random(5..20) do
-    create_entity(room.id, Ecto.UUID.generate(), %{
+    create_entity(room_id, Ecto.UUID.generate(), %{
       "mesh_builder" => ["box", create_random_box_args()],
       "position" => create_random_position(),
       "color" => shift_color(color)
     })
   end
-
-  # need to return {:ok, room} at the end because controller is expecting it
-  {:ok, room}
-end 
+end
 ```
 
 Also define a function that can create a random color:
 
 ```elixir
-def create_random_position() do
-  [Enum.random(-25..25), Enum.random(-2..2), Enum.random(-25..25)]
+def create_random_color() do
+  for _ <- 1..3 do
+    Enum.random(0..255)
+  end
 end
 
 def shift_color(color) do
@@ -1546,69 +1576,93 @@ const process_entity = (entity_id: string, components: object) => {
 
 Give it another test in the browser.  
 
-### Spawn Point
+## Entering the Room at a Spawn Point
 
-Moving on, one of the most important objects we need is the spawn point.  Up until now we've hardcoded where we create the camera, but a better place to put the camera is where the spawn point will be.  That way when we join the room we'll be in the correct spot according the room design.
+Right now we've hardcoded our camera at a fixed location in the scene.  But the server should be the authority of where we should place our camera depending on the layout of the room.  The server should also remember where we are in the room in case we need to re-join the room (refresh the browser, due to any issues).
 
-Let's create a new entity for the spawn_point in the `create_room` function:
+### Create Spawn Point Entity
+
+First let's handle the case of our initial position in the room by creating a new entity called `spawn_point` in the `create_room` function:
 
 ```elixir
  # create spawn_point
-  create_entity(room.id, Ecto.UUID.generate(), %{"spawn_point" => true, "position" => create_random_position()})
+   create_entity(room_id, Ecto.UUID.generate(), %{
+      "spawn_point" => true,
+      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
+    })
 
 ```
-Then in the `snapshot.ts`
+We could listen to this "spawn_point" component in our snapshot.ts system like before and draw something at that position, but we don't need to if we don't want to visually indicate where the spawn_point is.
 
-```typescript
-const process_entity = (entity_id: string, components: object) => {
-  // only react if the mesh_builder component is present in components
-  if (components["mesh_builder"]) {
-    const [mesh_type, mesh_args] = components["mesh_builder"];
-    // currently only handling box type at the moment
-    if (mesh_type === "box") {
-      const box =
-        scene.getMeshByName(entity_id) ||
-        CreateBox(entity_id, mesh_args, scene);
-      if (components["position"]) {
-        box.position.fromArray(components["position"]);
-      }
-      if (components["color"]) {
-        let material = new StandardMaterial(components["color"], scene);
-        material.alpha = 1;
-        material.diffuseColor = new Color3(
-          components["color"][0] / 255,
-          components["color"][1] / 255,
-          components["color"][2] / 255
-        );
-        box.material = material;
-      }
-    }
-  } else if (components["spawn_point"]) {
-    let spawn_point =
-      scene.getTransformNodeByName(entity_id) ||
-      new TransformNode(entity_id, scene);
-    Tags.AddTagsTo(spawn_point, "spawn_point");
-    spawn_point.position.fromArray(components["spawn_point"]);
+Instead we're going to focus our attention to the server-side because the server will tell the client where they need to be, starting with the spawn_point.
+
+### Add Query Entities by Component Name
+
+First we need a way to quickly look up the spawn_point for a room (there could be many spawn_points, we'll just pick the first).  Add this query to the `rooms.exs` file:
+
+```elixir
+def find_entities_having_component_name(room_id, component_name) do
+  q =
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.component_name == ^component_name,
+      select: c.entity_id
+    )
+
+  from(c in Xr.Rooms.Component,
+    where: c.room_id == ^room_id and c.entity_id in subquery(q)
+  )
+  |> Repo.all()
+  |> components_to_map()
+end
+```
+
+This query will essentially let us look up all entities that have a particular component name which will help us lookup all the room's spawn_points.  
+
+It'll give us output like this:
+
+```
+%{
+  "d32aaea5-0ca9-4143-bae7-8d0e66f05490" => %{
+    "position" => [6, 2, 9],
+    "spawn_point" => true
   }
-};
+}
 ```
 
-In the snippet above all we're doing is listening for the "snapshot" channel event and then going through each entity in the payload and if there is a component with name "spawn_point" then we create a BABYLON.TransformNode with the entity name and tag it "spawn_point" so we can find it by the tag easily later if we need to.
+Now that we have a way of looking up the spawn_point entity for a room, we also need a way of storing and looking up the last known location of a user.  The idea here is:
 
-### Using the Spawn Point
+1. When a client joins the room channel:
+2. Check if we have a previous location for the user
+3. If yes, send the user_joined message along with the previous location
+4. If no, send the user_joined message along with the spawn_point location
+   
+So we need some server-side in memory storage that is fast and able to be simultaneously updated by many clients.
 
-Now that the front end has a spawn_point location we can move the camera to the spawn_point. Add this after the spawn_point position is set:
+### Create ETS Table for User Snapshot
 
-```typescript
-scene.activeCamera.position.fromArray(components["position"]);
+
+
+We don't have an index on room_id and component_name so let's add one.  I'm modifying the same migration file since I haven't pushed this code up yet.  If you're working on a team and have shared your code you'll never want to modify migration files.  They're intended to be immutable.
+
+```elixir
+    create index(:components, [:room_id, :entity_id])
+    # helps look up tags
+    create index(:components, [:room_id, :component_name])
+    create index(:components, [:entity_id, :component_name], unique: true)
 ```
-Now when we load the scene for a room we consistently start at the spawn point.  You may have noticed a quick flicker of content because our camera is created at a default spot and it takes some time for us to connect to the room channel and then receive the entities snapshot data.  It then takes some more time to draw all the objects in the scene until we finally come to the spawn point and move our camera to the new location.  
+
+
+
+
+
+
+Now when we load the scene for a room we consistently start at the spawn_point.  You may have noticed a quick flicker of content because our camera is created at a default spot and it takes some time for us to connect to the room channel and then receive the entities snapshot data.  It then takes some more time to draw all the objects in the scene until we finally come to the spawn_point and move our camera to the new location.  
 
 ### Ask for User First Interaction
 
-Instead of immediately connecting to the room channel as soon as the page loads, let's pop up a modal to ask the user if they want to "enter" the room in the first place.  The first benefit is that we get rid of that flicker of camera repositioning that seemed like an accident.  Instead the camera will be purposefully repositioned as a result of us taking an action.  The second, even more important benefit is that we get our "first user interaction" out of the way, which is required to have the user click something, anything, in order to unblock us from obtaining user permissions for immersive VR or to check what audio devices they have like microphone etc.  Without the first interaction, most browsers prevent code from executing certain browser APIs.  The third benefit is that if someone  arrives on a room webpage by accident or is some kind of internet bot crawling our pages, we don't waste channel resources if they don't join until after a click.  Later we can add to this modal more features, perhaps a form to ask for a nickname prompt or an avatar selector or a captcha to prove they are human etc, or an error when the user is not allowed entry.
+Instead of immediately connecting to the room channel as soon as the page loads, let's pop up a modal to ask the user if they want to "enter" the room in the first place.  The first benefit is that we get rid of that flicker of camera repositioning that seemed like an accident.  Instead the camera will be purposefully repositioned as a result of us taking an action.  The second, even more important benefit is that we get our "first user interaction" out of the way.  This initial interaction is required in order to unblock us from using some browser APIs, such as checking what audio devices they have like microphone etc. The third benefit is that we don't waste channel resources if they don't want to, or are unqualified to join the room.  
 
-Since we get to use HTML to build interactive experiences, we can modify the room controllers `show.html.heex` page to drop in a Phoenix liveview.
+Let's modify the room controller's `show.html.heex` page to drop in a Phoenix liveview.
 
 ```elixir
 <script>
@@ -1617,8 +1671,9 @@ Since we get to use HTML to build interactive experiences, we can modify the roo
   })
 </script>
 <%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>
-
 ```
+
+This live_render function loads a LiveView directly from the template.  It expects a module, in this case named `XrWeb.RoomMenu.Index`, let's create that now.
 
 ### Create the liveview for the menu
 
@@ -1634,45 +1689,64 @@ defmodule XrWeb.RoomMenu.Index do
      assign(socket,
        user_id: user_id,
        room_id: room_id,
-       entered: false
      ), layout: false}
   end
 end
 ```
 
-This creates a liveview process and is mounted with some initial state.
+This creates a liveview process and is mounted with some initial state.  The room_id and user_id were passed into the LiveView process from the front-end.
 
 ### Create the template for the modal
 
 Create a template file at `lib/xr_web/live/room_menu/index.html.heex`
 
 ```html
-<div class="z-20 absolute top-0 right-0">
-  <button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
-    Click here to enter
-  </button>
+<div id="room_modal" class="z-10 fixed inset-0 flex items-center justify-center">
+  <div class="fixed inset-0 bg-black opacity-50"></div>
+  <!-- Modal Content -->
+  <div class="fixed z-20 bg-white p-8 rounded-md shadow-md w-96 text-center">
+    <p class="text-lg text-gray-800">Your modal content goes here.</p>
+    <button
+      class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md"
+      phx-click={
+        JS.hide(to: "#room_modal")
+        |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
+      }
+    >
+      Enter Room
+    </button>
+  </div>
 </div>
+
 ```
 When we create a template of the same name then it is automatically rendered.  I've styled the modal to appear ontop of everything.
 
 ### Take Action When Modal Clicked
 
-We want the modal to disappear when the button is clicked.  But we also want to trigger the front-end to connect to the channel. Phoenix Liveview is considered server-side code written in Elixir, rendered as HTML and sent to the frontend on mount.  Typically Phoenix Liveview can receive information from the front-end, clicks for example through the use of special HTML attributes like `phx-click`.  That would then send a message to the server and the mounted liveview can modify its state and the diffs are sent down the wire for the front-end to weave in the changes.
+We want the modal to disappear when the button is clicked.  But we also want to trigger the front-end to connect to the channel. Phoenix Liveview is considered server-side code written in Elixir, rendered as HTML and sent to the frontend on mount.  Typically Phoenix Liveview can receive information from the front-end, clicks for example through the use of special HTML attributes like `phx-click`.  
 
-However in this case there is no point to send a message to the server because we actually want to send a message the the rest of our javascript to simply call `channel.join` located in our `broker.ts`.  Fortunately Phoenix provides a way to trigger certain common tasks purely in the front-end without involving the server.
+Typically usage would be something like:
+
+```html
+<button phx-click="inc">Click Me</button>
+```
+
+That would then send a message of "inc" to the liveview process and we'd have to write handler to handle it and we modify some state.  Liveview pays attention to what parts of the state are used in the front-end and diff are sent down the wire for the front-end to weave in the UI changes.
+
+However in this case there is no point to send a message to the server because we actually want to send a message the the rest of our javascript.  We just want to simply call `channel.join` located in our `broker.ts`.  Fortunately Phoenix provides a way to trigger certain common tasks purely in the front-end without involving the server.
 
 Phoenix provides an Elixir module called JS for javascript interop.  There is a function called JS.dispatch that when rendered and mounted will invoke some javascript that creates a window custom event when clicked.
 
 If we do something like this for example:
 ```elixir
 <button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
-    Click here to enter
-  </button>
+  Click here to enter
+</button>
 ```
 
 A custom javascript event will bubble to the window object.  The event name is "live_to_xr" and the event will have a detail object that contains any parameters we want to include with the event.
 
-Then to subscribe to this event we can open up our `broker.ts` and the following:
+Then to subscribe to this event in the front-end we can open up our `broker.ts` and the following:
 
 ```typescript
 window.addEventListener("live_to_xr", e => {
@@ -1692,36 +1766,36 @@ window.addEventListener("live_to_xr", e => {
 });
 ```
 
-Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked. 
+We can also hide the model after the click without involving a round trip to the server by just using:
 
-Give this a test.
+```html
+<button phx-click={JS.hide(to: "#room_modal")}>
+```
 
+#### Summary
+
+With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  Once the channel is joined it pushes the front-end a snapshot of obstacles in the room rendered a particular hue of colors.  The front-end's snapshot system receives the message and loops through every entity, drawing a box using the Babylon.js CreateBox function.  One of the entities is a spawnpoint which when processed resets the camera to the spawnpoint.
+
+Give this a test.  We created a spawn_point entity but haven't yet made an endpoint for our game.  We'll get to that soon, but there is something more important we should work on next.
 
 ### Simple Presence
 
-Presence is the notion of seeing each other's avatars in a shared space.  The first thing we need to figure out is where we are supposed to place our camera when we enter a room.  Since rooms can contain different kinds of environments, we might be in a maze or on a spaceship, we can't just assume we can place our camera at the origin (0,0,0).
+Presence is the notion of seeing each other's avatars in a shared space.  If we join a room and enter at the room's spawn_point, and there are multiple clients that have joined the room, then we should be able to look left and right and be able to "see" each other.  When we move forward, we want other people to see that movement applied to our avatar.  When we log out of a room, then other people should see our avatar disappear.  
 
-
-If we join a room at a certain location (usually called a spawn point), then our avatar should appear on or near the spawn point.  When we move forward, we want other people to see that movement applied to our avatar.  When we log out of a room, then other people should see our avatar disappear.  This means there are two basic things that need to be solved at the same time: Visiblity, which is whether to draw an avatar or not based on a user joining or leaving a room, and Position/Orientation, because we can't draw the avatar unless we also know where to draw it and how it's facing!
-
-We would be able to do something like that if we were to receive messages that looked something like this:
+Take a look at the message shapes below, if we were to broadcast messages like this whenever clients joined or left the room, we could use that to draw and remove an avatar based on user's attendance:
 
 ```
 {event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
 {event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
 {event: "user_left", payload: {user_id: "tom"}}
-
 ```
+I like these events because if ordered, they tell a story.
 
 ### Event Sourcing
 
-There is a pattern called Event Sourcing that treats a stream of events as the source of truth.  This stream of events can be persisted or processed in real time to transform the data into alternate forms that suite particular use cases.  We modified data is called projections.  The classic example of event sourcing is an accountant's ledger.  Each event in the ledger has a date (a timestamp), a description and whether it is a credit or debit from some account in the ledger.  With this data we can build up different projections such as, sum over all the credits and debits to come up with how much balance we have in an account. 
+There is an architectural pattern called Event Sourcing that treats a stream of events as the source of truth.  This stream of events can be persisted or processed in real time to transform the data into alternate forms called projections that suite different use cases.  The classic example of event sourcing is an accountant's ledger.  Each event in the ledger has a date (a timestamp), a description and whether it is a credit or debit from some account in the ledger.  With this data we can build up different projections such as, sum over all the credits and debits to come up with how much balance we have in an account. 
 
-Our 3D scene is like a projection too.  Each connected browser can process a stream of events like the one above and any time we received "user_joined", we can draw a simple avatar at the given position and rotation.  For now we can start with a simple gray box.  The same principles should be applicable to more complicated avatars later.  If we get the "user_moved" message we'll just update that box's position and rotation.  Finally if we receive the "user_left" message then we delete that 3D object from the scene.
-
-In event sourcing, the projections are built up by processing every message in order from the beginning.  But if a client connects to the room later then the others, or had to disconnect and then reconnect later, they would have missed out on any messages sent while they were not connected to the channel.  To remedy this, as soon as a client connects to the room we need to catch them up on all the missing users that have already joined by either sending all the previous missing messages or just a list of all the users present now.
-
-It's more practical to send a snapshot of the current state because sending a log of all the missing messages would be a waste of data transfer.  Usually this is because when we enter a room, we only care where things and people are right now.  We don't need to know where they were a few moments ago let alone since the beginning of time.  On the other hand, if we wanted to create a re-play feature to relive the experience of a party or game that we were not able to attend in realtime, we can use the event stream can replay the events so we can experience all the original movements again.
+Our 3D scene is like a projection too.  Each connected browser can process a stream of events like the one above and any time we received "user_joined", we can draw a simple avatar at the given position and rotation.  For now we can start with a simple box.  The same principles should be applicable to more complicated avatars later.  If we get the "user_moved" message we'll just update that box's position and rotation.  Finally if we receive the "user_left" message then we delete that 3D object from the scene.
 
 ### Phoenix Presence
 
@@ -1754,19 +1828,22 @@ Add your new module to your supervision tree, in `lib/xr/application.ex`, it mus
 Modify `xr_web/channels/room_channel.ex` and add ` alias XrWeb.Presence` near the top of the file and also redefine the `after_join` handler:
 
 ```elixir
-def handle_info(:after_join, socket) do
-    {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{
-      online_at: inspect(System.system_time(:second))
-    })
+...
+alias XrWeb.Presence
+...
 
-    push(socket, "presence_state", Presence.list(socket))
-    {:noreply, socket}
-  end
+def handle_info(:after_join, socket) do
+  {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
+
+  entities = Xr.Rooms.entities(socket.assigns.room_id)
+  push(socket, "snapshot", entities)
+  {:noreply, socket}
+end
 ```
 
-When any user joins the room channel they will receive a `presence_state` message that lists all the users in the room.  They will also receive a `presence_diff` message any time a person joins or leaves the room.  
+By adding `Presence.track` we now automatically get a channel message of event `presence_diff` pushed down to the browser anytime a client joins or leaves (by closing the browser).  We can also get a list of all user_ids that have already joined the room when we join the room using `Presence.list`.  We'll use that a bit later.
 
-We can console log all the different kinds of messages coming from the `RoomChannel` by adding this snippet to `broker.ts`:
+If you want to log all the messages coming from the `RoomChannel`, I like to use this bit of debug code to `broker.ts` (we'll remember to remove it later):
 
 ```typescript
 channel.onMessage = (event, payload, _) => {
@@ -1778,14 +1855,24 @@ channel.onMessage = (event, payload, _) => {
 };
 ```
 
-Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like.  You should see something like:
+Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like when you open additional browsers or when you close them.  You should see a payload like:
 
 ```javascript
-presence_diff {joins: {…}, leaves: {…}}
-presence_state {13a92fdc-9f90-4779-9796-5327dd8f8e6e: {…}}
+presence_diff {joins: {"39jfks9...": ...}, leaves: {}}
 ```
 
-Ok, great... but, didn't we want messages that looked more like?:
+Ok, great... that's useful if we only wanted to make a list of users, but we can't draw an avatar without also knowing where to draw it and the presence_diff doesn't give us position or rotation information.  That's something we're going to need to get from Babylon.js (the camera position and rotation) and push it up to the server via a `channel.push` method.
+
+### Client vs Server Dictates Position?
+
+You might be thinking, hey wait a minute.  The server told the front-end the spawn_point, and then we moved the camera there.  Now the client is going to tell the server where the camera is?  It's like both the server and the client are dictating the position.  Yes.  Sort of. The server will be the source of truth for providing a snapshot and broadcasting the eventstream, and each client updates the server with new events.  
+
+So when we first join, the client doesn't know anything about the world.  It gets a snapshot that includes a spawn_point.  It then joins the room.  Next we'll want the server to tell us were we are in that room.  The client doesn't tell the server where we joined.... mmm..., because if we refresh the page, and lose all memory, or if the scene or game has changed without us, the spawn_point moved for example, then the server is the authority to tell us where we are.  So we join, then in the after join, the server will tell us where our position is as part of the snapshot.  So we need to introduce position and rotation memory for every user.
+
+
+
+
+Remember we wanted events that told a story, and is sufficient information for drawing a simple avatar like this:
 
 ```javascript
 {event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
@@ -1793,11 +1880,9 @@ Ok, great... but, didn't we want messages that looked more like?:
 {event: "user_left", payload: {user_id: "tom"}}
 ```
 
-The Phoenix Presence is helping us tracking joins and leaves and we even get the current list of users in a room, but we're missing positions and rotations and also the format of the messages is not to our liking.  
-
 ### Phoenix Presence handle_metas Callback
 
-It turns out that we can add a callback to our `channels/presence.ex` that will get triggered everytime someone joins or leaves the room.  From that callback we could shape the kind of event that we want.  For now let's broadcast messages to all connected users of the room using a broadcast.  Since we're not broadcasting from within the channel we're using a slightly different api `XrWeb.Endpoint.broadcast`.
+It turns out that we can add a callback to our `channels/presence.ex` that will get triggered everytime someone joins or leaves the room.  From that callback we could shape the kind of event that we want.  
 
 ```elixir
 @doc """
@@ -2183,7 +2268,7 @@ We have a slight problem though, we're not specifying where the box should be dr
 
 Right now when we load a room URL, we immediately create the scene and add a camera in the `scene.ts` system.  Every browser that loads that same room URL creates a camera at exactly the same location so we're all on-top of each other!  Each user would not be able to see each other because we are all looking out the same way.
 
-Multiplayer games solve this problem by using a spawn point.  A spawn point has a position in 3D space, usually located on the ground of some surface.  Then when a user joins the room, we spawn the user near the spawn point with some randomness in position and maybe orientation too.  That way when multiple users join the room at the same time they're not as likely to be intersecting with each other.  Let's put a pin in that idea for now, we'll come back to this spawn point concept later.  For now, let's assume that our default scene has a spawn point a the origin (0,0,0).
+Multiplayer games solve this problem by using a spawn_point.  A spawn_point has a position in 3D space, usually located on the ground of some surface.  Then when a user joins the room, we spawn the user near the spawn_point with some randomness in position and maybe orientation too.  That way when multiple users join the room at the same time they're not as likely to be intersecting with each other.  Let's put a pin in that idea for now, we'll come back to this spawn_point concept later.  For now, let's assume that our default scene has a spawn_point a the origin (0,0,0).
 
 In `scene.ts`, when we create our camera, we could initialize it in a slightly random position around the origin. 
 
@@ -2259,6 +2344,12 @@ This handler pattern matches the incoming message on the "i_moved" event as well
 But when other clients join the room and render our box, how will they know that position?  When a client joins the room they will get a phoenix_state message that informs us all the user_ids that are in the room, but that message doesn't contain position data.  
 
 We can join the channel and push down some initial position to the server.  Phoenix presence tracking could theoretically keep that position as some metadata.  However, since players move around a lot, and Phoenix presence data is replicated across all nodes, I feel like that is too chatty to place data that is changing all the time in metadata.  Instead we need some kind of database to store rapidly changing data and be able to query all users positions when clients join. -->
+
+### Testing Multiplayer Without Deploying
+
+ ngrok
+ 
+ ssh -R 80:localhost:4000 serveo.net
 
 
 ## Assets, Interactables, Non-player Related Items

@@ -50,16 +50,17 @@ defmodule Xr.Rooms do
 
   """
   def create_room(attrs \\ %{}) do
-    {:ok, room} =
-      %Room{}
-      |> Room.changeset(attrs)
-      |> Repo.insert()
+    %Room{}
+    |> Room.changeset(attrs)
+    |> Repo.insert()
+  end
 
+  def generate_random_content(room_id) do
     # pick a random color
     color = create_random_color()
     # run this a few random times to create random entities
     for _ <- 1..Enum.random(5..20) do
-      create_entity(room.id, Ecto.UUID.generate(), %{
+      create_entity(room_id, Ecto.UUID.generate(), %{
         "mesh_builder" => ["box", create_random_box_args()],
         "position" => create_random_position(),
         "color" => shift_color(color)
@@ -67,10 +68,10 @@ defmodule Xr.Rooms do
     end
 
     # create spawn_point
-    create_entity(room.id, Ecto.UUID.generate(), %{"spawn_point" => true, "position" => create_random_position()})
-
-    # need to return {:ok, room} at the end because controller is expecting it
-    {:ok, room}
+    create_entity(room_id, Ecto.UUID.generate(), %{
+      "spawn_point" => true,
+      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
+    })
   end
 
   def create_random_position() do
@@ -82,11 +83,12 @@ defmodule Xr.Rooms do
     # pick one of the element positions
     position = Enum.random(0..2)
     # modify the value at that position
-    offset = case Enum.at(color, position) + Enum.random(-50..50) do
-      offset when offset < 0 -> 0
-      offset when offset > 255 -> 255
-      offset -> offset
-    end
+    offset =
+      case Enum.at(color, position) + Enum.random(-50..50) do
+        offset when offset < 0 -> 0
+        offset when offset > 255 -> 255
+        offset -> offset
+      end
 
     List.replace_at(color, position, offset)
   end
@@ -157,7 +159,7 @@ defmodule Xr.Rooms do
   """
 
   def components(room_id) do
-    Repo.all(from e in Xr.Rooms.Entity, where: e.room_id == ^room_id, order_by: e.entity_id)
+    Repo.all(from e in Xr.Rooms.Component, where: e.room_id == ^room_id, order_by: e.entity_id)
   end
 
   @doc """
@@ -166,6 +168,11 @@ defmodule Xr.Rooms do
 
   def entities(room_id) do
     components(room_id)
+    |> components_to_map()
+  end
+
+  def components_to_map(components) when is_list(components) do
+    components
     |> Enum.reduce(%{}, fn record, acc ->
       new_components =
         case acc[record.entity_id] do
@@ -184,7 +191,7 @@ defmodule Xr.Rooms do
   def create_entity(room_id, entity_id, components = %{}) do
     # loop through components
     for {component_name, component_value} <- components do
-      %Xr.Rooms.Entity{
+      %Xr.Rooms.Component{
         room_id: room_id,
         entity_id: entity_id,
         component_name: component_name,
@@ -192,5 +199,19 @@ defmodule Xr.Rooms do
       }
       |> Xr.Repo.insert!()
     end
+  end
+
+  def find_entities_having_component_name(room_id, component_name) do
+    q =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.component_name == ^component_name,
+        select: c.entity_id
+      )
+
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id in subquery(q)
+    )
+    |> Repo.all()
+    |> components_to_map()
   end
 end

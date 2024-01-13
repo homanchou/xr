@@ -17,9 +17,11 @@ defmodule XrWeb.RoomController do
   def create(conn, %{"room" => room_params}) do
     case Rooms.create_room(room_params) do
       {:ok, room} ->
+        Xr.Rooms.generate_random_content(room.id)
+
         conn
         |> put_flash(:info, "Room created successfully.")
-        |> redirect(to: ~p"/rooms/#{room}")
+        |> redirect(to: ~p"/rooms")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, :new, changeset: changeset)

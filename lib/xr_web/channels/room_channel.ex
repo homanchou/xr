@@ -32,8 +32,6 @@ defmodule XrWeb.RoomChannel do
   def handle_info(:after_join, socket) do
     {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
 
-    push(socket, "presence_state", Presence.list(socket))
-
     entities = Xr.Rooms.entities(socket.assigns.room_id)
     push(socket, "snapshot", entities)
     {:noreply, socket}

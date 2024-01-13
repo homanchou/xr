@@ -6,8 +6,7 @@ defmodule XrWeb.RoomMenu.Index do
     {:ok,
      assign(socket,
        user_id: user_id,
-       room_id: room_id,
-       entered: false
+       room_id: room_id
      ), layout: false}
   end
 end

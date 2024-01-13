@@ -1,7 +1,16 @@
-<div id="room_modal" class="z-20 absolute top-0 right-0">
-  <button phx-click={
-    JS.hide(to: "#room_modal") |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
-  }>
-    Click here to enter
-  </button>
+<div id="room_modal" class="z-10 fixed inset-0 flex items-center justify-center">
+  <div class="fixed inset-0 bg-black opacity-50"></div>
+  <!-- Modal Content -->
+  <div class="fixed z-20 bg-white p-8 rounded-md shadow-md w-96 text-center">
+    <p class="text-lg text-gray-800">Your modal content goes here.</p>
+    <button
+      class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md"
+      phx-click={
+        JS.hide(to: "#room_modal")
+        |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
+      }
+    >
+      Enter Room
+    </button>
+  </div>
 </div>

@@ -30,6 +30,7 @@ defmodule XrWeb.RoomController do
 
   def show(conn, %{"id" => id}) do
     room = Rooms.get_room!(id)
+    Xr.Servers.RoomsSupervisor.start_room(room.id)
     render(conn, :show, room: room)
   end
 

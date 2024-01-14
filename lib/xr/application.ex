@@ -18,7 +18,9 @@ defmodule Xr.Application do
       # {Xr.Worker, arg},
       # Start to serve requests, typically the last entry
       XrWeb.Presence,
-      XrWeb.Endpoint
+      XrWeb.Endpoint,
+      {Registry, keys: :unique, name: Xr.RoomsRegistry},
+      Xr.Servers.RoomsSupervisor
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

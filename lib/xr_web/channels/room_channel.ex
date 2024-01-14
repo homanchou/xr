@@ -4,8 +4,12 @@ defmodule XrWeb.RoomChannel do
 
   @impl true
   def join("room:" <> room_id, _payload, socket) do
-    send(self(), :after_join)
-    {:ok, assign(socket, :room_id, room_id)}
+    if (socket.assigns.user_id) do
+      send(self(), :after_join)
+      {:ok, assign(socket, :room_id, room_id)}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
   end
 
   # Channels can be used in a request/response fashion

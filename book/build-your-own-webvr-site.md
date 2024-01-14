@@ -1,5 +1,7 @@
 # Build Your Own Immersive VR Enabled Website for Fun and Profit
 
+maybe we should not join the liveview socket and channel socket together... it breaks the dashboard liveview, 
+
 - [Build Your Own Immersive VR Enabled Website for Fun and Profit](#build-your-own-immersive-vr-enabled-website-for-fun-and-profit)
   - [What this book is about](#what-this-book-is-about)
     - [Who is this book for?](#who-is-this-book-for)
@@ -62,17 +64,25 @@
     - [Add Random Obstacles To A Room Upon Creation](#add-random-obstacles-to-a-room-upon-creation)
     - [Push Snapshot to Client After Join](#push-snapshot-to-client-after-join)
     - [Add some color](#add-some-color)
+  - [Designing Events and Messages](#designing-events-and-messages)
+    - [Event Sourcing](#event-sourcing)
+    - [Phoenix PubSub](#phoenix-pubsub)
+    - [Create a Memory Store for User State](#create-a-memory-store-for-user-state)
+    - [Create an Event Sink Server](#create-an-event-sink-server)
+    - [First Person Shooter Events](#first-person-shooter-events)
+    - [CRUD Events vs High Level Events](#crud-events-vs-high-level-events)
   - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
     - [Create Spawn Point Entity](#create-spawn-point-entity)
     - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
     - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
+    - [](#)
     - [Ask for User First Interaction](#ask-for-user-first-interaction)
     - [Create the liveview for the menu](#create-the-liveview-for-the-menu)
     - [Create the template for the modal](#create-the-template-for-the-modal)
     - [Take Action When Modal Clicked](#take-action-when-modal-clicked)
       - [Summary](#summary)
     - [Simple Presence](#simple-presence)
-    - [Event Sourcing](#event-sourcing)
+    - [Event Sourcing](#event-sourcing-1)
     - [Phoenix Presence](#phoenix-presence)
     - [Client vs Server Dictates Position?](#client-vs-server-dictates-position)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
@@ -211,7 +221,13 @@ export ERL_AFLAGS="-kernel shell_history enabled"
 
 ### Install docker and docker-compose.  
 
-There are two reasons for wanting to use docker.  The first reason is so that we can run a local database with ease as we develop.  For Windows and Mac users the easiest way is probably by installing Docker Desktop for Windows (and mac) respectively.  The second reason for using docker is for when it comes time for deployment to production, creating a docker image might be one of the ways we'll want to utilize.
+You can skip this step if you already have Postgres on your machine.  But even if you do I recommend installing Docker anyway.  There are two reasons for wanting to use docker.  The first reason is so that we can run a local database with ease as we develop without worrying about version collisions or configuration conflicts with our host machine.  
+
+For Windows and Mac users the easiest way is probably by installing Docker Desktop for Windows (and mac) respectively.  The second reason for using docker is for when it comes time for deployment to production, creating a docker image might be one of the ways we'll want to utilize for deployment, so familiarity with docker is helpful.  
+
+Please lookup the instructions for installing docker and docker-compose on your system.  I'm using Windows and Windows Sub-System for Linux (WSL).  When I install Docker Desktop for Windows it automatically comes with docker-compose and docker is automatically available to me in the WSL command line environment as well.
+
+We will be using Docker to run our local database.  Remember to have the docker server running, otherwise the server can't find the database.
 
 
 ### Install vscode.
@@ -252,9 +268,7 @@ Ignore the lengthly output for just a moment.  We'll need to make sure Phoenix h
 
 ### Create a Postgres Database Server
 
-Docker is the easiest way to setup a hassle free and disposable database.  Getting the right drivers and dependences on your local machine and keeping them maintained when your OS needs to upgrade is a pain.  We don't really care where this data lives on our local machine, this is just a way for us to develop and test our features. 
-
-Immediately after running the `mix phx.new` command, `cd` into the new project folder that it create and we'll create a docker-compose.yml file so that we can connect to a postgres database.
+Immediately `cd` into the new project folder that the previous command just created and create a docker-compose.yml file so that we can connect to a postgres database.
 
 Paste the following into a docker-compose.yml file in your new project's root directory
 
@@ -277,9 +291,9 @@ volumes:
 ```
 
 
-Assuming you have docker and docker-compose or docker desktop already installed, run `docker-compose up -d`.  This will download the postgres image from dockerhub and initialize it with the default user and password.
+Assuming you have docker and docker-compose or docker desktop already installed, run `docker-compose up -d`.  This will download the postgres image from dockerhub and initialize it with the default user and password.  
 
-Check that the database image container is running with `docker ps`
+Check that the database image container is running with `docker ps`, which should show you list of running containers.  Remember that your server has this database dependency.  If you later try to start your server and you get database connection errors, check that Docker Desktop is running and check that your container from docker-compose is running too.
 
 Now you can run the rest of the project instructions:
 
@@ -290,6 +304,8 @@ mix ecto.create
 This will create a development database (a logical database) within your docker postgres database container.  
 
 Then start your server using `iex -S mix phx.server`
+
+Remember this command.  You'll be using it a lot and I may not always spell it out.  I'll just say, start your server and try something in your browser.  
 
 If you're on linux you may also get an error about needing `inotify-tools`, in which case follow the links to install that for live-reload.
 
@@ -1574,7 +1590,221 @@ const process_entity = (entity_id: string, components: object) => {
 };
 ```
 
-Give it another test in the browser.  
+Give it another test in the browser.  We now have some colorful random obstacles.
+
+## Designing Events and Messages
+
+By now you might be noticing a pattern that is emerging. We've been very focused on the message payloads that we create.  In fact, messages are at the core of this design architecture.  
+
+- Design an message describing some domain event
+- Send the message to the client
+- Create a system that listens to the message and have Babylon.js modify the 3D scene in some way
+
+The message can originate from different sources depending on these scenarios:
+
+1. Initial state snapshot.  We already implemented this.  This message originates from the server and is sent to the client when they join so they can draw all the initial scene.
+2. User generated events.  These are messages that the user initiates by taking some action.  These messages originate in the front-end and are sent to the server and then broadcast to all the other connected clients.
+3. System generated events.  These are messages that are indirectly triggered by something that has happened.  It could even be just the passing of time.  For example we could have a system that emits periodic events to open a door every 60 seconds then close 15 seconds after that.  We could have a system observe if bullets actually hit zombies and emit an event that the zombie was killed.  These events also originate on the client but should only come from one client otherwise we could end up with duplicate or conflicting events if they are calculated on every client.
+4. Server generated event.  Lastly these types of events come from the server and supplement events that cannot be generated on the client side.  For example the client cannot tell us they have left if they just close their browser and disconnect.  The server however can detect that the client has detached and emit an event that that user left.
+
+### Event Sourcing
+
+All these events, even if coming from different sources, if properly gathered and ordered with a timestamp can be used to construct an event stream.  There is an architectural pattern called event sourcing which simply means to collect events as a single source of truth so that we can transform the stream into projections, which are just alternate views of the data.
+
+### Phoenix PubSub
+
+Phoenix comes with a library called PubSub which allows any process to subscribe to a topic and for any code to broadcast messages on a topic.  This is very convenient to pass messages around without coupling the sender and receiver.
+
+Here's an example of how to use PubSub:
+
+```elixir
+alias Phoenix.PubSub
+PubSub.subscribe(Xr.PubSub, "room:123")
+:ok
+Process.info(self(), :messages)
+{:messages, []}
+PubSub.broadcast(Xr.PubSub, "room:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
+:ok
+Process.info(self(), :messages)
+{:messages, [{"user_moved", %{"user_id" => "tom", "pose" => ...}}]}
+```
+
+### Create a Memory Store for User State
+
+Let's create a small server that specializes in storing data about each connected user.  In particular we're going to need to know each user's avatar location (position, rotation, pose, etc) and other details so that when a client joins the room they can know where to draw all the existing avatars.
+
+Create a new file in `lib/xr/server/user_snapshot.ex` and paste this boilerplate to create a simple GenServer.
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+
+  def start_link() do
+    GenServer.start_link(__MODULE__, [])
+  end
+  @impl true
+  def init([]) do
+    {:ok, %{}}
+  end
+
+end
+```
+
+We can go to our terminal after starting `iex -S mix phx.server` and start an instance of this GenServer.
+
+```elixir
+>Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.524.0>}
+```
+
+That returns an `{:ok, pid}` tuple and if we pattern match it we can use the pid.
+
+```elixir
+>{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.525.0>}
+>:sys.get_state(pid)
+%{}
+```
+
+The state is an empty map as expected.  
+
+We can have the UserSnapshot Genserver subscribe to the room topic like this:
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+  alias Phoenix.PubSub
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id})
+  end
+  @impl true
+  def init({:ok, room_id}) do
+    PubSub.subscribe(Xr.PubSub, "room:#{room_id}")
+    {:ok, %{}}
+  end
+
+end
+```
+
+Now if any process broadcasts a message to the "room:#{room_id}" topic the UserSnapshot GenServer will receive a copy and we'll be able to build a database of user states.  However this GenServer is un-named right now we it's possible to create multiple instances of it.  Let's add a local process Registry so that we can use a string as the name of this process and make sure all GenServer's of this type have a unique name.
+
+Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
+
+```elixir
+ {Registry, keys: :unique, name: Xr.RoomsRegistry},
+```
+Now we can use a term for the GenServer name.  Add this to the `user_snapshot.ex` file:
+
+```
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, room_id}}
+  end
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+```
+
+Now the GenServer cannot be started twice:
+
+```elixir
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:ok, #PID<0.540.0>}
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:error, {:already_started, #PID<0.540.0>}}
+```
+
+Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
+
+```elixir
+defmodule Xr.Servers.RoomsSupervisor do
+  use DynamicSupervisor
+
+  def start_link(_arg) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  def start_room(room_id) do
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
+  end
+
+end
+```
+
+We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
+
+```elixir
+  children = [
+    ....
+    Xr.Servers.RoomsSupervisor
+  ]
+```
+
+Now wehe can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
+
+```elixir
+def show(conn, %{"id" => id}) do
+  room = Rooms.get_room!(id)
+  Xr.Servers.RoomsSupervisor.start_room(room.id)
+  render(conn, :show, room: room)
+end
+```
+
+### Create an Event Sink Server
+
+First lets create a destination that can receive our events.  Elixir is a language that was build with message passing to processes as a first class citizen.  We'll create a GenServer to receive all the events that occur in a room.  We can then 
+
+### First Person Shooter Events
+
+Let's make a list of some common things that happen in games like Doom and see if we can make an outline for all our events:
+
+1. Player moving around - observe our camera movement and send an event to the server that we moved.  `{note: "player_moved", eid: "user-id", c: {pose: {....}}}`.  When processing the event we should draw the avatar at the new location.
+2. Player discharging a weapon - observe a trigger press and send an event that we shot a bullet. 
+   `{note: "bullet_fired", by: "user-id", from_position: [], orientation: [], bullet_id: ...}`. When processing the event we should play a sound and animate an effect.  We might also update the ammo count.
+3. Opening a door - in the client we observe if we click a door or step on a trigger and send an event.  When we process the event we animate the door going up and play a sound.
+4. Monster moving around - in one of the clients at acts as a leader, emit an event of the monsters new location.  When processing the event draw the monster in the new location.
+5. Monster throwing a fireball - in the leader, emit an event of the fireball.  In all clients draw and animate the fireball flying in a certain direction.
+6. Player hit by a fireball - in the leader
+7. Monster hit by a bullet.
+8. Monster dies
+9.  Collecting a weapon.
+10. Switching to a different weapon.
+11. Collecting health.
+12. Collecting immunity.
+13. Collecting ammo.
+14. Collecting a key.
+15. Player reached end goal.
+16. Player was killed.
+
+
+
+
+
+
+
+### CRUD Events vs High Level Events
+
+If everything in our scene is an entity, with an entity_id and components which are just data, then should our events just be CRUD messages around creating and deleting entities and then updating components on entities?
+
+The implications of this would be that we have only a handful of types of messages like this:
+- `{create: "entity-id", components: {...}}`
+- `{update: "entity-id", components: {...}}` 
+- `{delete: "entity-id"}`
+
+The delete message is easy to handle because you just need to find that object by its entity id and dispose of it in the scene.  For both create_entity and update_entity we need to loop through it's components and those respective systems will either create or update the object and manipulate it in the scene.  This somewhat conforms to the schema we already have with the snapshot message.  And this maps directly to database CRUD operations.  On the serverside, we just make a handler loop through all the components and insert that into our Postgres database for the updated snapshot.  If we get a delete event we just remove the entity and all its components from the database.
+
+As an alternative to CRUD like events, we can opt for "High level" events.  These are events that tell a story.  If you were to read a log of events it would sound like "user_joined", "user_walked", "user_jumped", "user_grabbed", "user_threw".
+
+
+There are some issues with these messages though:
+
+- Hard to read the intent of the message.    
+
 
 ## Entering the Room at a Spawn Point
 
@@ -1636,11 +1866,66 @@ Now that we have a way of looking up the spawn_point entity for a room, we also 
 3. If yes, send the user_joined message along with the previous location
 4. If no, send the user_joined message along with the spawn_point location
    
-So we need some server-side in memory storage that is fast and able to be simultaneously updated by many clients.
+To do step 2 (check previous user location) we'll need a server-side database.  One idea is to just stash the user data into our Postgres database since components and entities can be anything including users.  However thinking about how frequently users are going to be moving around, making round trips to a persistent disk storage is going to be very chatty to our database server.  I also think that users should be treated differently than things
+
+However in memory storage that is fast and able to be simultaneously updated by many clients.
 
 ### Create ETS Table for User Snapshot
 
+Elixir is based on Erlang and Erlang comes with a fast in-memory database called Erlang-Term-Storage (ETS).
 
+To create a new ETS Table we do this:
+
+```elixir
+table = :ets.new(:some_atom, [:set, :public, {:write_concurrency, true},{:read_concurrency, true}])
+```
+
+An ETS table is linked to the process that created it.  So if the parent process dies or is shutdown than the child will be shutdown and memory reclaimed as well.
+
+The configuration above creates a table that has:
+
+- unique keys (desirable because every person is unique)
+- is writable by all processes (desirable so every client's room channel process can add their own data)
+- concurrent on reads and writes so multiple processes can access the data simultaneously
+
+To insert data provide the table reference and a tuple of {key, value} and to lookup data provide the table reference and the key:
+
+```elixir
+> :ets.insert(table, {"key", %{}})
+true
+> :ets.lookup(table, "key")
+[{"key", %{}}]
+```
+
+You can get the whole table as a list of key/value pairs using:
+
+```elixir
+>:ets.tab2list(table)
+[{"key", %{}}, ...]
+```
+
+Now for the tricky part:
+
+- Where do we instantiate this table?
+- How do we pass a table reference into the room channel?
+
+###
+
+```
+             +----------+                  
+         +---|Supervisor|--+               
+         |   +----------+  |               
+   +--------+       +--------+             
+   | Room 1 |       | Room 2 |             
+   | Child  |       | Child  |             
+   +--------+       +--------+       
+```
+
+
+
+You can set the name of a table to a unique atom like our room uuid turned into an atom, but since atoms are not garbage collected we should not create atoms from unbounded data.
+
+The `table` is some kind of Elixir `reference` so we need a way of sharing the reference to all room channels.
 
 We don't have an index on room_id and component_name so let's add one.  I'm modifying the same migration file since I haven't pushed this code up yet.  If you're working on a team and have shared your code you'll never want to modify migration files.  They're intended to be immutable.
 
@@ -1789,7 +2074,14 @@ Take a look at the message shapes below, if we were to broadcast messages like t
 {event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
 {event: "user_left", payload: {user_id: "tom"}}
 ```
-I like these events because if ordered, they tell a story.
+I like these events because if ordered, they tell a story.  In fact, we can imagine that if we went down this path we could have more nuanced events like "user_teleported", "user_walked", "user_ran", "user_threw_object", and these sparse events could carry only the necessary data to convey an idea, and the rendering engine can take more liberty and choose how to animate or draw the data. 
+
+Another way we could design our messages is to make all objects in the world the same.  Every message could just be a CRUD operation.  We're always creating an entity or deleting an entity or updating a component on an entity.  Events would look like this:
+
+```
+{event_type: "add_entity", payload: {entity_id: "tom", components: {position: [...]}}},
+{event_type: "delete_entity"}
+```
 
 ### Event Sourcing
 

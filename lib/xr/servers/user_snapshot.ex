@@ -1,28 +1,24 @@
 defmodule Xr.Servers.UserSnapshot do
   use GenServer
+  alias Phoenix.PubSub
 
-  def start_link() do
-    GenServer.start_link(__MODULE__, [])
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, room_id}}
   end
 
-  def user_moved(pid, payload) do
-    GenServer.cast(pid, {:user_moved, payload})
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+  @impl true
+  def init({:ok, room_id}) do
+    PubSub.subscribe(Xr.PubSub, "room:#{room_id}")
+    {:ok, %{}}
   end
 
   @impl true
-  def init([]) do
-    {:ok, %{users: %{}}}
+  def handle_info(msg, state) do
+    IO.inspect(msg, label: "user snapshot not handling")
+    {:noreply, state}
   end
 
-  @impl true
-  def handle_cast(
-        {:user_moved, %{"user_id" => user_id, "position" => position, "rotation" => rotation}},
-        state
-      ) do
-    {:noreply,
-     %{
-       state
-       | users: Map.put(state.users, user_id, %{"position" => position, "rotation" => rotation})
-     }}
-  end
 end

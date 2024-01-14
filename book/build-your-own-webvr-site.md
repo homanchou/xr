@@ -1,7 +1,5 @@
 # Build Your Own Immersive VR Enabled Website for Fun and Profit
 
-maybe we should not join the liveview socket and channel socket together... it breaks the dashboard liveview, 
-
 - [Build Your Own Immersive VR Enabled Website for Fun and Profit](#build-your-own-immersive-vr-enabled-website-for-fun-and-profit)
   - [What this book is about](#what-this-book-is-about)
     - [Who is this book for?](#who-is-this-book-for)
@@ -24,7 +22,7 @@ maybe we should not join the liveview socket and channel socket together... it b
     - [Workstation Ready](#workstation-ready)
   - [Creating Rooms](#creating-rooms)
     - [Run Generator to Create Rooms](#run-generator-to-create-rooms)
-    - [Create Room Routes](#create-room-routes)
+    - [Add Room Routes](#add-room-routes)
     - [Create Rooms Database Table](#create-rooms-database-table)
     - [Replace the Default Phoenix Home Page](#replace-the-default-phoenix-home-page)
     - [Remove the Default Heading](#remove-the-default-heading)
@@ -43,7 +41,7 @@ maybe we should not join the liveview socket and channel socket together... it b
     - [Add User Token to Frontend](#add-user-token-to-frontend)
     - [Add User Token to Client Side Socket Connection Code](#add-user-token-to-client-side-socket-connection-code)
     - [Verify User Token in Server side Socket Connect Callback](#verify-user-token-in-server-side-socket-connect-callback)
-    - [Verify user\_id passed to RoomChannel](#verify-user_id-passed-to-roomchannel)
+    - [Verify RoomChannel Gets UserId](#verify-roomchannel-gets-userid)
   - [Adding Babylon.js](#adding-babylonjs)
     - [Install node](#install-node)
     - [Configure esbuild script](#configure-esbuild-script)
@@ -55,6 +53,7 @@ maybe we should not join the liveview socket and channel socket together... it b
       - [Add scene.ts](#add-scenets)
       - [Add room.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
+    - [Verify Asset Bundles](#verify-asset-bundles)
     - [Babylon Added Summary](#babylon-added-summary)
   - [Simple Obstacles](#simple-obstacles)
     - [Database Supplied Obstacles](#database-supplied-obstacles)
@@ -64,26 +63,33 @@ maybe we should not join the liveview socket and channel socket together... it b
     - [Add Random Obstacles To A Room Upon Creation](#add-random-obstacles-to-a-room-upon-creation)
     - [Push Snapshot to Client After Join](#push-snapshot-to-client-after-join)
     - [Add some color](#add-some-color)
-  - [Designing Events and Messages](#designing-events-and-messages)
+  - [Event Driven Architecture](#event-driven-architecture)
     - [Event Sourcing](#event-sourcing)
+    - [Message Producers](#message-producers)
     - [Phoenix PubSub](#phoenix-pubsub)
+  - [Presence](#presence)
+    - [Phoenix Presence](#phoenix-presence)
+  - [Ask for User First Interaction](#ask-for-user-first-interaction)
+    - [LiveView Module](#liveview-module)
+    - [LiveView Template](#liveview-template)
+    - [LiveView JS Interop](#liveview-js-interop)
+    - [Summary](#summary)
+  - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
+    - [Create Spawn Point Entity](#create-spawn-point-entity)
     - [Create a Memory Store for User State](#create-a-memory-store-for-user-state)
+    - [Add Handlers To Receive Movement Data](#add-handlers-to-receive-movement-data)
+      - [Server Tells User Where They Should Be](#server-tells-user-where-they-should-be)
+    - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
+  - [Designing Events and Messages](#designing-events-and-messages)
+    - [Event Sourcing](#event-sourcing-1)
+    - [Phoenix PubSub](#phoenix-pubsub-1)
     - [Create an Event Sink Server](#create-an-event-sink-server)
     - [First Person Shooter Events](#first-person-shooter-events)
     - [CRUD Events vs High Level Events](#crud-events-vs-high-level-events)
-  - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
-    - [Create Spawn Point Entity](#create-spawn-point-entity)
-    - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
     - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
     - [](#)
-    - [Ask for User First Interaction](#ask-for-user-first-interaction)
-    - [Create the liveview for the menu](#create-the-liveview-for-the-menu)
-    - [Create the template for the modal](#create-the-template-for-the-modal)
-    - [Take Action When Modal Clicked](#take-action-when-modal-clicked)
-      - [Summary](#summary)
     - [Simple Presence](#simple-presence)
-    - [Event Sourcing](#event-sourcing-1)
-    - [Phoenix Presence](#phoenix-presence)
+    - [Event Sourcing](#event-sourcing-2)
     - [Client vs Server Dictates Position?](#client-vs-server-dictates-position)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
     - [Add avatar.ts](#add-avatarts)
@@ -327,7 +333,7 @@ Open a terminal from your projects root folder and execute this mix task to gene
 mix phx.gen.html Rooms Room rooms name:string description:string
 ```
 
-### Create Room Routes
+### Add Room Routes
 
 Go ahead and follow the instructions and paste the new lines into your lib/xr_web/router.ex.  It should look something like this:
 
@@ -342,7 +348,7 @@ scope "/", XrWeb do
 end
 ```
 
-If you type `mix phx.routes` you'll see a table of the usual CRUD routes for `room`.
+If you type `mix phx.routes` you'll see a table of the usual Create, Read, Update, Delete (CRUD) routes for `room`.
 
 ```bash
 mix phx.routes
@@ -357,7 +363,7 @@ mix phx.routes
   DELETE  /rooms/:id                             XrWeb.RoomController :delete
 ```
 
-You'll goto `/rooms` to see a list of all your rooms and `/rooms/some-id` to drill down into a particular room. 
+The path `/rooms` will show a list of rooms we can manage.  The path `/rooms/:id` will be used to jump into a particular room.
 
 ### Create Rooms Database Table
 
@@ -381,7 +387,7 @@ defmodule Xr.Repo.Migrations.CreateRooms do
 end
 ```
 
-Everything looks good.  As you can see this migration will create a new table for us called `rooms` with an id column, name and description columns as well as default timestamps of inserted_at and updated_at.  These are just following the framework conventions.
+Everything looks good.  As you can see this migration will create a new table for us called `rooms` with an id column, name and description columns as well as default timestamps of inserted_at and updated_at.  
 
 Go ahead and run the migration now:
 
@@ -430,7 +436,7 @@ For now let's at least have a basic link on our homepage link over to our rooms 
 <.link href={~p"/rooms"} class="underline text-blue-700 p-2">Rooms</.link>
 ```
 
-That strange looking `.link` thing looks like an HTML tag but it's actually a Phoenix live view component.  That just means that it's a function named `link` that handles various kinds of navigation for us including clever push-state transitions that don't actually reload the page.  We don't really need to use it for this simple page transition since we're just using href which is a full page reload.  The next funky bit is the href value.  That is using a special ~p sigil which will raise a warning (vscode should underline in yellow) if we link to a non-existant path.
+That strange looking `<.link` thing looks like an HTML tag but it's actually a Phoenix live view component.  That just means that it's a function named `link` that handles various kinds of navigation for us including clever push-state transitions that don't actually reload the page.  We don't really need to use it for this simple page transition since we're just using href which is a full page reload.  The next funky bit is the href value.  That is using a special ~p sigil which will raise a warning (vscode should underline in yellow) if we link to a non-existant path.
 
 ### Remove the Default Heading
 
@@ -712,7 +718,9 @@ We now have our first browser to browser interaction and it forms the basis of b
 
 ## Securing the WebSocket
 
-At this point we've proven that we can send messages back and forth from one browser to another.  We've sort of played it fast and loose so let's go back and tidy a few things up.  Phoenix provides a way of doing authentication in the `UserSocket`.  You may have noticed code snippets in the code generated in `user_socket.js` that tells us what to add.  The basic idea is that our backend will send a bit of encrypted data to the front-end such as the user's id.  And when we connect to the socket from the front-end we'll send that encrypted data back to the server.  In the `UserSocket` module we'll then unencrypt the data, retrieving the user_id and sticking it into the socket so that it's available in the `RoomChannel`.  But first we'll need a user_id.
+At this point we've proven that we can send messages back and forth from one browser to another.  We've sort of played it fast and loose so let's go back and tidy a few things up.  Phoenix provides a way of doing authentication in the `UserSocket`.  You may have noticed code snippets in the code generated in `user_socket.js` that tells us what to add.  The basic idea is that our backend will send a bit of encrypted data to the front-end such as the user's id.  And when we connect to the socket from the front-end we'll send that encrypted data back to the server for verification.  Any party that attempts to connect to our socket without providing the user token will not be able to join our room channel.  In the `UserSocket` module we'll unencrypt the user token, retrieving the user_id and add it into the socket so that it's available in the `RoomChannel`.  That's a lot to take in.  
+
+First we'll need a user_id.
 
 ### Creating a unique id per visitor
 
@@ -733,9 +741,9 @@ Open up `router.ex` and type the following function:
   end
 ```
 
-This function (known as a function plug), just follows a certain convention.  It takes a conn (a kind of connection struct), and second argument for some options that we don't care about now.  Then it creates a new conn that adds a user_id into the cookie session, but only if it wasn't there already.  
+This function (known as a function plug), just follows a certain convention.  It takes a conn (a kind of connection struct), and second argument for some options that we don't care about now.  Then it creates a new conn that adds a unique user_id into the cookie session, but only if it wasn't there already.  That means we get a sticky identifier for each visitor.  We also add the user_id into the `assigns` map of the `conn` so that it's readily available.
 
-We'll add this plug into the browser pipeline:
+Next we'll add this plug into the browser pipeline so that every page load will process our plug function:
 
 ```elixir
 pipeline :browser do
@@ -746,11 +754,11 @@ pipeline :browser do
 end
 ```
 
-Now every visitor to the website will get a unique user_id in their session that will persist unless they clear their cookies and they haven't even had to login or register.  How convenient!
+Now every visitor to the website will get a unique user_id in their session and they haven't even had to login or register.  How convenient!
 
 ### Add User Token to Conn
 
-Let's add another function plug in `router.ex` for creating an encrypted token from the user_id.  We'll then pass this to the frontend so it can be passed back to the server and verified in the `UserSocket`
+We now have a unique user_id in the cookie session.  But we need to send it down to the front-end encrypted as a user_token.  Let's add another function plug in `router.ex` for creating an encrypted token from the user_id.  We'll then pass this to the frontend so it can be passed back to the server and verified in the `UserSocket`
 
 ```elixir
  defp put_user_token(conn, _) do
@@ -802,6 +810,7 @@ let liveSocket = new LiveSocket("/live", Socket, {params: {_csrf_token: csrfToke
 Now we open up `user_socket.ex` and replace the default `connect` function with this snippet that will verify the user token:
 
 ```elixir
+@impl true
 def connect(%{"_user_token" => token}, socket, _connect_info) do
   case Phoenix.Token.verify(socket, "some salt", token, max_age: 1_209_600) do
     {:ok, user_id} ->
@@ -811,20 +820,32 @@ def connect(%{"_user_token" => token}, socket, _connect_info) do
       :error
   end
 end
+
+# if user_token is not provided, which is the case for phoenix live dashboard
+# return :ok, so the socket can still connect, but the room channel don't allow join to succeed
+@impl true
+def connect(_, socket, _connect_info) do
+  {:ok, socket}
+end
 ```
 
-### Verify user_id passed to RoomChannel
+### Verify RoomChannel Gets UserId
 
 At this point we have completed authenticating the socket and we have this additional user_id in the socket we can use in `RoomChannel`.  Let's test that everything is hooked up properly by broadcasting the `room_id` and `user_id` whenever any client joins.
 
 Open up `room_channel.ex` and modify `join` function to be like this:
 
 ```elixir
-  def join("room:" <> room_id, _payload, socket) do
+def join("room:" <> room_id, _payload, socket) do
+  if (socket.assigns.user_id) do
     send(self(), :after_join)
     {:ok, assign(socket, :room_id, room_id)}
+  else
+    {:error, %{reason: "unauthorized"}}
   end
+end
 ```
+
 The `join` function, on a successful operation should return a tuple with `{:ok, socket}`.  Here we are adding the room_id into the socket so we have some memory to use in other handlers.  `user_id` is already in the socket assigns thanks to the `UserSocket` connect callback putting it in there (we did that!).
 
 This `send` function is a built in function that will send a message to any Elixir process.  In this case we're sending a message to ourselves, `self`, right after we've joined.  Once we've joined, (and not before) we can utilize the channel APIs like `push` (send a message to my client and no one elses), `broadcast` (send a message to all clients) etc.  We need to add a new handler to handle the `:after_join` message.
@@ -1246,6 +1267,10 @@ You should end up with a `assets/js` folder structure like this:
     └── scene.ts
 ```
 
+### Verify Asset Bundles
+
+If you want to see the assets that these source typescript files turn into, start your dev server `iex -S mix phx.server` then take a look inside `priv/static/assets` folder.  The watchers are hard at work observing any changes to the typescript files and then esbuild is bundling and splitting the files here.  These might look very big now and that's because in development we're not minifying any code and we're also including source maps inline in the file.  To see what the file sizes will look like for production run `mix assets.deploy`.  This will create the minified, no sourcemap, gzipped versions of the files.  Run `mix phx.digest.clean --all` to remove files created.
+
 ### Babylon Added Summary
 
 Whew!  A lot happened in this section.  We've successfully added babylon.js, but to do that we had to change out the way Phoenix packages and bundles its javascript and at the same time we organized our own folder structure to make it easier to add more functionality going forward.
@@ -1592,6 +1617,441 @@ const process_entity = (entity_id: string, components: object) => {
 
 Give it another test in the browser.  We now have some colorful random obstacles.
 
+## Event Driven Architecture
+
+By now you might be noticing a pattern that is emerging. We've been very focused on the message payloads that we create.  In fact, messages are at the core of this design architecture.  
+
+- Design an message describing some domain event
+- Send the message to the client
+- Create a system that listens to the message and have Babylon.js modify the 3D scene in some way
+
+### Event Sourcing
+
+There is an architectural pattern called event sourcing where we strategically put every thing important to us that can happen into an ordered stream of events (called an Event Stream).  An event is a fact that has just happened.  It has just enough information to allow us to re-create the state (or view) purely from processing those events in order again.  It's very useful for auditing what happened because you have a perfect cronological log.  It's useful for testing and debugging because we can replay the events into the UI to see if the view renders everything correctly based off of the events.  And we get a replay feature for free in order to experience immersive meeting room replay.
+
+We can have any number of subscribers listening to the event stream building up their own "projections", aka views of the data that are built-up by processing each event.
+
+### Message Producers
+
+A message can originate from different sources depending on these scenarios:
+
+1. Initial state snapshot.  We already implemented this.  This message originates from the server and is sent to the client when they join so they can draw all the initial scene.
+2. User generated events.  These are messages that the user initiates by taking some action.  These messages originate in the front-end and are sent to the server and then broadcast to all the other connected clients.
+3. System generated events.  These are messages that are indirectly triggered by something that has happened.  It could even be just the passing of time.  For example we could have a system that emits periodic events to open a door every 60 seconds then close 15 seconds after that.  We could have a system observe if bullets actually hit zombies and emit an event that the zombie was killed.  These events also originate on the client but should only come from one client otherwise we could end up with duplicate or conflicting events if they are calculated on every client.
+4. Server generated event.  Lastly these types of events come from the server and supplement events that cannot be generated on the client side.  For example the client cannot tell us they have left if they just close their browser and disconnect.  The server however can detect that the client has detached and emit an event that that user left.
+
+### Phoenix PubSub
+
+Phoenix comes with a library called PubSub which allows any process to subscribe to a named topic  and for any code to broadcast messages on a topic.  This is very convenient to easily allow any Elixir process to talk to another process.  
+
+Here's an example of how to use PubSub in the iex terminal:
+
+```elixir
+alias Phoenix.PubSub
+PubSub.subscribe(Xr.PubSub, "stream:123")
+:ok
+Process.info(self(), :messages)
+{:messages, []}
+PubSub.broadcast(Xr.PubSub, "stream:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
+:ok
+Process.info(self(), :messages)
+{:messages, [{"user_moved", %{"user_id" => "tom", "pose" => ...}}]}
+```
+In this simple example we subscribe to a topic "stream:123", broadcast a message to it and then see that our process mailbox received the message.
+
+This understanding sets us up to create an event-stream for our room.  Everything that is important about a room should be broadcast on the stream.
+
+## Presence
+
+The first events that we will work on will help us establish where our avatars should be in 3D space.  Our goal is to produce some events like this:
+
+```
+{event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_left", payload: {user_id: "tom"}}
+```
+
+### Phoenix Presence
+
+To help us with the join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.    
+
+Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  
+
+Let's get started!  And wouldn't you know it?  There is a generator for this too.  Gotta love them generators!
+
+```bash
+mix phx.gen.presence
+```
+
+This creates a new file for us `xr_web/channels/presence.ex`.
+
+Add your new module to your supervision tree, in `lib/xr/application.ex`, it must be after `PubSub` and before `Endpoint`:
+
+```elixir
+
+    children = [
+      {Phoenix.PubSub, name: Xr.PubSub},
+      ... 
+      XrWeb.Presence,
+      ...
+      XrWeb.Endpoint
+    ]
+
+```
+
+Modify `xr_web/channels/room_channel.ex` and add ` alias XrWeb.Presence` near the top of the file and also redefine the `after_join` handler:
+
+```elixir
+...
+alias XrWeb.Presence
+...
+
+def handle_info(:after_join, socket) do
+  {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
+
+  entities = Xr.Rooms.entities(socket.assigns.room_id)
+  push(socket, "snapshot", entities)
+  {:noreply, socket}
+end
+```
+
+By adding `Presence.track` we now automatically get a channel message of event `presence_diff` pushed down to the browser anytime a client joins or leaves (by closing the browser).  
+
+If you want to log all the messages coming from the `RoomChannel`, I like to use this bit of debug code to `broker.ts` (we'll remember to remove it later):
+
+```typescript
+channel.onMessage = (event, payload, _) => {
+  if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
+    // since this is debug level you'll need to set you browser's log level accordingly
+    console.debug(event, payload);
+  }
+  return payload;
+};
+```
+
+Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like when you open additional browsers or when you close them.  Your `console.debug` should show you a payload like:
+
+```javascript
+presence_diff {joins: {"39jfks9...": ...}, leaves: {}}
+```
+
+Ok, great... that's useful if we only wanted to make a list of users, but we can't draw an avatar without also knowing where to draw it and the presence_diff doesn't give us position or rotation information.  That's something we're going to need to get from Babylon.js (the camera position and rotation) and push it up to the server via a `channel.push` method.
+
+
+
+## Ask for User First Interaction
+
+Instead of immediately connecting to the room channel as soon as the page loads, let's pop up a modal to ask the user if they want to "enter" the room in the first place.  This sets up the ability to do some gating later.  We can't stop browsers from loading a public webpage if they know the meeting room_id, but we can prevent them from entering the event if they are unauthorized, don't have a password or invite, etc.  This means we don't waste channel resources and don't connect them to the room until they are qualified.  An even more important benefit is that we get our "first user interaction" out of the way.  This initial interaction (a click) is required in order to unblock us from using some browser APIs, such as checking what audio devices they have like microphone etc. 
+
+Let's modify the room controller's `show.html.heex` page to drop in a Phoenix liveview so we can create some dynamic HTML over our scene.
+
+```elixir
+<script>
+  window.addEventListener("DOMContentLoaded", function() {
+    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
+  })
+</script>
+<%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>
+```
+
+This live_render function loads a LiveView.  It expects a module, in this case named `XrWeb.RoomMenu.Index`, let's create that module now.
+
+### LiveView Module
+
+Add a file at `lib/xr_web/live/room_menu/index.ex`
+
+```elixir
+defmodule XrWeb.RoomMenu.Index do
+  use XrWeb, :live_view
+
+  @impl true
+  def mount(_params, %{"user_id" => user_id, "room_id" => room_id}, socket) do
+    {:ok,
+     assign(socket,
+       user_id: user_id,
+       room_id: room_id,
+     ), layout: false}
+  end
+end
+```
+
+This creates a liveview process and is mounted with some initial state.  The room_id and user_id were passed into the LiveView process from the front-end.
+
+### LiveView Template
+
+The liveview expects a rendering function or a template file.  Let's create a template file at `lib/xr_web/live/room_menu/index.html.heex`
+
+```html
+<div id="room_modal" class="z-10 fixed inset-0 flex items-center justify-center">
+  <div class="fixed inset-0 bg-black opacity-50"></div>
+  <!-- Modal Content -->
+  <div class="fixed z-20 bg-white p-8 rounded-md shadow-md w-96 text-center">
+    <p class="text-lg text-gray-800">Your modal content goes here.</p>
+    <button
+      class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md"
+      phx-click={
+        JS.hide(to: "#room_modal")
+        |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
+      }
+    >
+      Enter Room
+    </button>
+  </div>
+</div>
+
+```
+There is a bit to unpack here.  This very simple model is styled with tailwind classes to appear ontop of everything.  The meaty part here is the phx-click attribute and 
+
+```elixir
+JS.hide(to: "#room_modal")
+        |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"}) 
+```
+Which is a pipe of two elixir functions that actually become javascript functions.
+
+### LiveView JS Interop
+
+We want the modal to disappear when the button is clicked.  But we also want to trigger the front-end to connect to the channel after we click the button. Phoenix Liveview is considered server-side code written in Elixir, rendered as HTML and sent to the frontend on mount.  Typically Phoenix Liveview can receive information from the front-end.  Clicks for example, send data through the LiveView channel to the LiveView process through the use of special HTML attributes like `phx-click`.  
+
+Typically usage would be something like:
+
+```html
+<button phx-click="inc">Click Me</button>
+```
+
+That would then send a message of "inc" to the liveview process and we'd have to write handler to handle it and we modify some state.  Liveview pays attention to what parts of the state are used in the front-end and diff are sent down the wire for the front-end to weave in the UI changes.
+
+However in this case there is no point to send a message to the server because we actually want to send a message the the rest of our javascript.  We just want to simply call `channel.join` located in our `broker.ts`.  Fortunately Phoenix provides a way to trigger certain common tasks purely in the front-end without involving the server.
+
+Phoenix provides an Elixir module called JS for javascript interop.  There is a function called JS.dispatch that when rendered and mounted will invoke some javascript that creates a window custom event when clicked.
+
+If we do something like this for example:
+```elixir
+<button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
+  Click here to enter
+</button>
+```
+
+A custom javascript event will bubble to the window object.  The event name is "live_to_xr" and the event will have a detail object that contains any parameters we want to include with the event.
+
+Then to subscribe to this event in the front-end we can open up our `broker.ts` and the following:
+
+```typescript
+window.addEventListener("live_to_xr", e => {
+  if (e["details"]["event"] == "enter_room") {
+    channel
+      .join()
+      .receive("ok", (resp) => {
+        console.log("Joined successfully", resp);
+      })
+      .receive("error", (resp) => {
+        console.log("Unable to join", resp);
+      });
+  }
+});
+```
+
+This is the same channel joining code we had before, just now wrapped in an event listener to the "live_to_xr" event.  We can also hide the model after the click without involving a round trip to the server by just using `JS.hide(to: "#room_modal")` which is piped inside the `phx-click`.
+
+### Summary
+
+With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  Once the channel is joined it pushes the front-end a snapshot of obstacles in the room for a particular hue of colors.  The front-end's snapshot system receives the message and loops through every entity, drawing a box using the Babylon.js CreateBox function.   
+
+
+
+
+## Entering the Room at a Spawn Point
+
+Thus far we've hardcoded our camera at a fixed location in the scene like security camera overseeing everything.  But different rooms have different obstacles and they ought to have different rules governing where we start.  Let's let the room tell us where we can start.  This is sometimes called a "Spawn Point".  Since we already have some obstacles that are created in the database table of entities and components, why don't we just add another entity for "spawn_point"?
+
+### Create Spawn Point Entity
+
+Create a new entity called `spawn_point` in the `generate_random_content` function:
+
+```elixir
+ # create spawn_point
+   create_entity(room_id, Ecto.UUID.generate(), %{
+      "spawn_point" => true,
+      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
+    })
+```
+
+The spawn_point for now is just a random point in 3D space between -10 and 10 on the x and z axis, but limited to 2 meter tall in the y axis so we don't spawn underneath the floor which is typically at y = 0.
+
+You can clear all the rooms in the database you've created so far by stopping your server and running `mix ecto.reset`.  That will recreate and migrate all the tables.  Then start your server and create some new rooms, each new room created will have a spawn_point from now on.
+
+We could at this point create front-end code to listen for the spawn_point and move our camera there... however, before we implement that, there are two issues with that approach:
+
+1. If every client is launching into the room at exactly the same position of the spawn_point we will all be on top of each other and can't see anybody else at first.  We should spawn around the spawn_point with some randomness so it's unlikely we'll be directly on top of each other.
+2. If we have some internet trouble, a common fix is to try to refresh the browser.  If we reload the scene and process the spawn_point as our camera location, we'll always end up back at the spawn point instead of picking back up where we left off.  We should retain our previous location.
+
+This implies that the server should retain some memory of where the user is.  If the server knows our previous location, when we enter a room it can tell us where we were and that is where we should put our camera.  If the server has no previous data for us, then the server should pick a location near the spawn point and send that as a message.
+
+### Create a Memory Store for User State
+
+Let's create a small server that specializes in storing data about each connected user.  To start off with this in-memory database will store position and rotation data for each user, so that the server has it readily available.
+
+Create a new file in `lib/xr/server/user_snapshot.ex` and paste this boilerplate to create a simple GenServer.
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+
+  def start_link() do
+    GenServer.start_link(__MODULE__, [])
+  end
+  @impl true
+  def init([]) do
+    {:ok, %{}}
+  end
+
+end
+```
+
+We can go to our terminal after starting `iex -S mix phx.server` and start an instance of this GenServer.
+
+```elixir
+>Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.524.0>}
+```
+
+That returns an `{:ok, pid}` tuple and if we pattern match it we can get the pid and check it's state.
+
+```elixir
+>{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.525.0>}
+>:sys.get_state(pid)
+%{}
+```
+
+The state is an empty map as expected.
+
+### Add Handlers To Receive Movement Data
+
+We want to allow this UserSnapshot Genserver to receive position and rotation data.  Let's add a function for the client api:
+
+
+
+
+This GenServer is un-named right now, so we can't talk to it unless we have its pid.  Let's use a process registry so that we can use the room_id to get to this pid and it also ensures that we only have one of these databases.  
+
+Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
+
+```elixir
+ {Registry, keys: :unique, name: Xr.RoomsRegistry},
+```
+
+Add this to the `user_snapshot.ex` file:
+
+```
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "user_states:#{room_id}"}}
+  end
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+```
+
+Restart your server and try the following.  
+```elixir
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:ok, #PID<0.540.0>}
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:error, {:already_started, #PID<0.540.0>}}
+```
+You should see that the UserSnapshot GenServer cannot be started twice for the same room_id:
+
+Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
+
+```elixir
+defmodule Xr.Servers.RoomsSupervisor do
+  use DynamicSupervisor
+
+  def start_link(_arg) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  def start_room(room_id) do
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
+  end
+
+end
+```
+This supervisor will supervise any new rooms we tell it to, and if they crash it will just restart the crashed child.
+
+We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
+
+```elixir
+  children = [
+    ....
+    Xr.Servers.RoomsSupervisor
+  ]
+```
+
+Now we can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
+
+```elixir
+def show(conn, %{"id" => id}) do
+  room = Rooms.get_room!(id)
+  Xr.Servers.RoomsSupervisor.start_room(room.id)
+  render(conn, :show, room: room)
+end
+```
+This starts the UserSnapshot Genserver if it hasn't already started, and if it has it will silently fail.
+
+#### Server Tells User Where They Should Be
+
+Let's do a review of how we connect to a room:
+
+1. We load the page `rooms/:id` and see the modal
+2. We click the modal button and the `broker.ts` joins the channel
+3. The RoomChannel `after_join` handler sends down a snapshot
+4. The snapshot contains information about the room and we draw it.
+
+What we would like to receive at this point is locations of all the avatars so we can draw them, and figure out where to draw ourselves.
+
+Instead we're going to focus our attention to the server-side because the server will tell the client where they need to be, starting with the spawn_point.
+
+### Add Query Entities by Component Name
+
+First we need a way to quickly look up the spawn_point for a room (there could be many spawn_points, we'll just pick the first).  Add this query to the `rooms.exs` file:
+
+```elixir
+def find_entities_having_component_name(room_id, component_name) do
+  q =
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.component_name == ^component_name,
+      select: c.entity_id
+    )
+
+  from(c in Xr.Rooms.Component,
+    where: c.room_id == ^room_id and c.entity_id in subquery(q)
+  )
+  |> Repo.all()
+  |> components_to_map()
+end
+```
+
+This query will essentially let us look up all entities that have a particular component name which will help us lookup all the room's spawn_points.  
+
+It'll give us output like this:
+
+```
+%{
+  "d32aaea5-0ca9-4143-bae7-8d0e66f05490" => %{
+    "position" => [6, 2, 9],
+    "spawn_point" => true
+  }
+}
+```
+
+
+
+
 ## Designing Events and Messages
 
 By now you might be noticing a pattern that is emerging. We've been very focused on the message payloads that we create.  In fact, messages are at the core of this design architecture.  
@@ -1629,131 +2089,6 @@ Process.info(self(), :messages)
 {:messages, [{"user_moved", %{"user_id" => "tom", "pose" => ...}}]}
 ```
 
-### Create a Memory Store for User State
-
-Let's create a small server that specializes in storing data about each connected user.  In particular we're going to need to know each user's avatar location (position, rotation, pose, etc) and other details so that when a client joins the room they can know where to draw all the existing avatars.
-
-Create a new file in `lib/xr/server/user_snapshot.ex` and paste this boilerplate to create a simple GenServer.
-
-```elixir
-defmodule Xr.Servers.UserSnapshot do
-  use GenServer
-
-  def start_link() do
-    GenServer.start_link(__MODULE__, [])
-  end
-  @impl true
-  def init([]) do
-    {:ok, %{}}
-  end
-
-end
-```
-
-We can go to our terminal after starting `iex -S mix phx.server` and start an instance of this GenServer.
-
-```elixir
->Xr.Servers.UserSnapshot.start_link()
-{:ok, #PID<0.524.0>}
-```
-
-That returns an `{:ok, pid}` tuple and if we pattern match it we can use the pid.
-
-```elixir
->{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
-{:ok, #PID<0.525.0>}
->:sys.get_state(pid)
-%{}
-```
-
-The state is an empty map as expected.  
-
-We can have the UserSnapshot Genserver subscribe to the room topic like this:
-
-```elixir
-defmodule Xr.Servers.UserSnapshot do
-  use GenServer
-  alias Phoenix.PubSub
-
-  def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id})
-  end
-  @impl true
-  def init({:ok, room_id}) do
-    PubSub.subscribe(Xr.PubSub, "room:#{room_id}")
-    {:ok, %{}}
-  end
-
-end
-```
-
-Now if any process broadcasts a message to the "room:#{room_id}" topic the UserSnapshot GenServer will receive a copy and we'll be able to build a database of user states.  However this GenServer is un-named right now we it's possible to create multiple instances of it.  Let's add a local process Registry so that we can use a string as the name of this process and make sure all GenServer's of this type have a unique name.
-
-Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
-
-```elixir
- {Registry, keys: :unique, name: Xr.RoomsRegistry},
-```
-Now we can use a term for the GenServer name.  Add this to the `user_snapshot.ex` file:
-
-```
-  def via_tuple(room_id) do
-    {:via, Registry, {Xr.RoomsRegistry, room_id}}
-  end
-
-  def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
-  end
-```
-
-Now the GenServer cannot be started twice:
-
-```elixir
-> Xr.Servers.UserSnapshot.start_link("hi")
-{:ok, #PID<0.540.0>}
-> Xr.Servers.UserSnapshot.start_link("hi")
-{:error, {:already_started, #PID<0.540.0>}}
-```
-
-Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
-
-```elixir
-defmodule Xr.Servers.RoomsSupervisor do
-  use DynamicSupervisor
-
-  def start_link(_arg) do
-    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
-  end
-
-  def init(:ok) do
-    DynamicSupervisor.init(strategy: :one_for_one)
-  end
-
-  def start_room(room_id) do
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
-  end
-
-end
-```
-
-We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
-
-```elixir
-  children = [
-    ....
-    Xr.Servers.RoomsSupervisor
-  ]
-```
-
-Now wehe can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
-
-```elixir
-def show(conn, %{"id" => id}) do
-  room = Rooms.get_room!(id)
-  Xr.Servers.RoomsSupervisor.start_room(room.id)
-  render(conn, :show, room: room)
-end
-```
 
 ### Create an Event Sink Server
 
@@ -1805,59 +2140,6 @@ There are some issues with these messages though:
 
 - Hard to read the intent of the message.    
 
-
-## Entering the Room at a Spawn Point
-
-Right now we've hardcoded our camera at a fixed location in the scene.  But the server should be the authority of where we should place our camera depending on the layout of the room.  The server should also remember where we are in the room in case we need to re-join the room (refresh the browser, due to any issues).
-
-### Create Spawn Point Entity
-
-First let's handle the case of our initial position in the room by creating a new entity called `spawn_point` in the `create_room` function:
-
-```elixir
- # create spawn_point
-   create_entity(room_id, Ecto.UUID.generate(), %{
-      "spawn_point" => true,
-      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
-    })
-
-```
-We could listen to this "spawn_point" component in our snapshot.ts system like before and draw something at that position, but we don't need to if we don't want to visually indicate where the spawn_point is.
-
-Instead we're going to focus our attention to the server-side because the server will tell the client where they need to be, starting with the spawn_point.
-
-### Add Query Entities by Component Name
-
-First we need a way to quickly look up the spawn_point for a room (there could be many spawn_points, we'll just pick the first).  Add this query to the `rooms.exs` file:
-
-```elixir
-def find_entities_having_component_name(room_id, component_name) do
-  q =
-    from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.component_name == ^component_name,
-      select: c.entity_id
-    )
-
-  from(c in Xr.Rooms.Component,
-    where: c.room_id == ^room_id and c.entity_id in subquery(q)
-  )
-  |> Repo.all()
-  |> components_to_map()
-end
-```
-
-This query will essentially let us look up all entities that have a particular component name which will help us lookup all the room's spawn_points.  
-
-It'll give us output like this:
-
-```
-%{
-  "d32aaea5-0ca9-4143-bae7-8d0e66f05490" => %{
-    "position" => [6, 2, 9],
-    "spawn_point" => true
-  }
-}
-```
 
 Now that we have a way of looking up the spawn_point entity for a room, we also need a way of storing and looking up the last known location of a user.  The idea here is:
 
@@ -1943,125 +2225,6 @@ We don't have an index on room_id and component_name so let's add one.  I'm modi
 
 Now when we load the scene for a room we consistently start at the spawn_point.  You may have noticed a quick flicker of content because our camera is created at a default spot and it takes some time for us to connect to the room channel and then receive the entities snapshot data.  It then takes some more time to draw all the objects in the scene until we finally come to the spawn_point and move our camera to the new location.  
 
-### Ask for User First Interaction
-
-Instead of immediately connecting to the room channel as soon as the page loads, let's pop up a modal to ask the user if they want to "enter" the room in the first place.  The first benefit is that we get rid of that flicker of camera repositioning that seemed like an accident.  Instead the camera will be purposefully repositioned as a result of us taking an action.  The second, even more important benefit is that we get our "first user interaction" out of the way.  This initial interaction is required in order to unblock us from using some browser APIs, such as checking what audio devices they have like microphone etc. The third benefit is that we don't waste channel resources if they don't want to, or are unqualified to join the room.  
-
-Let's modify the room controller's `show.html.heex` page to drop in a Phoenix liveview.
-
-```elixir
-<script>
-  window.addEventListener("DOMContentLoaded", function() {
-    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
-  })
-</script>
-<%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>
-```
-
-This live_render function loads a LiveView directly from the template.  It expects a module, in this case named `XrWeb.RoomMenu.Index`, let's create that now.
-
-### Create the liveview for the menu
-
-Add a file at `lib/xr_web/live/room_menu/index.ex`
-
-```elixir
-defmodule XrWeb.RoomMenu.Index do
-  use XrWeb, :live_view
-
-  @impl true
-  def mount(_params, %{"user_id" => user_id, "room_id" => room_id}, socket) do
-    {:ok,
-     assign(socket,
-       user_id: user_id,
-       room_id: room_id,
-     ), layout: false}
-  end
-end
-```
-
-This creates a liveview process and is mounted with some initial state.  The room_id and user_id were passed into the LiveView process from the front-end.
-
-### Create the template for the modal
-
-Create a template file at `lib/xr_web/live/room_menu/index.html.heex`
-
-```html
-<div id="room_modal" class="z-10 fixed inset-0 flex items-center justify-center">
-  <div class="fixed inset-0 bg-black opacity-50"></div>
-  <!-- Modal Content -->
-  <div class="fixed z-20 bg-white p-8 rounded-md shadow-md w-96 text-center">
-    <p class="text-lg text-gray-800">Your modal content goes here.</p>
-    <button
-      class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md"
-      phx-click={
-        JS.hide(to: "#room_modal")
-        |> JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})
-      }
-    >
-      Enter Room
-    </button>
-  </div>
-</div>
-
-```
-When we create a template of the same name then it is automatically rendered.  I've styled the modal to appear ontop of everything.
-
-### Take Action When Modal Clicked
-
-We want the modal to disappear when the button is clicked.  But we also want to trigger the front-end to connect to the channel. Phoenix Liveview is considered server-side code written in Elixir, rendered as HTML and sent to the frontend on mount.  Typically Phoenix Liveview can receive information from the front-end, clicks for example through the use of special HTML attributes like `phx-click`.  
-
-Typically usage would be something like:
-
-```html
-<button phx-click="inc">Click Me</button>
-```
-
-That would then send a message of "inc" to the liveview process and we'd have to write handler to handle it and we modify some state.  Liveview pays attention to what parts of the state are used in the front-end and diff are sent down the wire for the front-end to weave in the UI changes.
-
-However in this case there is no point to send a message to the server because we actually want to send a message the the rest of our javascript.  We just want to simply call `channel.join` located in our `broker.ts`.  Fortunately Phoenix provides a way to trigger certain common tasks purely in the front-end without involving the server.
-
-Phoenix provides an Elixir module called JS for javascript interop.  There is a function called JS.dispatch that when rendered and mounted will invoke some javascript that creates a window custom event when clicked.
-
-If we do something like this for example:
-```elixir
-<button phx-click={JS.dispatch("live_to_xr", detail: %{"event" => "enter_room"})}>
-  Click here to enter
-</button>
-```
-
-A custom javascript event will bubble to the window object.  The event name is "live_to_xr" and the event will have a detail object that contains any parameters we want to include with the event.
-
-Then to subscribe to this event in the front-end we can open up our `broker.ts` and the following:
-
-```typescript
-window.addEventListener("live_to_xr", e => {
-  if (e["details"]["event"] == "enter_room") {
-
-    channel
-      .join()
-      .receive("ok", (resp) => {
-        console.log("Joined successfully", resp);
-      })
-      .receive("error", (resp) => {
-        console.log("Unable to join", resp);
-      });
-
-  }
-
-});
-```
-
-We can also hide the model after the click without involving a round trip to the server by just using:
-
-```html
-<button phx-click={JS.hide(to: "#room_modal")}>
-```
-
-#### Summary
-
-With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  Once the channel is joined it pushes the front-end a snapshot of obstacles in the room rendered a particular hue of colors.  The front-end's snapshot system receives the message and loops through every entity, drawing a box using the Babylon.js CreateBox function.  One of the entities is a spawnpoint which when processed resets the camera to the spawnpoint.
-
-Give this a test.  We created a spawn_point entity but haven't yet made an endpoint for our game.  We'll get to that soon, but there is something more important we should work on next.
 
 ### Simple Presence
 
@@ -2088,72 +2251,6 @@ Another way we could design our messages is to make all objects in the world the
 There is an architectural pattern called Event Sourcing that treats a stream of events as the source of truth.  This stream of events can be persisted or processed in real time to transform the data into alternate forms called projections that suite different use cases.  The classic example of event sourcing is an accountant's ledger.  Each event in the ledger has a date (a timestamp), a description and whether it is a credit or debit from some account in the ledger.  With this data we can build up different projections such as, sum over all the credits and debits to come up with how much balance we have in an account. 
 
 Our 3D scene is like a projection too.  Each connected browser can process a stream of events like the one above and any time we received "user_joined", we can draw a simple avatar at the given position and rotation.  For now we can start with a simple box.  The same principles should be applicable to more complicated avatars later.  If we get the "user_moved" message we'll just update that box's position and rotation.  Finally if we receive the "user_left" message then we delete that 3D object from the scene.
-
-### Phoenix Presence
-
-To help us with the join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.  It also sends a "presence_state" message that is pushed to the client upon joining to send them the current users in the room.  
-
-Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  
-
-Let's get started!  And wouldn't you know it?  There is a generator for this too.  Gotta love them generators!
-
-```bash
-mix phx.gen.presence
-```
-
-This creates a new file for us `xr_web/channels/presence.ex`.
-
-Add your new module to your supervision tree, in `lib/xr/application.ex`, it must be after `PubSub` and before `Endpoint`:
-
-```elixir
-
-    children = [
-      {Phoenix.PubSub, name: Xr.PubSub},
-      ... 
-      XrWeb.Presence,
-      ...
-      XrWeb.Endpoint
-    ]
-
-```
-
-Modify `xr_web/channels/room_channel.ex` and add ` alias XrWeb.Presence` near the top of the file and also redefine the `after_join` handler:
-
-```elixir
-...
-alias XrWeb.Presence
-...
-
-def handle_info(:after_join, socket) do
-  {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
-
-  entities = Xr.Rooms.entities(socket.assigns.room_id)
-  push(socket, "snapshot", entities)
-  {:noreply, socket}
-end
-```
-
-By adding `Presence.track` we now automatically get a channel message of event `presence_diff` pushed down to the browser anytime a client joins or leaves (by closing the browser).  We can also get a list of all user_ids that have already joined the room when we join the room using `Presence.list`.  We'll use that a bit later.
-
-If you want to log all the messages coming from the `RoomChannel`, I like to use this bit of debug code to `broker.ts` (we'll remember to remove it later):
-
-```typescript
-channel.onMessage = (event, payload, _) => {
-  if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
-    // since this is debug level you'll need to set you browser's log level accordingly
-    console.debug(event, payload);
-  }
-  return payload;
-};
-```
-
-Go ahead and open two browser tabs and navigate to an existing room and inspect the console log to see what the data payloads look like when you open additional browsers or when you close them.  You should see a payload like:
-
-```javascript
-presence_diff {joins: {"39jfks9...": ...}, leaves: {}}
-```
-
-Ok, great... that's useful if we only wanted to make a list of users, but we can't draw an avatar without also knowing where to draw it and the presence_diff doesn't give us position or rotation information.  That's something we're going to need to get from Babylon.js (the camera position and rotation) and push it up to the server via a `channel.push` method.
 
 ### Client vs Server Dictates Position?
 

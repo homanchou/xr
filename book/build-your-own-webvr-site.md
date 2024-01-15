@@ -69,6 +69,10 @@
     - [Phoenix PubSub](#phoenix-pubsub)
   - [Presence](#presence)
     - [Phoenix Presence](#phoenix-presence)
+    - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
+    - [Create a Server for the ETS Table](#create-a-server-for-the-ets-table)
+    - [Add Local Registry for Unique GenServer Names](#add-local-registry-for-unique-genserver-names)
+    - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
   - [Ask for User First Interaction](#ask-for-user-first-interaction)
     - [LiveView Module](#liveview-module)
     - [LiveView Template](#liveview-template)
@@ -76,8 +80,6 @@
     - [Summary](#summary)
   - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
     - [Create Spawn Point Entity](#create-spawn-point-entity)
-    - [Create a Memory Store for User State](#create-a-memory-store-for-user-state)
-    - [Add Handlers To Receive Movement Data](#add-handlers-to-receive-movement-data)
       - [Server Tells User Where They Should Be](#server-tells-user-where-they-should-be)
     - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
   - [Designing Events and Messages](#designing-events-and-messages)
@@ -86,12 +88,11 @@
     - [Create an Event Sink Server](#create-an-event-sink-server)
     - [First Person Shooter Events](#first-person-shooter-events)
     - [CRUD Events vs High Level Events](#crud-events-vs-high-level-events)
-    - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
     - [](#)
     - [Simple Presence](#simple-presence)
     - [Event Sourcing](#event-sourcing-2)
     - [Client vs Server Dictates Position?](#client-vs-server-dictates-position)
-    - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
+    - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback-1)
     - [Add avatar.ts](#add-avatarts)
     - [Users Snapshot](#users-snapshot)
     - [Testing Multiplayer Without Deploying](#testing-multiplayer-without-deploying)
@@ -1619,9 +1620,9 @@ Give it another test in the browser.  We now have some colorful random obstacles
 
 ## Event Driven Architecture
 
-By now you might be noticing a pattern that is emerging. We've been very focused on the message payloads that we create.  In fact, messages are at the core of this design architecture.  
+By now you might be noticing a pattern that is emerging. We've been very focused on the message payloads that we create.  In fact, messages are at the core of this design architecture:  
 
-- Design an message describing some domain event
+- Design a message describing some domain event
 - Send the message to the client
 - Create a system that listens to the message and have Babylon.js modify the 3D scene in some way
 
@@ -1673,7 +1674,7 @@ The first events that we will work on will help us establish where our avatars s
 
 ### Phoenix Presence
 
-To help us with the join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.    
+To help us with the user join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel and we'll get some events and a database of user_ids for free.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.    
 
 Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  
 
@@ -1715,7 +1716,8 @@ def handle_info(:after_join, socket) do
 end
 ```
 
-By adding `Presence.track` we now automatically get a channel message of event `presence_diff` pushed down to the browser anytime a client joins or leaves (by closing the browser).  
+By adding `Presence.track` within the `RoomChannel` process Phoenix Presence is now tied to the life and death of the RoomChannel process.  You can test this quickly in the browser if you want:
+
 
 If you want to log all the messages coming from the `RoomChannel`, I like to use this bit of debug code to `broker.ts` (we'll remember to remove it later):
 
@@ -1734,9 +1736,319 @@ Go ahead and open two browser tabs and navigate to an existing room and inspect 
 ```javascript
 presence_diff {joins: {"39jfks9...": ...}, leaves: {}}
 ```
+ 
 
-Ok, great... that's useful if we only wanted to make a list of users, but we can't draw an avatar without also knowing where to draw it and the presence_diff doesn't give us position or rotation information.  That's something we're going to need to get from Babylon.js (the camera position and rotation) and push it up to the server via a `channel.push` method.
+This is a good start.  It's not providing the event message shape that we want so we won't be making use of `presence_diff`.  We'll look into how we can reshape the Phoenix Presence messages later.  But before we work on that, we first need a database of user states that we can query so that when we shape our custom events we can inject the previously known user position, rotation, etc, state.
 
+### Create ETS Table for User Snapshot
+
+Elixir is based on Erlang and Erlang comes with a fast in-memory database called Erlang-Term-Storage (ETS).
+
+To create a new ETS Table we do this:
+
+```elixir
+table = :ets.new(:some_atom, [:set, :public, {:write_concurrency, true},{:read_concurrency, true}])
+```
+
+An ETS table is linked to the process that created it.  So if the parent process dies or is shutdown than the child will be shutdown and memory reclaimed as well.
+
+The configuration above creates a table variable that has:
+
+- unique keys (desirable because every person is unique)
+- is writable by all processes (in case we want to allow other processes to write to it)
+- concurrent on reads and writes so multiple processes can access the data simultaneously
+
+To insert data the API requires the table reference and a tuple of {key, value}
+
+```elixir
+> :ets.insert(table, {"key", %{}})
+true
+```
+
+To lookup a value, we use the key:
+```elixir
+> :ets.lookup(table, "key")
+[{"key", %{}}]
+```
+It returns a list of tuples of key and value.
+
+You can get the whole table as a list of tuples of key and value:
+
+```elixir
+>:ets.tab2list(table)
+[{"key", %{}}, ...]
+```
+Now the tricky part is where do we create this ETS table since it is linked to the process that created it?
+
+### Create a Server for the ETS Table
+
+Let's create a small server that specializes in storing data about each connected user.  We'll create a small api for this server that allows us to query the server for user state data.  The server itself will subscribe (via Phoenix PubSub) to the room's event stream so it will get movement data and store it in it's ETS table.
+
+We will build this up step by step.  Create a new file in `lib/xr/server/user_snapshot.ex` and paste this code to create a minimal GenServer.  
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+
+  def start_link() do
+    GenServer.start_link(__MODULE__, [])
+  end
+
+  @impl true
+  def init([]) do
+    {:ok, %{}}
+  end
+
+end
+```
+
+Here's a quick overview with what we can do with that GenServer already.  We can go to our terminal after starting `iex -S mix phx.server` and start an instance of this GenServer.
+
+```elixir
+>Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.524.0>}
+```
+
+We now have a server!  That pid is the process id of our server.  If we pattern match it we can deconstruct the pid and check it's state.
+
+```elixir
+>{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
+{:ok, #PID<0.525.0>}
+>:sys.get_state(pid)
+%{}
+```
+
+The state is an empty map as expected because that was the state we return in the `init` function.  We will replace the state with an ETS table soon, but first let's fix an issue with our server.
+
+### Add Local Registry for Unique GenServer Names
+
+This GenServer is un-named right now, so we can't talk to it unless we have its pid.  Let's use a process registry so that we can use the room_id to get to this pid and it also ensures that we only have one of these databases.  
+
+Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
+
+```elixir
+ {Registry, keys: :unique, name: Xr.RoomsRegistry},
+```
+Now we can name each process that is created from UserSnapshot GenServer using the `via_tuple` API.  If you're not familiar with GenServer's or via_tuple, the internet does a good explanation that I'll forego for now.
+
+Here is the final UserSnapshot module:
+
+```elixir
+defmodule Xr.Servers.UserSnapshot do
+  use GenServer
+  alias Phoenix.PubSub
+
+  # creates a tuple that will automatically map a string "user_states:#{room_id}" to this new process
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "user_states:#{room_id}"}}
+  end
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+
+  # client api to get user state
+  def get_user_state(room_id, user_id) do
+    GenServer.call(via_tuple(room_id), {:get_user_state, user_id})
+  end
+
+  # client api to get all user states
+  def all_user_states(room_id, map_of_user_ids) do
+    GenServer.call(via_tuple(room_id), {:all_user_states, map_of_user_ids})
+  end
+
+  @impl true
+  def init({:ok, room_id}) do
+    # subscribe to the room stream
+    PubSub.subscribe(Xr.PubSub, "room_stream:#{room_id}")
+
+    # create an ets table
+    table =
+      :ets.new(:user_states, [
+        :set,
+        :public,
+        {:write_concurrency, true},
+        {:read_concurrency, true}
+      ])
+
+    {:ok, table}
+  end
+
+  # responds to incoming message from the room stream
+  @impl true
+  def handle_info(%{"event" => "user_moved", "payload" => payload}, state) do
+    # insert into the ets table asynchronously
+    Task.start_link(fn ->
+      :ets.insert(
+        state,
+        {payload["user_id"], Map.reject(payload, fn {k, _} -> k == "user_id" end)}
+      )
+    end)
+
+    {:noreply, state}
+  end
+
+  # ignore all other incoming messages from the room stream
+  @impl true
+  def handle_info(_, state) do
+    {:noreply, state}
+  end
+
+  # internal api to get user state
+  @impl true
+  def handle_call({:get_user_state, user_id}, _from, state) do
+    result =
+      case :ets.lookup(state, user_id) do
+        [] -> nil
+        [{_key, value}] -> value
+      end
+
+    {:reply, result, state}
+  end
+
+  # internal api to get all user states
+  def handle_call({:all_user_states, map_of_user_ids}, _from, state) do
+    # get cache of movements
+    list = :ets.tab2list(state)
+    # reduce over map_of_user_ids and return a map of user_ids to their value in the ets table
+
+    result =
+      Enum.reduce(map_of_user_ids, %{}, fn {key, _value}, acc ->
+        case Enum.find(list, fn {k, _} -> k == key end) do
+          nil -> acc
+          {_, v} -> Map.put(acc, key, v)
+        end
+      end)
+
+    {:reply, result, state}
+  end
+end
+```
+
+Let's take it out for a spin.  Restart the server and terminal and try this commands and observe their output:
+
+```elixir
+> alias Phoenix.PubSub
+Phoenix.PubSub
+> alias Xr.Servers.UserSnapshot
+Xr.Servers.UserSnapshot
+> Xr.Servers.UserSnapshot.start_link("abc")
+{:ok, #PID<0.640.0>}
+> PubSub.broadcast(Xr.PubSub, "room_stream:abc", %{"event" => "user_moved", "payload" => %{"position" => [1,2,3], "user_id" => "tom"}})
+:ok
+> UserSnapshot.get_user_state("abc", "tom")
+%{"position" => [1, 2, 3], "user_id" => "tom"}
+```
+
+Cool!  We can broadcast events to our room_stream and this little server was paying attention to events that look like `"event" => "user_moved"` and cached it.  
+
+In addition, the Registry prevents us from starting the same server twice so we don't accidentally create more than one database.
+
+```elixir
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:ok, #PID<0.540.0>}
+> Xr.Servers.UserSnapshot.start_link("hi")
+{:error, {:already_started, #PID<0.540.0>}}
+```
+
+Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
+
+```elixir
+defmodule Xr.Servers.RoomsSupervisor do
+  use DynamicSupervisor
+
+  def start_link(_arg) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  def start_room(room_id) do
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
+  end
+
+end
+```
+This supervisor will supervise any new rooms we tell it to, and if they crash it will just restart the crashed child.
+
+We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
+
+```elixir
+  children = [
+    ....
+    Xr.Servers.RoomsSupervisor
+  ]
+```
+
+Now we can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
+
+```elixir
+def show(conn, %{"id" => id}) do
+  room = Rooms.get_room!(id)
+  Xr.Servers.RoomsSupervisor.start_room(room.id)
+  render(conn, :show, room: room)
+end
+```
+This starts the UserSnapshot Genserver if it hasn't already started, and if it has it will silently fail.
+
+### Phoenix Presence handle_metas Callback
+
+Now that we have a database for user states let's return to the task of emiting our events for user joins and leaves.
+
+It turns out that we can add a callback to our `channels/presence.ex` that will get triggered everytime a client joins or leaves the room.  From that callback we could shape the kind of event that we want.  
+
+```elixir
+@doc """
+  Presence is great for external clients, such as JavaScript applications,
+  but it can also be used from an Elixir client process to keep track of presence changes
+  as they happen on the server. This can be accomplished by implementing the optional init/1
+   and handle_metas/4 callbacks on your presence module.
+  """
+  def init(_opts) do
+    # user-land state
+    {:ok, %{}}
+  end
+
+
+  def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
+    for {user_id, _} <- joins do
+      # if we have previous user state data, then broadcast it
+      case get_state(user_id) do
+        nil ->
+          # grab the spawn_point for the room, and broadcast that instead
+          position = Xr.Rooms.generate_point_near_spawn_point(room_id)
+
+          Xr.PubSub.broadcast("room:#{room_id}", "user_joined", %{
+            "user_id" => user_id,
+            "position" => position,
+            "rotation" => [0, 0, 0, 1]
+          })
+
+        %{"position" => position, "rotation" => rotation} ->
+          Xr.PubSub.broadcast("room:#{room_id}", "user_joined", %{
+            "user_id" => user_id,
+            "position" => position,
+            "rotation" => rotation
+          })
+      end
+    end
+
+    for {user_id, _} <- leaves do
+      Xr.PubSub.broadcast("room:#{room_id}", "user_left", %{"user_id" => user_id})
+    end
+
+    {:ok, state}
+  end
+```
+
+handle_metas receives a map of user_ids that have joined or left and we can iterate through them and reshape them into "user_joined" and "user_left" events.  
+
+We have some functions we haven't defined yet.  `get_state` will take a user_id and we need to lookup the user in some database to see if we have any previous state.  If we do, we can pluck out the previous position and rotation and publish a "user_joined" event to our event stream.  Otherwise, (and we need to write this function too), we use `generate_point_near_spawn_point` to randomly generate a point near the first spawn_point we find for the given room.
+
+Next we need to implement a database
+ 
 
 
 ## Ask for User First Interaction
@@ -1886,122 +2198,6 @@ We could at this point create front-end code to listen for the spawn_point and m
 
 This implies that the server should retain some memory of where the user is.  If the server knows our previous location, when we enter a room it can tell us where we were and that is where we should put our camera.  If the server has no previous data for us, then the server should pick a location near the spawn point and send that as a message.
 
-### Create a Memory Store for User State
-
-Let's create a small server that specializes in storing data about each connected user.  To start off with this in-memory database will store position and rotation data for each user, so that the server has it readily available.
-
-Create a new file in `lib/xr/server/user_snapshot.ex` and paste this boilerplate to create a simple GenServer.
-
-```elixir
-defmodule Xr.Servers.UserSnapshot do
-  use GenServer
-
-  def start_link() do
-    GenServer.start_link(__MODULE__, [])
-  end
-  @impl true
-  def init([]) do
-    {:ok, %{}}
-  end
-
-end
-```
-
-We can go to our terminal after starting `iex -S mix phx.server` and start an instance of this GenServer.
-
-```elixir
->Xr.Servers.UserSnapshot.start_link()
-{:ok, #PID<0.524.0>}
-```
-
-That returns an `{:ok, pid}` tuple and if we pattern match it we can get the pid and check it's state.
-
-```elixir
->{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
-{:ok, #PID<0.525.0>}
->:sys.get_state(pid)
-%{}
-```
-
-The state is an empty map as expected.
-
-### Add Handlers To Receive Movement Data
-
-We want to allow this UserSnapshot Genserver to receive position and rotation data.  Let's add a function for the client api:
-
-
-
-
-This GenServer is un-named right now, so we can't talk to it unless we have its pid.  Let's use a process registry so that we can use the room_id to get to this pid and it also ensures that we only have one of these databases.  
-
-Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
-
-```elixir
- {Registry, keys: :unique, name: Xr.RoomsRegistry},
-```
-
-Add this to the `user_snapshot.ex` file:
-
-```
-  def via_tuple(room_id) do
-    {:via, Registry, {Xr.RoomsRegistry, "user_states:#{room_id}"}}
-  end
-
-  def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
-  end
-```
-
-Restart your server and try the following.  
-```elixir
-> Xr.Servers.UserSnapshot.start_link("hi")
-{:ok, #PID<0.540.0>}
-> Xr.Servers.UserSnapshot.start_link("hi")
-{:error, {:already_started, #PID<0.540.0>}}
-```
-You should see that the UserSnapshot GenServer cannot be started twice for the same room_id:
-
-Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
-
-```elixir
-defmodule Xr.Servers.RoomsSupervisor do
-  use DynamicSupervisor
-
-  def start_link(_arg) do
-    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
-  end
-
-  def init(:ok) do
-    DynamicSupervisor.init(strategy: :one_for_one)
-  end
-
-  def start_room(room_id) do
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
-  end
-
-end
-```
-This supervisor will supervise any new rooms we tell it to, and if they crash it will just restart the crashed child.
-
-We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
-
-```elixir
-  children = [
-    ....
-    Xr.Servers.RoomsSupervisor
-  ]
-```
-
-Now we can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
-
-```elixir
-def show(conn, %{"id" => id}) do
-  room = Rooms.get_room!(id)
-  Xr.Servers.RoomsSupervisor.start_room(room.id)
-  render(conn, :show, room: room)
-end
-```
-This starts the UserSnapshot Genserver if it hasn't already started, and if it has it will silently fail.
 
 #### Server Tells User Where They Should Be
 
@@ -2152,39 +2348,6 @@ To do step 2 (check previous user location) we'll need a server-side database.  
 
 However in memory storage that is fast and able to be simultaneously updated by many clients.
 
-### Create ETS Table for User Snapshot
-
-Elixir is based on Erlang and Erlang comes with a fast in-memory database called Erlang-Term-Storage (ETS).
-
-To create a new ETS Table we do this:
-
-```elixir
-table = :ets.new(:some_atom, [:set, :public, {:write_concurrency, true},{:read_concurrency, true}])
-```
-
-An ETS table is linked to the process that created it.  So if the parent process dies or is shutdown than the child will be shutdown and memory reclaimed as well.
-
-The configuration above creates a table that has:
-
-- unique keys (desirable because every person is unique)
-- is writable by all processes (desirable so every client's room channel process can add their own data)
-- concurrent on reads and writes so multiple processes can access the data simultaneously
-
-To insert data provide the table reference and a tuple of {key, value} and to lookup data provide the table reference and the key:
-
-```elixir
-> :ets.insert(table, {"key", %{}})
-true
-> :ets.lookup(table, "key")
-[{"key", %{}}]
-```
-
-You can get the whole table as a list of key/value pairs using:
-
-```elixir
->:ets.tab2list(table)
-[{"key", %{}}, ...]
-```
 
 Now for the tricky part:
 

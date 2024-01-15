@@ -9,6 +9,9 @@ defmodule XrWeb.Presence do
     otp_app: :xr,
     pubsub_server: Xr.PubSub
 
+  alias Phoenix.PubSub
+  alias Xr.Servers.UserSnapshot
+
   @doc """
   Presence is great for external clients, such as JavaScript applications,
   but it can also be used from an Elixir client process to keep track of presence changes
@@ -17,25 +20,57 @@ defmodule XrWeb.Presence do
   """
   def init(_opts) do
     # user-land state
-    {:ok, %{"me" => Enum.random(-5000..5000)}}
+    {:ok, %{}}
   end
 
   def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
     for {user_id, _} <- joins do
-      IO.inspect(user_id, label: "joined")
-      IO.inspect(state, label: "state")
+      # if we have previous user state data, then broadcast it
+      case UserSnapshot.get_user_state(room_id, user_id) do
+        nil ->
+          emit_join_at_spawn_point(room_id, user_id)
 
-      XrWeb.Endpoint.broadcast!("room:#{room_id}", "user_joined", %{
-        user_id: user_id,
-        position: nil,
-        rotation: nil
-      })
+        %{"position" => position, "rotation" => rotation} ->
+          emit_join_from_previous_state(room_id, user_id, position, rotation)
+      end
     end
 
     for {user_id, _} <- leaves do
-      XrWeb.Endpoint.broadcast!("room:#{room_id}", "user_left", %{user_id: user_id})
+      PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+        "event" => "user_left",
+        "payload" => %{"user_id" => user_id}
+      })
     end
 
     {:ok, state}
+  end
+
+  def emit_join_at_spawn_point(room_id, user_id) do
+    # grab the spawn_point for the room, and broadcast that instead
+    entities_map = Xr.Rooms.find_entities_having_component_name(room_id, "spawn_point")
+
+    # graps position from first spawn_point's position component
+    {_, %{"position" => position_value}} =
+      entities_map |> Enum.find(fn {k, v} -> %{"position" => position} = v end)
+
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => "user_joined",
+      "payload" => %{
+        "user_id" => user_id,
+        "position" => position_value,
+        "rotation" => [0, 0, 0, 1]
+      }
+    })
+  end
+
+  def emit_join_from_previous_state(room_id, user_id, position, rotation) do
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => "user_joined",
+      "payload" => %{
+        "user_id" => user_id,
+        "position" => position,
+        "rotation" => rotation
+      }
+    })
   end
 end

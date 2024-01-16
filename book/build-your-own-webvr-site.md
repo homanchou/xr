@@ -55,6 +55,7 @@
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Verify Asset Bundles](#verify-asset-bundles)
     - [Babylon Added Summary](#babylon-added-summary)
+  - [Adding RXJS](#adding-rxjs)
   - [Simple Obstacles](#simple-obstacles)
     - [Database Supplied Obstacles](#database-supplied-obstacles)
     - [Design a Snapshot Payload](#design-a-snapshot-payload)
@@ -62,29 +63,43 @@
     - [Add Functions To Create and Query Entities for a Room](#add-functions-to-create-and-query-entities-for-a-room)
     - [Add Random Obstacles To A Room Upon Creation](#add-random-obstacles-to-a-room-upon-creation)
     - [Push Snapshot to Client After Join](#push-snapshot-to-client-after-join)
-    - [Add some color](#add-some-color)
+    - [Add Snapshot System in the Frontend](#add-snapshot-system-in-the-frontend)
+    - [Add Color Using Materials](#add-color-using-materials)
   - [Event Driven Architecture](#event-driven-architecture)
     - [Event Sourcing](#event-sourcing)
     - [Message Producers](#message-producers)
-    - [Phoenix PubSub](#phoenix-pubsub)
+    - [Phoenix PubSub as an Event Stream](#phoenix-pubsub-as-an-event-stream)
   - [Presence](#presence)
-    - [Phoenix Presence](#phoenix-presence)
+    - [Joining Needs a Position](#joining-needs-a-position)
+    - [Create Spawn Point Entity](#create-spawn-point-entity)
+    - [Add Phoenix Presence](#add-phoenix-presence)
     - [Create ETS Table for User Snapshot](#create-ets-table-for-user-snapshot)
     - [Create a Server for the ETS Table](#create-a-server-for-the-ets-table)
     - [Add Local Registry for Unique GenServer Names](#add-local-registry-for-unique-genserver-names)
+    - [Add ETS and Registry into UserSnapshot Module](#add-ets-and-registry-into-usersnapshot-module)
+    - [Add Dynamic Supervisor](#add-dynamic-supervisor)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback)
+    - [Tidy-up Broadcast Functions](#tidy-up-broadcast-functions)
+    - [Share Camera Movement With Server](#share-camera-movement-with-server)
+      - [Add avatar.ts](#add-avatarts)
+    - [Fix Race Condition](#fix-race-condition)
+    - [RxJS Subject For Channel Join Event](#rxjs-subject-for-channel-join-event)
+    - [Handle Movement In RoomChannel](#handle-movement-in-roomchannel)
+    - [Reflect Events to the Frontend](#reflect-events-to-the-frontend)
+    - [Add Reflector To Supervisor](#add-reflector-to-supervisor)
+    - [Broker Subscribe to "stoc" Events.](#broker-subscribe-to-stoc-events)
+    - [Create Simple Avatar Mesh](#create-simple-avatar-mesh)
+    - [Handle Late-comers Using Presence.list](#handle-late-comers-using-presencelist)
   - [Ask for User First Interaction](#ask-for-user-first-interaction)
     - [LiveView Module](#liveview-module)
     - [LiveView Template](#liveview-template)
     - [LiveView JS Interop](#liveview-js-interop)
     - [Summary](#summary)
-  - [Entering the Room at a Spawn Point](#entering-the-room-at-a-spawn-point)
-    - [Create Spawn Point Entity](#create-spawn-point-entity)
       - [Server Tells User Where They Should Be](#server-tells-user-where-they-should-be)
     - [Add Query Entities by Component Name](#add-query-entities-by-component-name)
   - [Designing Events and Messages](#designing-events-and-messages)
     - [Event Sourcing](#event-sourcing-1)
-    - [Phoenix PubSub](#phoenix-pubsub-1)
+    - [Phoenix PubSub](#phoenix-pubsub)
     - [Create an Event Sink Server](#create-an-event-sink-server)
     - [First Person Shooter Events](#first-person-shooter-events)
     - [CRUD Events vs High Level Events](#crud-events-vs-high-level-events)
@@ -93,7 +108,7 @@
     - [Event Sourcing](#event-sourcing-2)
     - [Client vs Server Dictates Position?](#client-vs-server-dictates-position)
     - [Phoenix Presence handle\_metas Callback](#phoenix-presence-handle_metas-callback-1)
-    - [Add avatar.ts](#add-avatarts)
+    - [Add avatar.ts](#add-avatarts-1)
     - [Users Snapshot](#users-snapshot)
     - [Testing Multiplayer Without Deploying](#testing-multiplayer-without-deploying)
   - [Assets, Interactables, Non-player Related Items](#assets-interactables-non-player-related-items)
@@ -1090,6 +1105,8 @@ export const config: Config = {
 
 This file creates initializes a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.  This this is typescript we cannot add new properties at will.  Anytime we feel the urge to add a new property we'll need to add it to the Config type.  That may be a chore but the benefit is that we have types and intellisense will help remind us what common shared variables are available.
 
+
+
 #### Add broker.ts
 
 Now let's create the `assets/js/systems/broker.ts`
@@ -1278,6 +1295,55 @@ Whew!  A lot happened in this section.  We've successfully added babylon.js, but
 
 Open up your browser and navigate to a specific room URL and you should see a 3D scene.  Our camera is also already integrated with the keyboard and mouse so you can travel around in the scene, by clicking and dragging your mouse and then using the cursor keys to move forward or backward.  To open up the Babylon.js inspector we've added a short-cut (CTRL-b), so that we can inspect the meshes in the scene.  
 
+
+## Adding RXJS
+
+There is one more important library that I think is super useful for sharing realtime data between our systems and that is RxJS.  RxJS is (from their website) a library for composing asynchronous and event-based programs by using observable sequences.  This is a fancy way of saying that not only can we do regular pub/sub of events, we can transform and combine and filter the triggers associated with these events to run under certain constraints.  This will come in handy when we need to wait for one event to happen first before doing something else, or if we want to make sure something happens just once, or when we want to combine multiple events to figure out new gestures, such as determining when a user is trying to grab something.
+
+The main api we will be using from rxjs is `Subject`.  Think of a Subject as an event bus where you can push messages into it with `next(...data...)` and subscribe to the data using `subscribe(callback)`.
+
+RxJS then provides a bunch of useful ways to pipe, filter, combine, throttle, transform events from multiple streams of data.  I often reference https://rxmarbles.com/ to visualize how the data flows.
+
+Let's install rxjs from our `assets` directory:
+
+```bash
+npm i rxjs
+```
+
+Let's modify `config.ts` to add some `rxjs.Subject` that we can use later.
+
+```typescript
+import type { Channel, Socket } from "phoenix";
+import type { Scene } from "@babylonjs/core/scene";
+import type { Vector3, Quaternion } from "@babylonjs/core/Maths";
+import { Subject } from "rxjs/internal/Subject";
+
+
+export type Config = {
+  room_id: string;
+  user_id: string;
+  scene: Scene;
+  socket: Socket;
+  channel: Channel;
+  $room_stream: Subject<{ event: string, payload: any; }>;
+  $channel_joined: Subject<boolean>;
+  $room_entered: Subject<boolean>;
+  $camera_moved: Subject<[Vector3, Quaternion]>;
+};
+
+export const config: Config = {
+  room_id: "",
+  user_id: "",
+  scene: null,
+  socket: null,
+  channel: null,
+  $room_stream: new Subject<{ event: string, payload: any; }>(),
+  $channel_joined: new Subject<boolean>(),
+  $room_entered: new Subject<boolean>(),
+  $camera_moved: new Subject<[Vector3, Quaternion]>()
+}
+
+```
 
 
 ## Simple Obstacles
@@ -1496,7 +1562,15 @@ I added the call to `generate_random_content` as well as made the redirect go to
 Reset all your data in your dev database using `mix ecto.reset`.  Run your server again and create a new room and this time some random objects should be created.  We can check in the iex terminal using:
 
 ```elixir
-Xr.Rooms.entities("453b6858-9403-4dd9-a58e-17d25737be84") # get your room_id from your browser's URL bar
+> Xr.Rooms.entities("453b6858-9403-4dd9-a58e-17d25737be84") # get your room_id from your browser's URL bar
+%{
+  "027c850f-13aa-440f-9865-5a65fea6ec70" => %{
+    "color" => [18, 124, 84],
+    "mesh_builder" => ["box", %{"depth" => 5, "height" => 6, "width" => 5}],
+    "position" => [-2, 0, 0]
+  },
+  ...
+  ...
 ```
 
 ### Push Snapshot to Client After Join
@@ -1510,6 +1584,8 @@ Now let's pass this data to the front-end via the room channel.  After we join t
     {:noreply, socket}
   end
 ```
+
+### Add Snapshot System in the Frontend
 
 Now lets make a new system on the front-end to consume this message and draw the boxes.  Create a file at `assets/js/systems/snapshot.ts`:
 
@@ -1547,7 +1623,7 @@ If you now visit your browser and create some different rooms you will see some 
 
 The boxes are pretty bland though.  Let's try adding some color.
 
-### Add some color
+### Add Color Using Materials
 
 Open up `rooms.ex` and add a color component in our random box generator:
 
@@ -1641,9 +1717,9 @@ A message can originate from different sources depending on these scenarios:
 3. System generated events.  These are messages that are indirectly triggered by something that has happened.  It could even be just the passing of time.  For example we could have a system that emits periodic events to open a door every 60 seconds then close 15 seconds after that.  We could have a system observe if bullets actually hit zombies and emit an event that the zombie was killed.  These events also originate on the client but should only come from one client otherwise we could end up with duplicate or conflicting events if they are calculated on every client.
 4. Server generated event.  Lastly these types of events come from the server and supplement events that cannot be generated on the client side.  For example the client cannot tell us they have left if they just close their browser and disconnect.  The server however can detect that the client has detached and emit an event that that user left.
 
-### Phoenix PubSub
+### Phoenix PubSub as an Event Stream
 
-Phoenix comes with a library called PubSub which allows any process to subscribe to a named topic  and for any code to broadcast messages on a topic.  This is very convenient to easily allow any Elixir process to talk to another process.  
+Phoenix comes with a library called PubSub which allows any process to subscribe or broadcast on a named topic.  This is very convenient to easily allow any Elixir process to talk to another process.  
 
 Here's an example of how to use PubSub in the iex terminal:
 
@@ -1664,17 +1740,96 @@ This understanding sets us up to create an event-stream for our room.  Everythin
 
 ## Presence
 
-The first events that we will work on will help us establish where our avatars should be in 3D space.  Our goal is to produce some events like this:
+Virtual presence is the concept of being able to see each other online at the same time in a shared space.  The first events that we will work on will help us establish our avatar positions and rotations.  Our goal is to produce some events like this:
 
 ```
 {event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
 {event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
 {event: "user_left", payload: {user_id: "tom"}}
 ```
+This way as soon as someone joins the room, we know where to draw them.  And when someone moves we know where to move them.
 
-### Phoenix Presence
+### Joining Needs a Position
 
-To help us with the user join and leave type of messages we're going to rely on a built in library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel and we'll get some events and a database of user_ids for free.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.    
+Starting with the "user_joined" event, it makes sense that when we join a room we first appear in a location that is dictated by the kind of environment the room is hosting.  Thus far we've hardcoded our camera at a fixed location in the scene like security camera overseeing everything.  But just like the other entities that a room stores about itself stored in the components table, we ought to have one entity specifically purposed to tell us where the game starts.  This entity is called the spawn_point.
+
+### Create Spawn Point Entity
+
+Create a new entity called `spawn_point` in the `generate_random_content` function:
+
+```elixir
+    # create spawn_point
+    create_entity(room_id, Ecto.UUID.generate(), %{
+      "spawn_point" => true,
+      "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
+    })
+```
+We'd like to re-use common component names if they represent the same idea, so we are re-using the "position" component.  We also need to be able to somehow tag or label this entity as a "spawn_point".  Since the entity itself is just an id with no other information, all data is stored in some kind of component so we added a "spawn_point" = true component just so we can find this entity later by one of its component names.
+
+The spawn_point for now is just a random point in 3D space between -10 and 10 on the x and z axis and slightly above y = 0 which is a common place to put the floor.  We may change this later for multi-leveled rooms.
+
+Let's add a convenience function for filtering entities for a room by component names.
+
+```elixir
+  def find_entities_having_component_name(room_id, component_name) do
+    q =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.component_name == ^component_name,
+        select: c.entity_id
+      )
+
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id in subquery(q)
+    )
+    |> Repo.all()
+    |> components_to_map()
+  end
+```
+
+Let's also add a function to grab a position vector near a spawn point.  We add a little randomness so that when the server hands out positions near a spawn_point hopefully the users don't end up exactly on top of each other so they have a better chance of seeing each other when they look left or right when arriving at the same time.
+
+```elixir
+  def get_head_position_near_spawn_point(room_id) do
+    # grab the entities that have spawn_point as a component
+    entities_map = Xr.Rooms.find_entities_having_component_name(room_id, "spawn_point")
+
+    # grabs position from first spawn_point's position component
+    {_entity_id, %{"position" => [x, y, z]}} =
+      entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
+
+    # randomly calculate a position near it where the player head should be
+    offset1 = :rand.uniform() * 2 - 1
+    offset2 = :rand.uniform() * 2 - 1
+    [x + offset1, y + 2, z + offset2]
+  end
+```
+
+You can clear all the rooms in the database you've created so far by stopping your server and running `mix ecto.reset`.  That will recreate and migrate all the tables.  Then start your server and create some new rooms, each new room created will have a spawn_point from now on
+
+We can test these new functions in the `iex` terminal:
+
+```elixir
+> alias Xr.Rooms
+> room_id = "895cc3f6-1360-4ae0-acbf-29f03907f1b6"
+> Rooms.find_entities_having_component_name(room_id, "spawn_point")
+%{
+  "26ecb8e0-774e-4764-a4a7-d6025c308037" => %{
+    "position" => [-2, 0.1, 7],
+    "spawn_point" => true
+  }
+}
+
+> Rooms.get_head_position_near_spawn_point(room_id)
+[-1.0802579661399285, 2, 7.9967831898518575]
+> Rooms.get_head_position_near_spawn_point(room_id)
+[-2.1414205495000918, 2, 6.251404238600888]
+```
+
+Now that our room contains the concept of a spawn_point, we'll be able to use it when we emit our user_joined event.
+
+### Add Phoenix Presence
+
+To help us keep track of which user_ids are online, we're going to rely on an existing library called Phoenix Presence.  This pattern injects the ability to track which users are connected to a channel and we'll get some events and a database of user_ids for free.  By default usage of Phoenix Presence sends a "presence_diff" message to each connected client whenever clients join or leave the channel.    
 
 Read more about it here: https://hexdocs.pm/phoenix/Phoenix.Presence.html  
 
@@ -1689,15 +1844,15 @@ This creates a new file for us `xr_web/channels/presence.ex`.
 Add your new module to your supervision tree, in `lib/xr/application.ex`, it must be after `PubSub` and before `Endpoint`:
 
 ```elixir
-
-    children = [
-      {Phoenix.PubSub, name: Xr.PubSub},
-      ... 
-      XrWeb.Presence,
-      ...
-      XrWeb.Endpoint
-    ]
-
+ ...
+ children = [
+   {Phoenix.PubSub, name: Xr.PubSub},
+   ... 
+   XrWeb.Presence,
+   ...
+   XrWeb.Endpoint
+ ]
+ ...
 ```
 
 Modify `xr_web/channels/room_channel.ex` and add ` alias XrWeb.Presence` near the top of the file and also redefine the `after_join` handler:
@@ -1738,11 +1893,17 @@ presence_diff {joins: {"39jfks9...": ...}, leaves: {}}
 ```
  
 
-This is a good start.  It's not providing the event message shape that we want so we won't be making use of `presence_diff`.  We'll look into how we can reshape the Phoenix Presence messages later.  But before we work on that, we first need a database of user states that we can query so that when we shape our custom events we can inject the previously known user position, rotation, etc, state.
+Although this message is triggered at all the right times, it's not providing the event message shape that we want so we won't be making use of `presence_diff`.  We'll look into how we can reshape the Phoenix Presence messages later.  But before we work on that, we first need a database of user states.  Because remember, our custom events also need to tell us where a user is the moment they join a room.
 
 ### Create ETS Table for User Snapshot
 
-Elixir is based on Erlang and Erlang comes with a fast in-memory database called Erlang-Term-Storage (ETS).
+We already have a Postgres database for room entities like obstacles and our spawn_point.  We can consider placing information about users in that database too however I decided against it.  I'm making the distinction that the Postgres database is about stuff in the room, like objects and environment and users are treated differently.  
+
+The environment is usually slow to change.  It's loaded once and then seldom modified during game play.  And even if it's modified, those changes may want to be stored separately too so that the game can be reset to its original state without mixing the updates with the original setting.
+
+Users are updated constantly.  Users are coming and going and dropping off because of network issues etc.  If you're wearing a head-mounted-display (HMD) it generates a near constant stream of subtle position and rotation updates even if you do your best to hold your head still.  These are transient data, don't impact the environment but are important for a social reason.  For that, we need a very fast database that is going to be hammered upon.
+
+Elixir is based on Erlang and Erlang comes with a fast in-memory database called Erlang-Term-Storage (ETS).  Here are the basics:
 
 To create a new ETS Table we do this:
 
@@ -1750,11 +1911,9 @@ To create a new ETS Table we do this:
 table = :ets.new(:some_atom, [:set, :public, {:write_concurrency, true},{:read_concurrency, true}])
 ```
 
-An ETS table is linked to the process that created it.  So if the parent process dies or is shutdown than the child will be shutdown and memory reclaimed as well.
+The configuration above creates an ETS table that has:
 
-The configuration above creates a table variable that has:
-
-- unique keys (desirable because every person is unique)
+- unique keys (desirable because every user_id is unique)
 - is writable by all processes (in case we want to allow other processes to write to it)
 - concurrent on reads and writes so multiple processes can access the data simultaneously
 
@@ -1778,11 +1937,14 @@ You can get the whole table as a list of tuples of key and value:
 >:ets.tab2list(table)
 [{"key", %{}}, ...]
 ```
-Now the tricky part is where do we create this ETS table since it is linked to the process that created it?
+
+An ETS table is linked to the process that created it.  So if the parent process dies or is shutdown than the child will be shutdown and memory reclaimed as well.  In order to access the ETS table we need to have its reference which was returned when it was created.  
+
+Now we just need to figure out where and how we should go about creating the ETS table per unique room.
 
 ### Create a Server for the ETS Table
 
-Let's create a small server that specializes in storing data about each connected user.  We'll create a small api for this server that allows us to query the server for user state data.  The server itself will subscribe (via Phoenix PubSub) to the room's event stream so it will get movement data and store it in it's ETS table.
+Let's create a small server that specializes in storing data about each connected user.  A GenServer is perfect for hosting a small specialized API with some state and we can dynamically start and stop these servers.  The plan is to have a unique user snapshot server per room that is storing location or other state about each user in that particular room.
 
 We will build this up step by step.  Create a new file in `lib/xr/server/user_snapshot.ex` and paste this code to create a minimal GenServer.  
 
@@ -1809,7 +1971,7 @@ Here's a quick overview with what we can do with that GenServer already.  We can
 {:ok, #PID<0.524.0>}
 ```
 
-We now have a server!  That pid is the process id of our server.  If we pattern match it we can deconstruct the pid and check it's state.
+We now have a tiny server!  That pid is the process id of our server.  If we pattern match it we can deconstruct the pid and check it's state.
 
 ```elixir
 >{:ok, pid} = Xr.Servers.UserSnapshot.start_link()
@@ -1818,18 +1980,21 @@ We now have a server!  That pid is the process id of our server.  If we pattern 
 %{}
 ```
 
-The state is an empty map as expected because that was the state we return in the `init` function.  We will replace the state with an ETS table soon, but first let's fix an issue with our server.
+The state is an empty map as expected because that was the state we returned in the `init` function.  We will replace the state with an ETS table soon, but first let's fix an issue with our server.
 
 ### Add Local Registry for Unique GenServer Names
 
-This GenServer is un-named right now, so we can't talk to it unless we have its pid.  Let's use a process registry so that we can use the room_id to get to this pid and it also ensures that we only have one of these databases.  
+This GenServer is un-named right now, so we can't talk to it unless we have its pid.  But let's say we don't know its pid and we'd like to lookup this particular GenServer by a name.  A registry let's us do that.  The registry inserts a mapping between a name and a pid and also ensures that we won't accidentally start two of the same servers for the same room.  
 
 Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
 
 ```elixir
  {Registry, keys: :unique, name: Xr.RoomsRegistry},
 ```
-Now we can name each process that is created from UserSnapshot GenServer using the `via_tuple` API.  If you're not familiar with GenServer's or via_tuple, the internet does a good explanation that I'll forego for now.
+
+The Registry is built in feature and it just works.  Now we can name each process that is created from UserSnapshot GenServer using the `via_tuple` API.  If you're not familiar with GenServers or via_tuple, the internet does a good explanation that I'll forego for now.
+
+### Add ETS and Registry into UserSnapshot Module
 
 Here is the final UserSnapshot module:
 
@@ -1925,7 +2090,9 @@ defmodule Xr.Servers.UserSnapshot do
 end
 ```
 
-Let's take it out for a spin.  Restart the server and terminal and try this commands and observe their output:
+There's a lot happening in there, but essentially we've written a server that creates an ETS table and also subscribes that GenServer process to a PubSub topic called "room_stream:#{room_id}".  If events are broadcast onto that topic, this server will receive an incoming message and store user movement into its ETS table.  The server also provides some public apis to support the ability to query for a particular user or to all users it has in its ETS database.
+
+Let's take it out for a spin.  Restart the server and terminal and try the following commands and observe their output:
 
 ```elixir
 > alias Phoenix.PubSub
@@ -1940,9 +2107,9 @@ Xr.Servers.UserSnapshot
 %{"position" => [1, 2, 3], "user_id" => "tom"}
 ```
 
-Cool!  We can broadcast events to our room_stream and this little server was paying attention to events that look like `"event" => "user_moved"` and cached it.  
+Cool!  In the above example we broadcast events to a room_stream topic and this little server was paying attention to events that look like `"event" => "user_moved"` and cached it so we could retrive it with an API call.  
 
-In addition, the Registry prevents us from starting the same server twice so we don't accidentally create more than one database.
+The following example show how the Registry prevents us from starting the same server twice so we don't accidentally create more than one database.
 
 ```elixir
 > Xr.Servers.UserSnapshot.start_link("hi")
@@ -1951,7 +2118,9 @@ In addition, the Registry prevents us from starting the same server twice so we 
 {:error, {:already_started, #PID<0.540.0>}}
 ```
 
-Let's also add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
+### Add Dynamic Supervisor
+
+GenServers ought to be supervised so that if they crash they can be restarted.Let's add a supervisor for our UserSnapshot.  Create a new file at `lib/xr/servers/rooms_supervisor`
 
 ```elixir
 defmodule Xr.Servers.RoomsSupervisor do
@@ -1969,9 +2138,25 @@ defmodule Xr.Servers.RoomsSupervisor do
     DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
   end
 
+  def stop_room(room_id) do
+    DynamicSupervisor.terminate_child(
+      __MODULE__,
+      Xr.Servers.UserSnapshot.via_tuple(room_id) |> GenServer.whereis()
+    )
+  end
 end
 ```
-This supervisor will supervise any new rooms we tell it to, and if they crash it will just restart the crashed child.
+When we use the start_room function, this RoomsSupervisor will create a new UserSnapshot GenServer as a child of itself.  This Supervisor can supervise multiple rooms.
+
+```
+             +----------+                  
+         +---|Supervisor|--+               
+         |   +----------+  |               
+   +--------+       +--------+             
+   | Room 1 |       | Room 2 |             
+   | Child  |       | Child  |             
+   +--------+       +--------+       
+```
 
 We want to start this supervisor automatically when Phoenix starts our application so add it to the bottom of the children list in `application.ex`.
 
@@ -1993,14 +2178,30 @@ end
 ```
 This starts the UserSnapshot Genserver if it hasn't already started, and if it has it will silently fail.
 
+
 ### Phoenix Presence handle_metas Callback
 
-Now that we have a database for user states let's return to the task of emiting our events for user joins and leaves.
+Now that we have a fast in-memory database for user states let's return to the task of emiting our events for user joins and leaves.
 
-It turns out that we can add a callback to our `channels/presence.ex` that will get triggered everytime a client joins or leaves the room.  From that callback we could shape the kind of event that we want.  
+It turns out Phoenix Presence provides callback that we can add to our `channels/presence.ex` that will get triggered everytime a client joins or leaves the room.  From that callback we could shape the kind of event that we want and send it into our room_stream.  Remember that our room_stream is our one destination for all our room events so every thing that happens in the room goes there and we'll figure out what to do with it later inside other GenServers that subscribe to the stream.
 
 ```elixir
-@doc """
+defmodule XrWeb.Presence do
+  @moduledoc """
+  Provides presence tracking to channels and processes.
+
+  See the [`Phoenix.Presence`](https://hexdocs.pm/phoenix/Phoenix.Presence.html)
+  docs for more details.
+  """
+  use Phoenix.Presence,
+    otp_app: :xr,
+    pubsub_server: Xr.PubSub
+
+  alias Phoenix.PubSub
+  alias Xr.Servers.UserSnapshot
+  alias Xr.Rooms
+
+  @doc """
   Presence is great for external clients, such as JavaScript applications,
   but it can also be used from an Elixir client process to keep track of presence changes
   as they happen on the server. This can be accomplished by implementing the optional init/1
@@ -2011,44 +2212,404 @@ It turns out that we can add a callback to our `channels/presence.ex` that will 
     {:ok, %{}}
   end
 
-
   def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
     for {user_id, _} <- joins do
       # if we have previous user state data, then broadcast it
-      case get_state(user_id) do
+      case UserSnapshot.get_user_state(room_id, user_id) do
         nil ->
-          # grab the spawn_point for the room, and broadcast that instead
-          position = Xr.Rooms.generate_point_near_spawn_point(room_id)
+          emit_join_at_spawn_point(room_id, user_id)
 
-          Xr.PubSub.broadcast("room:#{room_id}", "user_joined", %{
-            "user_id" => user_id,
-            "position" => position,
-            "rotation" => [0, 0, 0, 1]
-          })
-
-        %{"position" => position, "rotation" => rotation} ->
-          Xr.PubSub.broadcast("room:#{room_id}", "user_joined", %{
-            "user_id" => user_id,
-            "position" => position,
-            "rotation" => rotation
-          })
+        user_state ->
+          emit_join_from_previous_state(room_id, user_id, user_state)
       end
     end
 
     for {user_id, _} <- leaves do
-      Xr.PubSub.broadcast("room:#{room_id}", "user_left", %{"user_id" => user_id})
+      emit_left(room_id, user_id)
     end
 
     {:ok, state}
   end
+
+  def emit_left(room_id, user_id) do
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => "user_left",
+      "payload" => %{
+        "user_id" => user_id
+      }
+    })
+  end
+
+  def emit_join_at_spawn_point(room_id, user_id) do
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => "user_joined",
+      "payload" => %{
+        "user_id" => user_id,
+        "position" => Rooms.get_head_position_near_spawn_point(room_id),
+        "rotation" => [0, 0, 0, 1]
+      }
+    })
+  end
+
+  def emit_join_from_previous_state(room_id, user_id, %{
+        "position" => position,
+        "rotation" => rotation
+      }) do
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => "user_joined",
+      "payload" => %{
+        "user_id" => user_id,
+        "position" => position,
+        "rotation" => rotation
+      }
+    })
+  end
+end
+
 ```
 
-handle_metas receives a map of user_ids that have joined or left and we can iterate through them and reshape them into "user_joined" and "user_left" events.  
+handle_metas receives a map of user_ids that have joined or left and we can iterate through them and reshape them into "user_joined" and "user_left" events.  The user_joined has two scenarios, we either have some memory in the ETS table from before, or have no data at all in which case we load the position from the room's spawn point.  We can't test this in the front-end yet because these messages are being sent to the room_stream, which isn't going to the front-end.  To send messages to the front-end we need to use the `XrWeb.Endpoint.broadcast` method and send it to the `room:#{room_id}` topic because that's what the client is subscribed to.
 
-We have some functions we haven't defined yet.  `get_state` will take a user_id and we need to lookup the user in some database to see if we have any previous state.  If we do, we can pluck out the previous position and rotation and publish a "user_joined" event to our event stream.  Otherwise, (and we need to write this function too), we use `generate_point_near_spawn_point` to randomly generate a point near the first spawn_point we find for the given room.
+### Tidy-up Broadcast Functions
 
-Next we need to implement a database
- 
+The above broadcast code to PubSub is looking a little verbose and we need to write the topic and create the map everytime.  Let's add a little function helper to wrap up some of the redundant parts so we can clean this up a bit.
+
+Create a new file at `lib/xr/events.ex` with the following code:
+
+```elixir
+defmodule Xr.Events do
+  defstruct [:room_id, :event_name, :payload]
+
+  alias Phoenix.PubSub
+
+  # simple way to create a struct without having to write a map and allow chainable broadcasts
+  def event(room_id, event_name, payload) when is_map(payload) do
+    %__MODULE__{room_id: room_id, event_name: event_name, payload: payload}
+  end
+
+  # broadcasts an event to the room stream
+  def to_room_stream(%__MODULE__{} = event) do
+    PubSub.broadcast(Xr.PubSub, "room_stream:#{event.room_id}", %{
+      "event" => event.event_name,
+      "payload" => event.payload
+    })
+
+    event
+  end
+
+  # broadcasts an event to the front-end client
+  def to_client(%__MODULE__{} = event) do
+    XrWeb.Endpoint.broadcast("room:#{event.room_id}", "stoc", %{
+      "event" => event.event_name,
+      "payload" => event.payload
+    })
+
+    event
+  end
+end
+
+```
+
+This allows us to write slightly less boiler plate and we can also chain operations like this:
+
+```elixir
+import Events
+event("my_room", "i_moved", %{}) |> to_room_stream() |> to_client()
+```
+Let's update `presence.ex` using these helper functions (remember to `import Xr.Events`):
+
+```elixir
+  def emit_left(room_id, user_id) do
+    event(room_id, "user_left", %{"user_id" => user_id})
+    |> to_room_stream()
+  end
+
+  def emit_join_at_spawn_point(room_id, user_id) do
+    event(room_id, "user_joined", %{
+      "user_id" => user_id,
+      "position" => Rooms.get_head_position_near_spawn_point(room_id),
+      "rotation" => [0, 0, 0, 1]
+    })
+    |> to_room_stream()
+  end
+
+  def emit_join_from_previous_state(room_id, user_id, %{
+        "position" => position,
+        "rotation" => rotation
+      }) do
+    event(room_id, "user_joined", %{
+      "user_id" => user_id,
+      "position" => position,
+      "rotation" => rotation
+    })
+    |> to_room_stream()
+  end
+```
+
+### Share Camera Movement With Server
+
+We've got the "user_joined" and "user_left" event going into our room_stream.  We still need to send the camera movements from the Babylon.js world as events into our event stream.
+
+#### Add avatar.ts
+
+Let's add a new typescript file dedicated to handling the presence of avatars at `assets/js/systems/avatar.ts`.  First we need to create a new listener to listen whenever our camera moves then send a message to the room channel.
+
+```typescript
+import { config } from "../config";
+
+const { scene, channel } = config;
+
+let lastSyncTime = 0;
+const throttleTime = 200; // ms
+// when the camera moves, push data to channel but limit to every 200ms
+scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
+  console.log("camera moved");
+  if (Date.now() - lastSyncTime > throttleTime) {
+    config.channel.push("i_moved", {
+      position: cam.position.asArray(),
+      rotation: cam.absoluteRotation.asArray(),
+    });
+    lastSyncTime = Date.now();
+  }
+});
+```
+
+Remember to add this new `avatar` system to the `rooms.ts` otherwise this new file is unreachable.
+
+```typescript
+import "./systems/avatar";
+```
+
+
+Babylon.js provides observables. See the 'onWhatever.add' pattern above?  These observables give us a way to trigger a callback function whenever that observable thing happens.  In this case whenever the camera view matrix changes, we push the camera position and rotation data to the channel.  
+
+### Fix Race Condition
+
+There is a race condition here though because there is a chance that initializing the camera invokes the callback and tries to push a message on the channel before the channel has had a chance to join the room.  To fix this issue we should wait until the channel has properly joined the room before creating this listener.  We also want to make sure this listener isn't bound more than once, incase the channel reconnects itself etc.
+
+### RxJS Subject For Channel Join Event
+
+Remember when we added RxJS to the code base and created some Subjects in the `config.ts` file?  Now's our chance to use it.
+
+In `broker.ts` in the code where we join the channel, let's send a signal that the channel was joined:
+
+```typescript
+
+
+channel
+    .join()
+    .receive("ok", (resp) => {
+      console.log("Joined successfully", resp);
+      // this alerts any subscribers of $channel_joined Subject that we've officially joined the channel
+      config.$channel_joined.next(true);
+    })
+    .receive("error", (resp) => {
+      console.log("Unable to join", resp);
+    });
+```
+
+Now back in `avatar.ts` we can listen for that event, but pipe it and wrangle it so that we only create one subscription no matter how many times we receive the $channel_joined event.
+
+Here is the updated `avatar.ts` with RxJs subscriptions, including one for camera movement. 
+
+```typescript
+import { config } from "../config";
+import { Quaternion, TransformNode } from "@babylonjs/core";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { filter, throttleTime, take } from "rxjs/operators";
+
+const { scene } = config;
+
+
+// take(1) will only take one event off of the bus
+config.$channel_joined.pipe(take(1)).subscribe(() => {
+  config.$camera_moved.pipe(throttleTime(200)).subscribe(() => {
+    const cam = scene.activeCamera;
+    config.channel.push("i_moved", {
+      position: cam.position.asArray(),
+      rotation: cam.absoluteRotation.asArray(),
+    });
+  });
+});
+
+scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
+  config.$camera_moved.next(new Date().getTime());
+});
+
+
+```
+
+
+### Handle Movement In RoomChannel
+
+Now we'll be getting "i_moved" channel events in the RoomChannel.  Update `room_channel.ex` with this handler and remember to import `Xr.Events` for the new helper functions we made earlier:
+
+```elixir
+  ...
+  import Xr.Events
+  ...
+
+  def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
+    event(socket.assigns.room_id, "user_moved", %{
+      "user_id" => socket.assigns.user_id,
+      "position" => position,
+      "rotation" => rotation
+    })
+    |> to_room_stream()
+
+    {:noreply, socket}
+  end
+```
+This handler forwards "i_moved" events into "user_moved" events in the room_stream.  Now we should be receiving a complete set of user events in our rooom_stream: "user_joined", "user_left", "user_moved".
+
+### Reflect Events to the Frontend
+
+The point of sending all events to a room_stream is that we can decide what to do when them decoupled from the sender.  We already have one UserSnapshot Genserver that is subscribed to the stream and caching movement data for all users that move.  But right now our front-end isn't receiving any of these messages from the server.  Let's fix that now by adding another GenServer that will simply reflect the messages it receives in the room_stream back out to the clients so they can render something?  Later on we can add more logic to this GenServer to be more intelligent with how often it forwards data.  Perhaps we want to batch some of the data together before send it out, etc.
+
+Add `lib/xr/servers/reflector.ex`
+
+```elixir
+defmodule Xr.Servers.Reflector do
+  use GenServer
+  alias Phoenix.PubSub
+  import Xr.Events
+
+  # creates a tuple that will automatically map a string "user_states:#{room_id}" to this new process
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "reflector:#{room_id}"}}
+  end
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+
+  @impl true
+  def init({:ok, room_id}) do
+    # subscribe to the room stream
+    PubSub.subscribe(Xr.PubSub, "room_stream:#{room_id}")
+
+    {:ok, %{room_id: room_id}}
+  end
+
+  # responds to incoming message from the room stream and reflects it out to the client
+  @impl true
+  def handle_info(%{"event" => event_name, "payload" => payload}, state) do
+    event(state.room_id, event_name, payload)
+    |> to_client()
+
+    {:noreply, state}
+  end
+end
+
+```
+
+### Add Reflector To Supervisor
+
+Add this new GenServer under the same supervisor.  Open up `lib/xr/servers/rooms_supervisor` and update the start_room and stop_room functions.
+
+```elixir
+  def start_room(room_id) do
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.Reflector, room_id})
+  end
+
+  def stop_room(room_id) do
+    DynamicSupervisor.terminate_child(
+      __MODULE__,
+      Xr.Servers.UserSnapshot.via_tuple(room_id) |> GenServer.whereis()
+    )
+
+    DynamicSupervisor.terminate_child(
+      __MODULE__,
+      Xr.Servers.Reflector.via_tuple(room_id) |> GenServer.whereis()
+    )
+  end
+```
+
+We just added another supervised GenServer to do a different kind of action on the same room_stream.  This pattern will allow us to just create another GenServer whenever we want to pull and manipulate the room_stream data in some new way.
+
+Now we should be getting all the messages that come to room_stream forwarded to the client under the event "stoc" (server to client) or even better (stream to client) event name.
+
+### Broker Subscribe to "stoc" Events.
+
+Back in our `broker.ts` we need to listen for "stoc" events and let's just redirect that into an RxJS Subject for more powerful filtering capabilities.
+
+```typescript
+channel.on("stoc", (event) => {
+  config.$room_stream.next(event);
+});
+```
+
+### Create Simple Avatar Mesh
+
+Back in `avatar.ts` let's create some subscriptions over the "user_joined", "user_moved", "user_left" events we can now get from the $room_stream Subject and draw a very simple box to represent a user's avatar.
+
+```typescript
+// reacting to incoming events to draw other users, not self
+
+// user_joined
+config.$room_stream.pipe(
+  filter(e => e.event === "user_joined"),
+  filter(e => e.payload.user_id !== config.user_id),
+).subscribe(e => {
+  createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+});
+
+// user_left
+config.$room_stream.pipe(
+  filter(e => e.event === "user_left"),
+  filter(e => e.payload.user_id !== config.user_id)
+).subscribe(e => {
+  removeUser(e.payload.user_id);
+});
+
+// user_moved
+config.$room_stream.pipe(
+  filter(e => e.event === "user_moved"),
+  filter(e => e.payload.user_id !== config.user_id)
+).subscribe(e => {
+  poseUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+});
+
+const removeUser = (user_id: string) => {
+  const user = scene.getTransformNodeByName(user_id);
+  if (user) {
+    user.dispose();
+  }
+};
+
+const createSimpleUser = (user_id: string, position: number[], rotation: number[]) => {
+  if (user_id !== config.user_id) {
+    const user = scene.getTransformNodeByName(user_id);
+    if (!user) {
+      const transform = new TransformNode(user_id, scene);
+      const box = CreateBox("head");
+      box.parent = transform;
+      poseUser(user_id, position, rotation);
+    }
+  }
+};
+
+const poseUser = (user_id: string, position: number[], rotation: number[]) => {
+  const transform = scene.getTransformNodeByName(user_id);
+  if (transform) {
+    transform.position.fromArray(position);
+    if (!transform.rotationQuaternion) { transform.rotationQuaternion = Quaternion.FromArray(rotation); } else {
+      transform.rotationQuaternion.x = rotation[0];
+      transform.rotationQuaternion.y = rotation[1];
+      transform.rotationQuaternion.z = rotation[2];
+      transform.rotationQuaternion.w = rotation[3];
+    }
+  }
+};
+```
+
+### Handle Late-comers Using Presence.list
+
+If you test this now in two browsers (or same browser with other tab incognito), you will notice that the first window to connect to the channel will be able to see the second user that joins.  But the second user that joins doesn't get a "user_joined" message regarding the first user because that message was sent before they arrived so they missed it.
+
+We'll fix this in a similar way to how we're sending a "snapshot" message for all objects in the room.  We similarly need to send a snapshot for all the active users in the room when they first connect.
+
 
 
 ## Ask for User First Interaction
@@ -2169,27 +2730,7 @@ This is the same channel joining code we had before, just now wrapped in an even
 With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  Once the channel is joined it pushes the front-end a snapshot of obstacles in the room for a particular hue of colors.  The front-end's snapshot system receives the message and loops through every entity, drawing a box using the Babylon.js CreateBox function.   
 
 
-
-
-## Entering the Room at a Spawn Point
-
-Thus far we've hardcoded our camera at a fixed location in the scene like security camera overseeing everything.  But different rooms have different obstacles and they ought to have different rules governing where we start.  Let's let the room tell us where we can start.  This is sometimes called a "Spawn Point".  Since we already have some obstacles that are created in the database table of entities and components, why don't we just add another entity for "spawn_point"?
-
-### Create Spawn Point Entity
-
-Create a new entity called `spawn_point` in the `generate_random_content` function:
-
-```elixir
- # create spawn_point
-   create_entity(room_id, Ecto.UUID.generate(), %{
-      "spawn_point" => true,
-      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
-    })
-```
-
-The spawn_point for now is just a random point in 3D space between -10 and 10 on the x and z axis, but limited to 2 meter tall in the y axis so we don't spawn underneath the floor which is typically at y = 0.
-
-You can clear all the rooms in the database you've created so far by stopping your server and running `mix ecto.reset`.  That will recreate and migrate all the tables.  Then start your server and create some new rooms, each new room created will have a spawn_point from now on.
+.
 
 We could at this point create front-end code to listen for the spawn_point and move our camera there... however, before we implement that, there are two issues with that approach:
 

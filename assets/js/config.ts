@@ -1,7 +1,7 @@
 import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Vector3, Quaternion } from "@babylonjs/core/Maths";
-import { Subject } from "rxjs";
+import { Subject } from "rxjs/internal/Subject";
 
 
 export type Config = {
@@ -10,10 +10,10 @@ export type Config = {
   scene: Scene;
   socket: Socket;
   channel: Channel;
-  // $presence_state: Subject<{[user_id: string]: any }>
-  // $presence_diff: Subject<{joins: {[user_id: string]: any }, leaves: {[user_id: string]: any }}>
-  // $camera_moved: Subject<[Vector3, Quaternion]>
-  // $user_moved: Subject<{user_id: string, position: number[], rotation: number[]}>
+  $room_stream: Subject<{ event: string, payload: any; }>;
+  $channel_joined: Subject<boolean>;
+  $room_entered: Subject<boolean>;
+  $camera_moved: Subject<number>;
 };
 
 export const config: Config = {
@@ -22,9 +22,9 @@ export const config: Config = {
   scene: null,
   socket: null,
   channel: null,
-  // $presence_state: new Subject<{[user_id: string]: any }>(),
-  // $presence_diff: new Subject<{joins: {[user_id: string]: any }, leaves: {[user_id: string]: any }}>,
-  // $camera_moved: new Subject<[Vector3, Quaternion]>(),
-  // $user_moved: new Subject<{user_id: string, position: number[], rotation: number[]}>(),
+  $room_stream: new Subject<{ event: string, payload: any; }>(),
+  $channel_joined: new Subject<boolean>(),
+  $room_entered: new Subject<boolean>(),
+  $camera_moved: new Subject<number>()
 }
 

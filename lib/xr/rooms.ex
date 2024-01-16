@@ -70,7 +70,7 @@ defmodule Xr.Rooms do
     # create spawn_point
     create_entity(room_id, Ecto.UUID.generate(), %{
       "spawn_point" => true,
-      "position" => [Enum.random(-10..10), 2, Enum.random(-10..10)]
+      "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
   end
 
@@ -213,5 +213,19 @@ defmodule Xr.Rooms do
     )
     |> Repo.all()
     |> components_to_map()
+  end
+
+  def get_head_position_near_spawn_point(room_id) do
+    # grab the entities that have spawn_point as a component
+    entities_map = Xr.Rooms.find_entities_having_component_name(room_id, "spawn_point")
+
+    # grabs position from first spawn_point's position component
+    {_entity_id, %{"position" => [x, y, z]}} =
+      entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
+
+    # randomly calculate a position near it where the player head should be
+    offset1 = :rand.uniform() * 2 - 1
+    offset2 = :rand.uniform() * 2 - 1
+    [x + offset1, y + 2, z + offset2]
   end
 end

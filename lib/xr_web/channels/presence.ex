@@ -11,6 +11,9 @@ defmodule XrWeb.Presence do
 
   alias Phoenix.PubSub
   alias Xr.Servers.UserSnapshot
+  alias Xr.Rooms
+
+  import Xr.Events
 
   @doc """
   Presence is great for external clients, such as JavaScript applications,
@@ -30,47 +33,41 @@ defmodule XrWeb.Presence do
         nil ->
           emit_join_at_spawn_point(room_id, user_id)
 
-        %{"position" => position, "rotation" => rotation} ->
-          emit_join_from_previous_state(room_id, user_id, position, rotation)
+        user_state ->
+          emit_join_from_previous_state(room_id, user_id, user_state)
       end
     end
 
     for {user_id, _} <- leaves do
-      PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
-        "event" => "user_left",
-        "payload" => %{"user_id" => user_id}
-      })
+      emit_left(room_id, user_id)
     end
 
     {:ok, state}
   end
 
-  def emit_join_at_spawn_point(room_id, user_id) do
-    # grab the spawn_point for the room, and broadcast that instead
-    entities_map = Xr.Rooms.find_entities_having_component_name(room_id, "spawn_point")
-
-    # graps position from first spawn_point's position component
-    {_, %{"position" => position_value}} =
-      entities_map |> Enum.find(fn {k, v} -> %{"position" => position} = v end)
-
-    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
-      "event" => "user_joined",
-      "payload" => %{
-        "user_id" => user_id,
-        "position" => position_value,
-        "rotation" => [0, 0, 0, 1]
-      }
-    })
+  def emit_left(room_id, user_id) do
+    event(room_id, "user_left", %{"user_id" => user_id})
+    |> to_room_stream()
   end
 
-  def emit_join_from_previous_state(room_id, user_id, position, rotation) do
-    PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
-      "event" => "user_joined",
-      "payload" => %{
-        "user_id" => user_id,
+  def emit_join_at_spawn_point(room_id, user_id) do
+    event(room_id, "user_joined", %{
+      "user_id" => user_id,
+      "position" => Rooms.get_head_position_near_spawn_point(room_id),
+      "rotation" => [0, 0, 0, 1]
+    })
+    |> to_room_stream()
+  end
+
+  def emit_join_from_previous_state(room_id, user_id, %{
         "position" => position,
         "rotation" => rotation
-      }
+      }) do
+    event(room_id, "user_joined", %{
+      "user_id" => user_id,
+      "position" => position,
+      "rotation" => rotation
     })
+    |> to_room_stream()
   end
 end

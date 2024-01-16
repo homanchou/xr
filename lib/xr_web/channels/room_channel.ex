@@ -1,10 +1,11 @@
 defmodule XrWeb.RoomChannel do
   use XrWeb, :channel
   alias XrWeb.Presence
+  import Xr.Events
 
   @impl true
   def join("room:" <> room_id, _payload, socket) do
-    if (socket.assigns.user_id) do
+    if socket.assigns.user_id do
       send(self(), :after_join)
       {:ok, assign(socket, :room_id, room_id)}
     else
@@ -19,15 +20,14 @@ defmodule XrWeb.RoomChannel do
     {:reply, {:ok, payload}, socket}
   end
 
-  # It is also common to receive messages from the client and
-  # broadcast to everyone in the current topic (room:lobby).
   @impl true
   def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
-    broadcast_from(socket, "user_moved", %{
-      user_id: socket.assigns.user_id,
-      position: position,
-      rotation: rotation
+    event(socket.assigns.room_id, "user_moved", %{
+      "user_id" => socket.assigns.user_id,
+      "position" => position,
+      "rotation" => rotation
     })
+    |> to_room_stream()
 
     {:noreply, socket}
   end

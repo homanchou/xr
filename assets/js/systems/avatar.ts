@@ -1,39 +1,52 @@
 import { config } from "../config";
 import { Quaternion, TransformNode } from "@babylonjs/core";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { filter, throttleTime, take } from "rxjs/operators";
 
-const { scene, channel } = config;
+const { scene } = config;
 
-let lastSyncTime = 0;
-const throttleTime = 200; // ms
-// when the camera moves, push data to channel but limit to every 200ms
+// create a signal that the camera moved
 scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
-  console.log("camera moved");
-  if (Date.now() - lastSyncTime > throttleTime) {
+  config.$camera_moved.next(new Date().getTime());
+});
+
+// subscribe just one time to the channel joined event
+// and create a new subscription that takes all camera movement, throttles it to 200 ms and sends it to the server
+config.$channel_joined.pipe(take(1)).subscribe(() => {
+  config.$camera_moved.pipe(throttleTime(200)).subscribe(() => {
+    const cam = scene.activeCamera;
     config.channel.push("i_moved", {
       position: cam.position.asArray(),
       rotation: cam.absoluteRotation.asArray(),
     });
-    lastSyncTime = Date.now();
-  }
+  });
 });
 
+// reacting to incoming events to draw other users, not self
 
-channel.on("user_joined", (payload: { user_id: string, position: number[], rotation: number[]; }) => {
-  console.log("user_joined", payload);
-  createSimpleUser(payload.user_id, payload.position, payload.rotation);
+// user_joined
+config.$room_stream.pipe(
+  filter(e => e.event === "user_joined"),
+  filter(e => e.payload.user_id !== config.user_id),
+).subscribe(e => {
+  createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
 });
 
-channel.on("user_left", (payload: { user_id: string; }) => {
-  console.log("user_left", payload);
-  removeUser(payload.user_id);
+// user_left
+config.$room_stream.pipe(
+  filter(e => e.event === "user_left"),
+  filter(e => e.payload.user_id !== config.user_id)
+).subscribe(e => {
+  removeUser(e.payload.user_id);
 });
 
-channel.on("user_moved", (payload: { user_id: string, position: number[], rotation: number[]; }) => {
-  console.log("user_moved", payload);
-  poseUser(payload.user_id, payload.position, payload.rotation);
+// user_moved
+config.$room_stream.pipe(
+  filter(e => e.event === "user_moved"),
+  filter(e => e.payload.user_id !== config.user_id)
+).subscribe(e => {
+  poseUser(e.payload.user_id, e.payload.position, e.payload.rotation);
 });
-
 
 const removeUser = (user_id: string) => {
   const user = scene.getTransformNodeByName(user_id);

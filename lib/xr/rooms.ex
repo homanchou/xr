@@ -74,8 +74,10 @@ defmodule Xr.Rooms do
     })
   end
 
+  # create random positions that do not overlap on the same integer coordinates
   def create_random_position() do
-    [Enum.random(-25..25), Enum.random(-2..2), Enum.random(-25..25)]
+    offset = Enum.random(-1000..1000) / 1000
+    [Enum.random(-25..25) + offset, Enum.random(-2..2) + offset, Enum.random(-25..25) + offset]
   end
 
   def shift_color(color) do
@@ -224,8 +226,8 @@ defmodule Xr.Rooms do
       entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
 
     # randomly calculate a position near it where the player head should be
-    offset1 = :rand.uniform() * 2 - 1
-    offset2 = :rand.uniform() * 2 - 1
+    offset1 = Enum.random(-100..100) / 100
+    offset2 = Enum.random(-100..100) / 100
     [x + offset1, y + 2, z + offset2]
   end
 end

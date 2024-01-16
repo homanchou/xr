@@ -1,7 +1,7 @@
 import { config } from "../config";
 import { Quaternion, TransformNode } from "@babylonjs/core";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
-import { Channel } from "phoenix";
+import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 import { filter, throttleTime, take } from "rxjs/operators";
 
 const { scene } = config;
@@ -16,10 +16,12 @@ scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
 config.$channel_joined.pipe(take(1)).subscribe(() => {
   config.$camera_moved.pipe(throttleTime(200)).subscribe(() => {
     const cam = scene.activeCamera;
-    config.channel.push("i_moved", {
+    const payload = {
       position: cam.position.asArray(),
       rotation: cam.absoluteRotation.asArray(),
-    });
+    }
+    console.log("sending camera movement", payload);
+    config.channel.push("i_moved", payload);
   });
 });
 
@@ -32,9 +34,10 @@ config.$room_stream.pipe(
   if (e.payload.user_id !== config.user_id) {
     createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
   } else {
-    const cam = scene.activeCamera;
+    console.log("it is me so set camera position", e)
+    const cam = scene.activeCamera as FreeCamera;
     cam.position.fromArray(e.payload.position);
-    cam.absoluteRotation.copyFromFloats(e.payload.rotation[0], e.payload.rotation[1], e.payload.rotation[2], e.payload.rotation[3]);
+    cam.rotationQuaternion = Quaternion.FromArray(e.payload.rotation);
   }
 });
 

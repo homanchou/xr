@@ -28,3 +28,5 @@ export const config: Config = {
   $camera_moved: new Subject<number>()
 }
 
+window["config"] = config
+

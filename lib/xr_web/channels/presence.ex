@@ -9,7 +9,6 @@ defmodule XrWeb.Presence do
     otp_app: :xr,
     pubsub_server: Xr.PubSub
 
-  alias Phoenix.PubSub
   alias Xr.Servers.UserSnapshot
   alias Xr.Rooms
 

@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { Quaternion, TransformNode } from "@babylonjs/core";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { Channel } from "phoenix";
 import { filter, throttleTime, take } from "rxjs/operators";
 
 const { scene } = config;
@@ -27,9 +28,14 @@ config.$channel_joined.pipe(take(1)).subscribe(() => {
 // user_joined
 config.$room_stream.pipe(
   filter(e => e.event === "user_joined"),
-  filter(e => e.payload.user_id !== config.user_id),
 ).subscribe(e => {
-  createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+  if (e.payload.user_id !== config.user_id) {
+    createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+  } else {
+    const cam = scene.activeCamera;
+    cam.position.fromArray(e.payload.position);
+    cam.absoluteRotation.copyFromFloats(e.payload.rotation[0], e.payload.rotation[1], e.payload.rotation[2], e.payload.rotation[3]);
+  }
 });
 
 // user_left
@@ -79,3 +85,12 @@ const poseUser = (user_id: string, position: number[], rotation: number[]) => {
     }
   }
 };
+
+config.channel.on("user_snapshot", (payload: { user_id: string, position: number[], rotation: number[]; }[]) => {
+  Object.entries(payload).forEach(([user_id, state]) => {
+    if (user_id !== config.user_id) {
+      createSimpleUser(user_id, state.position, state.rotation);
+    }
+
+  });
+});

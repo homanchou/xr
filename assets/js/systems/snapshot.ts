@@ -37,12 +37,5 @@ const process_entity = (entity_id: string, components: object) => {
         box.material = material;
       }
     }
-  } else if (components["spawn_point"]) {
-    let spawn_point =
-      scene.getTransformNodeByName(entity_id) ||
-      new TransformNode(entity_id, scene);
-    Tags.AddTagsTo(spawn_point, "spawn_point");
-    spawn_point.position.fromArray(components["position"]);
-    scene.activeCamera.position.fromArray(components["position"]);
   }
 };

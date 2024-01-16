@@ -2017,9 +2017,9 @@ defmodule Xr.Servers.UserSnapshot do
     GenServer.call(via_tuple(room_id), {:get_user_state, user_id})
   end
 
-  # client api to get all user states
-  def all_user_states(room_id, map_of_user_ids) do
-    GenServer.call(via_tuple(room_id), {:all_user_states, map_of_user_ids})
+  # client api to get all user states, return a maps of user_ids to state
+  def all_user_states(room_id) do
+    GenServer.call(via_tuple(room_id), :all_user_states)
   end
 
   @impl true
@@ -2071,23 +2071,20 @@ defmodule Xr.Servers.UserSnapshot do
     {:reply, result, state}
   end
 
-  # internal api to get all user states
-  def handle_call({:all_user_states, map_of_user_ids}, _from, state) do
+  # internal api to get all user states, returns a map of user_id to user_state
+  def handle_call(:all_user_states, _from, state) do
     # get cache of movements
     list = :ets.tab2list(state)
-    # reduce over map_of_user_ids and return a map of user_ids to their value in the ets table
 
     result =
-      Enum.reduce(map_of_user_ids, %{}, fn {key, _value}, acc ->
-        case Enum.find(list, fn {k, _} -> k == key end) do
-          nil -> acc
-          {_, v} -> Map.put(acc, key, v)
-        end
+      Enum.reduce(list, %{}, fn {key, value}, acc ->
+        Map.put(acc, key, value)
       end)
 
     {:reply, result, state}
   end
 end
+
 ```
 
 There's a lot happening in there, but essentially we've written a server that creates an ETS table and also subscribes that GenServer process to a PubSub topic called "room_stream:#{room_id}".  If events are broadcast onto that topic, this server will receive an incoming message and store user movement into its ETS table.  The server also provides some public apis to support the ability to query for a particular user or to all users it has in its ETS database.
@@ -2609,6 +2606,34 @@ const poseUser = (user_id: string, position: number[], rotation: number[]) => {
 If you test this now in two browsers (or same browser with other tab incognito), you will notice that the first window to connect to the channel will be able to see the second user that joins.  But the second user that joins doesn't get a "user_joined" message regarding the first user because that message was sent before they arrived so they missed it.
 
 We'll fix this in a similar way to how we're sending a "snapshot" message for all objects in the room.  We similarly need to send a snapshot for all the active users in the room when they first connect.
+
+In `room_channel.ex` implement a helper function to get all the user_states from user_ids that are in `Presence.list`, which is an object with user_id keys.
+
+```elixir
+  def user_snapshot(socket) do
+    user_states = UserSnapshot.all_user_states(socket.assigns.room_id)
+
+    Presence.list(socket)
+    |> Enum.reduce(%{}, fn {user_id, _}, acc ->
+      Map.put(acc, user_id, user_states[user_id])
+    end)
+  end
+```
+
+Then push it to the channel in the `after_join` handler.
+
+```elixir
+  def handle_info(:after_join, socket) do
+    {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})
+
+    entities = Xr.Rooms.entities(socket.assigns.room_id)
+    push(socket, "snapshot", entities)
+    push(socket, "user_snapshot", user_snapshot(socket))
+    {:noreply, socket}
+  end
+```
+
+Finally let's handle this event in `avatar.ts`
 
 
 

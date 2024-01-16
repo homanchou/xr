@@ -1,6 +1,7 @@
 defmodule XrWeb.RoomChannel do
   use XrWeb, :channel
   alias XrWeb.Presence
+  alias Xr.Servers.UserSnapshot
   import Xr.Events
 
   @impl true
@@ -38,6 +39,16 @@ defmodule XrWeb.RoomChannel do
 
     entities = Xr.Rooms.entities(socket.assigns.room_id)
     push(socket, "snapshot", entities)
+    push(socket, "user_snapshot", user_snapshot(socket))
     {:noreply, socket}
+  end
+
+  def user_snapshot(socket) do
+    user_states = UserSnapshot.all_user_states(socket.assigns.room_id)
+
+    Presence.list(socket)
+    |> Enum.reduce(%{}, fn {user_id, _}, acc ->
+      Map.put(acc, user_id, user_states[user_id])
+    end)
   end
 end

@@ -16,7 +16,7 @@ defmodule Xr.Servers.UserSnapshot do
     GenServer.call(via_tuple(room_id), {:get_user_state, user_id})
   end
 
-  # client api to get all user states
+  # client api to get all user states, return a maps of user_ids to state
   def all_user_states(room_id) do
     GenServer.call(via_tuple(room_id), :all_user_states)
   end
@@ -70,7 +70,7 @@ defmodule Xr.Servers.UserSnapshot do
     {:reply, result, state}
   end
 
-  # internal api to get all user states
+  # internal api to get all user states, returns a map of user_id to user_state
   def handle_call(:all_user_states, _from, state) do
     # get cache of movements
     list = :ets.tab2list(state)

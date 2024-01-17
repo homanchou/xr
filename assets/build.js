@@ -1,21 +1,5 @@
 const esbuild = require("esbuild");
 const { typecheckPlugin } = require('@jgoz/esbuild-plugin-typecheck');
-const falWorks = require("@fal-works/esbuild-plugin-global-externals");
-
-const globals = {
-  babylonjs: {
-    varName: "BABYLON",
-    type: "cjs",
-  },
-  "babylonjs-materials": {
-    varName: "BABYLON",
-    type: "cjs",
-  },
-  "babylonjs-gui": {
-    varName: "BABYLON.GUI",
-    type: "cjs",
-  },
-}
 
 const args = process.argv.slice(2);
 const watch = args.includes('--watch');
@@ -27,7 +11,6 @@ const loader = {
 
 const plugins = [
   // Add and configure plugins here
-  falWorks.globalExternals(globals),
   typecheckPlugin(),
 ];
 

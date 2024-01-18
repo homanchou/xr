@@ -602,3 +602,7 @@ const process_entity = (entity_id: string, components: object) => {
 ```
 
 Give it another test in the browser.  We now have some colorful random obstacles.
+
+### Summary
+
+In this chapter we finally rendered something 3D in our show room URL by incorporating Babylon.js.  We also organized our front-end code according to module systems and introduced a mechanism to share data between systems.  We made some simple but unique assets for each room by specifying a data schema based on entities and components.  We randomly generated the data for each room upon room creation and stored the data into a database table we created.  Finally we created a system on the front-end that would receive a snapshot of room data and render the data to the scene as multi-colored boxes.

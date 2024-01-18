@@ -118,4 +118,4 @@ That becomes useful for switching node version from within different projects.
 
 ### Summary
 
-At this point your machine will hopefully have all the dependencies and software you need to start the project.  
+At this point your machine will hopefully have Chrome, Elixir, Phoenix, Node, Npm, Docker and VsCode successfully installed and we're ready to create our project.

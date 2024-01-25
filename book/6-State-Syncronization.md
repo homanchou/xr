@@ -43,7 +43,7 @@ When I was in highschool, a popular first person shooter game at that time was D
 7. Monster hit by a bullet
 8. Monster died
 9.  Player collected a weapon
-10. Player to a different weapon
+10. Player switched to a different weapon
 11. Player Collected health
 12. Player Collected immunity
 13. Player Collected ammo
@@ -56,7 +56,7 @@ When I was in highschool, a popular first person shooter game at that time was D
 20. Level Won
 21. Level Lost
 
-The game may not have used events like this, but let's roll with this as an exercise.  Let's go through some of these events and explore what a data payload looks like.  Remember, our aim is to syncronize a common state object.  We should be able to write a function that takes a previous state and an event data payload and produce a new state.  This should be achievable if all events are CRUDy:
+That game may not have used events like this, but let's roll with this as an exercise.  Let's go through some of these events and explore what a data payload looks like.  Remember, our aim is to syncronize a common state object.  We should be able to write a function that takes a previous state and an event data payload and produce a new state.  If we make all events fit into a CRUDy style, then we won't have to write that many functions to update state.  Essentially there will be only 3 kinds of events:
 
 - create an entity
 - delete an entity
@@ -74,6 +74,18 @@ The game may not have used events like this, but let's roll with this as an exer
 ```
 
 A new user appearing in the space would be represented as a brand new entity.  A new entity is accompanied by all it's starting components. This is inserting a key in an object.
+
+In the front-end this could be merged into a state by doing:
+
+```typescript
+state[entity_id] = components
+```
+Or if each component is an object then:
+
+```typescript
+// for each component key/value
+state[component_name][entity_id] = component_value
+```
 
 #### Player Left
 
@@ -100,7 +112,7 @@ Remove an entity from the state object.  That should be as simple as deleting a 
 }
 ```
 
-Modify these components for an entity.  The operation "set" will be triggered for each component.  This will replace a key in components with a new value for an entity.
+A "set" operation will replace a key in components with a new value for an entity.
 
 #### Player discharged a weapon
 ```json
@@ -114,38 +126,11 @@ Modify these components for an entity.  The operation "set" will be triggered fo
 }
 ```
 
-This one is interesting because want to create a new visible object in the scene, a flying bullet.  But also animate it smoothly.  There are two ways we can do this.  Either receive a stream of new positions over time, or just get one message for the direction the bullet should animate and just move it locally.  
+This one is interesting because want to create a new visible object in the scene, a flying bullet.  But also animate it continuously toward the target.  There are two ways we can do this.  Either receive a stream of new positions over time, or just get one message for the direction the bullet should travel and just animate it locally without additional messages.  
 
-In the first way, any one who jumps into the room while the bullet is in mid-flight will get an update on where the arrow should be.  So this is good for slow moving projectiles.  
+In the first way, any one who jumps into the room while the bullet is in mid-flight will get an update soon enough on where the bullet should be.  So this is good for slow moving projectiles.  
 
-In the second way, the flight might be smoother since it is not interrupted by incoming position updates that might differ than our own smooth simulation.  But if a person joins the room late they would see the arrow flight start at that time.
-
-Additionally we need another message to remove the bullet after it has missed and hit a wall or hit a monster.
-
-We can use client authoritative model for bullets that the client shoots to send the second message.
-
-```json
-{
-   note: "bullet_missed",
-   op: "delete",
-   entity_id: "rand234"
-}
-or
-{
-   note: "bullet_missed",
-   op: "set",
-   entity_id: "rand234",
-   components: {
-      bullet_state: "struck_wall"
-      ttl: 5
-   }
-}
-```
-We can either use a "delete" operation to remove an entity.  Or we can use a new component "ttl" (time to live) to indicate that the entity will be removed a number of ms later.
-
-On the other hand, if the bullet is so fast that it is transient, then maybe we can skip creating the entity entirely.  A user that joins the room in mid-flight might not see that bullet, but who cares?  
-
-In this case we can create the bullet with a longer ttl which informs each client the maximum amount of time we should keep the entity around before it is deleted. The benefit is that the authoritative client need not even tell other clients when a bullet missed, it will certainly be removed without an additional event.
+In the second way, the flight might be smoother without periodic positions since network delays and timings will probably result in a less than perfectly smooth animation.  But if a person joins the room late they would miss the animation event and never see it.  Or if the initial state they download contains an entity with a flying bullet and they start it now, it will also be a state that isn't what others see.  We'll need to decide how important synced state is to us.
 
 #### Player triggered a door open
 
@@ -167,43 +152,104 @@ Similar to the bullet scenario, anything that involves animation can be designed
 This involves more than one entity.  There is the fireball that is in flight and the person that was struck by the fireball.  In this case we could generate more than one state change operation.  The fireball needs to explode and be removed.  The player needs to accumulate some damage.
 ```json
 { 
-    note: "player hit by fireball",
-    ops: [
-        {
-            op: "set",
-            entity_id: "fireball_123"
-            components: {
-                fireball_state: "hit",
-                ttl: 10
-            }
-        },
-        {
-            op: "dec",
-            entity_id: "user123",
-            components: {
-                health: 10
-            }
-        }
-    ]
+    note: "player hit by fireball",   
+    op: "set",
+    entity_id: "fireball_123"
+    components: {
+        fireball_state: "hit",
+        ttl: 10
+    }
+},   
+{
+    op: "dec",
+    entity_id: "user123",
+    components: {
+        health: 10
+    }
 }
+    
+
 ```
 The first operation will first set a component to indicate that it hit something.  That could trigger the view to create a blast explosion and play a sound.  The ttl of 10 ms, informs the front-end to remove the fireball nearly instantaneously.  The second operation deducts 10 from the health of the player that was hit.  
 
+#### Monster hit by a bullet
 
-1. Monster hit by a bullet
-2. Monster died
-3.  Player collected a weapon
-4.  Player to a different weapon
-5.  Player Collected health
-6.  Player Collected immunity
-7.  Player Collected ammo
-8.  Player Collected a key
-9.  Player reached end goal
-10. Player was killed
-11. Monster moved
-12. Monster threw a fireball
-13. Level Won
-14. Level Lost
+```json
+{ 
+    note: "monster hit by bullet",   
+    op: "set",
+    entity_id: "bullet_123"
+    components: {
+        bullet_state: "hit"
+        ttl: 10
+    }
+},
+{
+    op: "set",
+    entity_id: "monster123",
+    components: {
+        monster_state: "monster_pain"
+    }
+}
+``` 
+
+#### Monster died
+
+```json
+{
+    op: "set",
+    entity_id: "monster123",
+    components: {
+        monster_state: "monster_dying"
+        ttl: 2000
+    }
+}
+```
+
+#### Player Collect Item
+
+The player collecting any item should be at least two events.  One to remove or hide the item from the scene.  One to increase a variable that represents items in that player's possesion.
+
+```json
+{
+    note: "player collected health",
+    op: "delete",
+    entity_id: "item234"
+},
+{
+    op: "inc_to_100",
+    entity_id: "user123",
+    components: {
+        health: 10
+    }
+}
+```
+Picking up a unique item that is already in the scene can be hiding the visibility and setting ownership:
+```json
+{
+    note: "player collected weapon",
+    op: "set",
+    entity_id: "weapon123"
+    components: {
+        visibility: false,
+        owned_by: "user567"
+    }
+}
+```
+
+#### Player Reached End Goal
+
+#### Player Killed
+
+#### Monster Moved
+
+#### Monster Threw Fireball
+
+#### Level Won
+
+#### Level Lost
+
+
 
 
 ### Flow of Events

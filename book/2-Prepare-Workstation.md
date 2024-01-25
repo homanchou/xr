@@ -13,6 +13,10 @@ If you're on Linux you're already good to go.  If you're on Mac you're fine too.
 
 The Chrome browser has the best compatability specs for WebGL, (FireFox is also great).  I primarily tested on Chrome and the Oculus Quest headset comes with a browser that is also based on Chromium.
 
+### Install WebXR Device Emulator Browser Extension
+
+Go to the chrome web store and search for webxr.  At the time of this writing there are two extensions to choose from that will emulate an WebXR compatible device.  This is useful for testing some aspects of a VR scene using your desktop browser without needing to put on a headset.
+
 ### Install Elixir
 
 To develop a code project using Phoenix we're first going to need Elixir.  And to install Elixir, we need to also install Erlang.  You can follow the Elixir online docs for how to install Elixir for your operating system, though I highly recommend you install these using asdf so that you can switch versions.  At some point in the future, you'll be working on several projects, or you may check out some old code you wrote a few months back and want to work on it again, only to find that your new computer that you bought has a different version of Elixir than the old project.

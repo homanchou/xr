@@ -3,11 +3,11 @@
 
 So far we've just been dealing with a single file `app.ts` but that will become unwieldy soon.  
 
-It would be good to split the code base up into managable files with each file responsible for some particular feature/aspect of our game (TBD).  
+It would be good to split the code base up into managable files with each file responsible for some particular feature of our game room.  
 
-Let's create a folder in `assets/js` called `systems`.
+Let's create a folder in `assets/js` called `systems`.  We will be adding more and more files to this `systems` folder.  Each file will handle one particular concern.
 
-Within that folder we can create a file called `broker.ts` that is responsible for connecting to the `RoomChannel` as we did previously.  And we can have another file called `scene.ts` that is responsible for creating an HTML canvas on the page to draw our 3D scene.  
+Our first system wil be called `broker.ts` and that system is responsible for connecting to the `RoomChannel` as we did previously.  Let's create another file called `scene.ts` that is responsible for creating an HTML canvas on the page to draw our 3D scene.  
 
 We need a mechanism to share data between systems.  For example, the `broker.ts` system needs to know the room_id in order to join the channel.  The `scene.ts` will need to be able to share the `BABYLON.Scene` object that it creates because other systems may need to interact with it.
 
@@ -36,7 +36,7 @@ export const config: Config = {
 }
 ```
 
-This file creates initializes a `config` variable.  When other typescript files import this file they'll get access to the `config` and can read or write to it.  This this is typescript we cannot add new properties at will.  Anytime we feel the urge to add a new property we'll need to add it to the Config type.  That may be a chore but the benefit is that we have types and intellisense will help remind us what common shared variables are available.
+This file creates initializes and exports a `config` variable.  When other typescript files import this file they'll get access to the same `config` and can read or write to it.  Since we are using a stripc type and not a regular javascript object we cannot add arbitrary new properties at will.  Anytime we feel the urge to add a new property we'll need to add it to the Config type.  That may be a chore but the benefit is that we have types and intellisense will help remind us what common shared variables are available.
 
 
 
@@ -62,7 +62,7 @@ channel.on("shout", payload => {
 
 ```
 
-You'll notice that this is just a port of the code we had before for joining a channel.  Except we are getting the socket and room_id from the config.  
+This should look familiar as it is just a port of the code we had before for joining a channel.  Except we are getting the socket and room_id from the config.  
 
 #### Add scene.ts
 
@@ -151,18 +151,20 @@ engine.runRenderLoop(() => {
 
 
 ```
-The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging (notice we use async imports in order to keep the bundle size smaller by taking advantage of esbuild's code splitting feature).  The scene is created in this file and then assigned to the `scene` key in the `config` object.  It's important that any systems that need to make use of `config.scene` be evaluated after `config.scene` is available.
+The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut hotkey combo to open the inspector if we need to do some debugging (notice we use async imports in order to keep the bundle size smaller by taking advantage of esbuild's code splitting feature).  The scene is created in this file and then assigned to the `scene` key in the `config` object.  It's important that any systems that need to make use of `config.scene` be evaluated after `config.scene` is available.
 
-#### Add room.ts
+#### Add systems.ts
 
-To tie everything together, we need to import each system in the correct order.  Add this file `assets/js/room.ts` to load each system we've made so far.
+To tie all the systems together, we need to import each system in the correct order.  Add this file `assets/js/systems.ts` to load each system we've made so far.
 
 ```typescript
 import "./systems/broker";
 import "./systems/scene";
 ```
 
-Finally we need to tie all this new code back to our original entry point or it won't get bundled.
+Whenever we add a new system, we'll need to update the system.ts file or the new system won't be reachable.
+
+Finally the system.ts file we just made must also be included in our entry point file or it also won't be reachable.
 
 ### Update app.ts
 
@@ -173,10 +175,10 @@ window["initRoom"] = async (room_id: string, user_id: string) => {
   config.room_id = room_id;
   config.user_id = user_id;
   config.socket = liveSocket;
-  await import("./room");
+  await import("./systems");
 };
 ```
-The `initRoom` function is now responsible for invoking `config` for the first time, and populating some important shared data like the socket, room_id and user_id into the config so it's available to any other code that imports `config`.  It also imports `room` which imports all the systems we just created.  Again we use dynamic imports so that if initRoom is never called none of the Babylon.js and room related code needs to be loaded, which keeps the rest of the pages unhindered by large js bundles.
+The `initRoom` function is now responsible for invoking `config` for the first time, and populating some important shared data like the socket, room_id and user_id into the config so it's available to any other code that imports `config`.  It also imports `systems` which imports all the systems we just created.  Again we use dynamic imports so that if initRoom is never called none of the Babylon.js and room related code needs to be loaded, which keeps the rest of the pages unhindered by large js bundles.
 
 Remember that this `initRoom` function is only invoked by the `show.html.heex` template if it renders:
 
@@ -195,7 +197,7 @@ You should end up with a `assets/js` folder structure like this, setting us up t
 ```
 ├── app.ts
 ├── config.ts
-├── room.ts
+├── systems.ts
 └── systems
     ├── broker.ts
     └── scene.ts

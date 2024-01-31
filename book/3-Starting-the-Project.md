@@ -404,4 +404,4 @@ If you want to see the assets that our source typescript files turn into, start 
 
 ### Summary
 
-In this chapter we've created our codebase working directory and created a `rooms` resource that will serve as our virtual meeting room.  We've also customized a bare bones header and homepage.  Finally we changed out the way Phoenix packages and bundles its javascript so that we can lean on Typescript for our future front-end coding experience.
+In this chapter we've created our codebase working directory and created a `rooms` resource that will serve as our virtual meeting room.  We've also customized a bare bones header and homepage.  Finally we changed out the way Phoenix packages and bundles its javascript using a custom esbuild script so that we can lean on Typescript for our future front-end coding experience.

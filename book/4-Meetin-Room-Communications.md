@@ -9,20 +9,33 @@ We don't have much of a UI in our room yet, but don't worry we don't need it yet
 
 In javascript land we're going to connect to a web socket at an address hosted by the server.  
 
-```
-clientA -> connect to -> Server Socket
-```
-The client then joins a Channel.
-```
-clientA -> join -> Channel
-```
-Another client B, does the same.
-```
-clientB -> connect to -> Server Socket
-clientB -> join -> Channel
+```mermaid
+sequenceDiagram
+
+clientA->>Socket: connect to User Socket
+clientA->>Channel: join a channel
+
 ```
 
-A channel is basically a litle machine that processes incoming messages.  Client A and Client B are both connected to little servers called processes (or GenServers).  And these processes are all subscribed to the same PubSub topic, so if Client A broadcasts a message on the topic, then Client B or any number of connected clients will receive the message.
+
+Another client B, does the same.  
+
+```mermaid
+sequenceDiagram
+
+clientA->>Channel(A): joined
+clientB->>Channel(B): joined
+
+```
+
+A channel is basically a litle machine that processes incoming messages.  Client A and Client B are both connected to little servers called processes (or GenServers).  And these channel processes are all subscribed to the same PubSub topic, so if Client A broadcasts a message on the topic, then Client B or any number of connected clients will receive the message.
+
+```mermaid
+sequenceDiagram
+Channel(A)->>Phoenix PubSub: broadcast_from client A
+Phoenix PubSub->>Channel(B): subscribed to room
+Channel(B)->>ClientB: recieves msg
+```
 
 ### Create a User Socket
 
@@ -55,7 +68,7 @@ Open `lib/xr_web/channels/user_socket.ex` and add this line:
 ```elixir
   channel "room:*", XrWeb.RoomChannel
 ```
-In fact, that line might be there already, just uncomment it.  This `room:*` pattern means that the `RoomChannel` module will spawn new processes whenever a client joins a channel with the topic starting with "room:" e.g. "room:42".
+In fact, that line might be there already, just uncomment it.  This `room:*` pattern means that the `RoomChannel` module will be used as a template to spawn new channel processes whenever a client joins a channel with the topic starting with "room:" e.g. "room:42".
 
 ### Modify RoomChannel Join function
 
@@ -73,7 +86,7 @@ The generator created code that looks like this:
   end
 ```
 
-We'll add authorization later, so just remove that bit for now.  Notice the pattern "room:lobby" is currently hardcoded.  This means this room channel can only handle one specific meeting room, the lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
+We'll add authorization later, so just remove that bit for now.  Notice the pattern "room:lobby" is currently hardcoded.  This means this room channel can only handle one specific meeting room / topic, the room:lobby.  We want to handle arbitrary meeting room ids.  We want to change it to look like this:
 
 
 ```elixir
@@ -97,7 +110,7 @@ The same kind of pattern matching is applied to function heads like `join` and i
 
 ### Sharing the liveview socket
 
-It turns out that Phoenx Liveview already comes with a web socket to send data diffs to the front-end to render components without re-rendering the whole page.  We've been using it already, the generate that we used to create the CRUD pages for rooms uses Liveview.
+It turns out that Phoenx Liveview already comes with a web socket to send data diffs to the front-end to render components without re-rendering the whole page.  We've been using it already, the generator that we used to create the CRUD pages for rooms uses Liveview.
 
 Look inside `assets/js/app.ts`
 
@@ -150,7 +163,7 @@ window["initRoom"] = async (room_id: string, user_id: string) => {
 }
 ```
 
-Now we need to call this function, but we need to make sure we wait long enough until the browser has evaluated the initRoom function definition.  We'll get an error if we just call it immediately.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
+Now we need to call this function, but we need to make sure we wait long enough until the browser has evaluated the initRoom function definition.  We'll get an error that `initRoom` is undefined if we just call it immediately.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
 
 ```html
 <body>
@@ -174,7 +187,7 @@ You won't see that console.log output on any other page you navigate to, which i
 
 I've you are new to sending messages with channels, here's a quick demonstration.  Feel free to skim this section if you're already familiar with it.
 
-Since w don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a quick little test so we can be satisfied at our progress.  In `app.ts` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browser's console.
+Since we don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a quick little test so we can be satisfied at our progress.  In `app.ts` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browser's console.
 
 ```javascript
 let channel = liveSocket.channel(`room:${room_id}`, {})
@@ -401,4 +414,4 @@ We can safely delete `user_socket.js` now because we integrated its javascript c
 
 ### Summary
 
-In this chapter we enabled room specific communications using Phoenix channels.  We created a RoomChannel that responded to incoming messages and pushed responses back to the client.  In the client we wrote channel subscriptions using `channel.on` to respond to messages coming from the server and responded by printing something to the console.log.  We then secured the socket and channel by passing a user_token to the front-end and then back to the server for verification.  In the process we also created sticky user_ids for each visitor.
+In this chapter we enabled room specific communications using Phoenix channels.  Using the built in Phoenix generators, we created a UserSocket and a RoomChannel that responds to incoming messages and pushes responses back to the client.  We piggybacked the UserSocket onto the existing liveview socket then customized the RoomChannel to accept any room_id.  In the client we wrote channel subscriptions using `channel.on` to respond to messages coming from the server and responded by printing something to the console.log.  We created sticky a user_id for every visitor.  We then secured the socket and channel by passing a user_token to the front-end and then back to the server for verification. 

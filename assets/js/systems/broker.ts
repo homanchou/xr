@@ -1,5 +1,7 @@
 
-import { config } from "../config";
+import { StateOperation, config } from "../config";
+import { create_entity } from "./state";
+
 
 // channel connection
 const socket = config.socket;
@@ -7,8 +9,14 @@ socket.connect();
 let channel = socket.channel(`room:${config.room_id}`, {});
 config.channel = channel;
 
-channel.on("stoc", (event) => {
-  config.$room_stream.next(event);
+// channel.on("stoc", (event) => {
+//   config.$room_stream.next(event);
+// });
+
+channel.on("snapshot", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
+  for (const [entity_id, components] of Object.entries(payload)) {
+    create_entity({ entity_id, components, local: true });
+  }
 });
 
 // for debugging

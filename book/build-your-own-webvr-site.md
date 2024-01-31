@@ -51,7 +51,7 @@
       - [Add config.ts](#add-configts)
       - [Add broker.ts](#add-brokerts)
       - [Add scene.ts](#add-scenets)
-      - [Add room.ts](#add-roomts)
+      - [Add systems.ts](#add-roomts)
     - [Replace app.js with app.ts](#replace-appjs-with-appts)
     - [Verify Asset Bundles](#verify-asset-bundles)
     - [Babylon Added Summary](#babylon-added-summary)
@@ -1220,9 +1220,9 @@ engine.runRenderLoop(() => {
 ```
 The `scene.ts` contains typical Babylon.js getting started boilerplate to setup a canvas, engine, camera and scene.  It also includes a shortcut to open the inspector if we need to do some debugging (notice we use async imports in order to keep the bundle size smaller by taking advantage of esbuild's code splitting feature).  The scene is created in this file and then assigned to the `scene` key in the `config` object.  It's important that any systems that need to make use of `config.scene` be evaluated after `config.scene` is available.
 
-#### Add room.ts
+#### Add systems.ts
 
-To tie everything together, we need to import each system in the correct order.  Add this file `assets/js/room.ts` to load each system we've made so far.
+To tie everything together, we need to import each system in the correct order.  Add this file `assets/js/systems.ts` to load each system we've made so far.
 
 ```typescript
 import "./systems/broker";
@@ -1279,7 +1279,7 @@ You should end up with a `assets/js` folder structure like this:
 ```
 ├── app.ts
 ├── config.ts
-├── room.ts
+├── systems.ts
 └── systems
     ├── broker.ts
     └── scene.ts

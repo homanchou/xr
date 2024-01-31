@@ -31,5 +31,5 @@ window["initRoom"] = async (room_id: string, user_id: string) => {
   config.room_id = room_id;
   config.user_id = user_id;
   config.socket = liveSocket;
-  await import("./room");
+  await import("./systems");
 };

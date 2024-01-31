@@ -28,34 +28,34 @@ config.$channel_joined.pipe(take(1)).subscribe(() => {
 // reacting to incoming events to draw other users, not self
 
 // user_joined
-config.$room_stream.pipe(
-  filter(e => e.event === "user_joined"),
-).subscribe(e => {
-  if (e.payload.user_id !== config.user_id) {
-    createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
-  } else {
-    console.log("it is me so set camera position", e)
-    const cam = scene.activeCamera as FreeCamera;
-    cam.position.fromArray(e.payload.position);
-    cam.rotationQuaternion = Quaternion.FromArray(e.payload.rotation);
-  }
-});
+// config.$room_stream.pipe(
+//   filter(e => e.event === "user_joined"),
+// ).subscribe(e => {
+//   if (e.payload.user_id !== config.user_id) {
+//     createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+//   } else {
+//     console.log("it is me so set camera position", e)
+//     const cam = scene.activeCamera as FreeCamera;
+//     cam.position.fromArray(e.payload.position);
+//     cam.rotationQuaternion = Quaternion.FromArray(e.payload.rotation);
+//   }
+// });
 
 // user_left
-config.$room_stream.pipe(
-  filter(e => e.event === "user_left"),
-  filter(e => e.payload.user_id !== config.user_id)
-).subscribe(e => {
-  removeUser(e.payload.user_id);
-});
+// config.$room_stream.pipe(
+//   filter(e => e.event === "user_left"),
+//   filter(e => e.payload.user_id !== config.user_id)
+// ).subscribe(e => {
+//   removeUser(e.payload.user_id);
+// });
 
 // user_moved
-config.$room_stream.pipe(
-  filter(e => e.event === "user_moved"),
-  filter(e => e.payload.user_id !== config.user_id)
-).subscribe(e => {
-  poseUser(e.payload.user_id, e.payload.position, e.payload.rotation);
-});
+// config.$room_stream.pipe(
+//   filter(e => e.event === "user_moved"),
+//   filter(e => e.payload.user_id !== config.user_id)
+// ).subscribe(e => {
+//   poseUser(e.payload.user_id, e.payload.position, e.payload.rotation);
+// });
 
 const removeUser = (user_id: string) => {
   const user = scene.getTransformNodeByName(user_id);
@@ -89,11 +89,11 @@ const poseUser = (user_id: string, position: number[], rotation: number[]) => {
   }
 };
 
-config.channel.on("user_snapshot", (payload: { user_id: string, position: number[], rotation: number[]; }[]) => {
-  Object.entries(payload).forEach(([user_id, state]) => {
-    if (user_id !== config.user_id) {
-      createSimpleUser(user_id, state.position, state.rotation);
-    }
+// config.channel.on("user_snapshot", (payload: { user_id: string, position: number[], rotation: number[]; }[]) => {
+//   Object.entries(payload).forEach(([user_id, state]) => {
+//     if (user_id !== config.user_id) {
+//       createSimpleUser(user_id, state.position, state.rotation);
+//     }
 
-  });
-});
+//   });
+// });

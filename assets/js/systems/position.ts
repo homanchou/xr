@@ -3,8 +3,6 @@ import { filter } from "rxjs/operators";
 
 const { scene, $room_stream } = config;
 
-
-
 $room_stream.pipe(
   filter(evt => (evt.op === StateOperation.create)),
   filter(componentExists("position")),

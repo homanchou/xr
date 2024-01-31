@@ -1,12 +1,9 @@
-import { CreateBox } from "@babylonjs/core/Meshes/Builders";
 import { StateOperation, componentExists, config } from "../config";
 import { StandardMaterial } from "@babylonjs/core/Materials";
 import { Color3 } from "@babylonjs/core";
 import { filter } from "rxjs/operators";
 
 const { scene, $room_stream } = config;
-
-
 
 $room_stream.pipe(
   filter(evt => (evt.op === StateOperation.create)),

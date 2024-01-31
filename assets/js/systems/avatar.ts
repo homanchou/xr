@@ -20,7 +20,6 @@ config.$channel_joined.pipe(take(1)).subscribe(() => {
       position: cam.position.asArray(),
       rotation: cam.absoluteRotation.asArray(),
     }
-    console.log("sending camera movement", payload);
     config.channel.push("i_moved", payload);
   });
 });

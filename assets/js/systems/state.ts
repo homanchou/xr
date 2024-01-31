@@ -7,7 +7,7 @@ export type State = Map<ComponentName, EntityComponentValue>;
 
 export const state = new Map<ComponentName, EntityComponentValue>();
 
-const { scene, channel, $room_stream } = config;
+const { channel, $room_stream } = config;
 config.state = state;
 
 // modify state only through these functions

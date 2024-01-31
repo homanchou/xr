@@ -6,9 +6,10 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import { Scene } from "@babylonjs/core/scene";
-
 import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
 import "@babylonjs/core/Materials/standardMaterial";
+
+// create the babylonjs engine and scene
 
 // create the canvas html element and attach it to the webpage
 const canvas = document.createElement("canvas");

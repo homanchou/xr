@@ -9,9 +9,11 @@ socket.connect();
 let channel = socket.channel(`room:${config.room_id}`, {});
 config.channel = channel;
 
-// channel.on("stoc", (event) => {
-//   config.$room_stream.next(event);
-// });
+// channel subscriptions
+
+channel.on("stoc", (event) => {
+  config.$room_stream.next(event);
+});
 
 channel.on("snapshot", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
   for (const [entity_id, components] of Object.entries(payload)) {
@@ -21,13 +23,13 @@ channel.on("snapshot", (payload: { [entity_id: string]: {[component_name: string
 
 // for debugging
 channel.onMessage = (event, payload, _) => {
-  // if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
-  console.debug(event, payload);
-  // }
+  if (!event.startsWith("phx_") && !event.startsWith("chan_")) {
+    console.debug(event, payload);
+  }
   return payload;
 };
 
-
+// when liveview emits enter_room
 window.addEventListener("live_to_xr", e => {
   console.log("live_to_xr", e);
   if (e["detail"]["event"] == "enter_room") {

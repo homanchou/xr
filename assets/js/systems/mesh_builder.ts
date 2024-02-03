@@ -2,9 +2,18 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders";
 import { StateOperation, componentExists, config } from "../config";
 import { filter  } from "rxjs/operators";
 
-const { scene, $room_stream } = config;
+const { scene, $state_mutations, channel } = config;
 
-$room_stream.pipe(
+
+channel.on("snapshot", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
+  for (const [entity_id, components] of Object.entries(payload)) {
+    $state_mutations.next({op: StateOperation.create, eid: entity_id, com: components});
+  }
+});
+
+
+
+$state_mutations.pipe(
   filter(evt => (evt.op === StateOperation.create)),
   filter(componentExists("mesh_builder")),
 ).subscribe((evt) => {

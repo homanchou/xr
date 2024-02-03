@@ -56,7 +56,7 @@ Then start your server using `iex -S mix phx.server`
 
 Remember this command.  You'll be using it a lot and I may not always spell it out.  I'll just say, start your server and try something in your browser.  
 
-If you're on linux you may also get an error about needing `inotify-tools`, in which case follow the links to install that for live-reload.
+If you're on linux or (windows subsystem for linux) you may also get an error about needing `inotify-tools`, in which case follow the links in the error message to install that for live-reload.
 
 
 ## Creating Rooms

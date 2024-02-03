@@ -9,7 +9,7 @@ defmodule XrWeb.Presence do
     otp_app: :xr,
     pubsub_server: Xr.PubSub
 
-  alias Xr.Servers.UserSnapshot
+  alias Xr.Servers.State
   alias Xr.Rooms
 
   import Xr.Events
@@ -28,7 +28,7 @@ defmodule XrWeb.Presence do
   def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
     for {user_id, _} <- joins do
       # if we have previous user state data, then broadcast it
-      case UserSnapshot.get_user_state(room_id, user_id) do
+      case State.entity_state(room_id, user_id) do
         nil ->
           emit_join_at_spawn_point(room_id, user_id)
 
@@ -59,13 +59,14 @@ defmodule XrWeb.Presence do
   end
 
   def emit_join_from_previous_state(room_id, user_id, %{
-        "position" => position,
-        "rotation" => rotation
+        create: create,
+        update: update
       }) do
+    data = update || create
     event(room_id, "user_joined", %{
       "user_id" => user_id,
-      "position" => position,
-      "rotation" => rotation
+      "position" => data["position"],
+      "rotation" => data["rotation"]
     })
     |> to_room_stream()
   end

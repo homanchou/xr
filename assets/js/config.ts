@@ -10,7 +10,7 @@ export enum StateOperation {
   delete = "d",
 }
 
-export type RoomEvent = {
+export type StateMutation = {
   op: StateOperation;
   eid: string;
   com?: {
@@ -23,7 +23,7 @@ export type RoomEvent = {
 
 // rxjs filter helper for matching if a component exists in event
 export const componentExists = (component_name: string) => {
-  return (evt: RoomEvent) => {
+  return (evt: StateMutation) => {
     return evt.com[component_name] !== undefined
   }
 }
@@ -43,10 +43,10 @@ export type Config = {
   socket: Socket;
   channel: Channel;
   state: State;
-  $room_stream: Subject<RoomEvent>;
   $channel_joined: Subject<boolean>;
   $room_entered: Subject<boolean>;
   $camera_moved: Subject<number>;
+  $state_mutations: Subject<StateMutation>;
 };
 
 export const config: Config = {
@@ -56,11 +56,10 @@ export const config: Config = {
   socket: null,
   channel: null,
   state: null,
-  $room_stream: new Subject<RoomEvent>(),
   $channel_joined: new Subject<boolean>(),
   $room_entered: new Subject<boolean>(),
   $camera_moved: new Subject<number>(),
-  
+  $state_mutations: new Subject<StateMutation>(),
 }
 
 window["config"] = config

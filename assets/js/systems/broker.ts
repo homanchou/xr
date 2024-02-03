@@ -1,6 +1,5 @@
 
-import { StateOperation, config } from "../config";
-import { create_entity } from "./state";
+import { config } from "../config";
 
 
 // channel connection
@@ -11,14 +10,8 @@ config.channel = channel;
 
 // channel subscriptions
 
-channel.on("stoc", (event) => {
-  config.$room_stream.next(event);
-});
-
-channel.on("snapshot", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
-  for (const [entity_id, components] of Object.entries(payload)) {
-    create_entity({ entity_id, components, local: true });
-  }
+channel.on("state_mutations", (event) => {
+  config.$state_mutations.next(event);
 });
 
 // for debugging

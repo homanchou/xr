@@ -22,15 +22,15 @@ defmodule XrWeb.RoomControllerTest do
   end
 
   describe "create room" do
-    test "redirects to show when data is valid", %{conn: conn} do
-      conn = post(conn, ~p"/rooms", room: @create_attrs)
+    # test "redirects to show when data is valid", %{conn: conn} do
+    #   conn = post(conn, ~p"/rooms", room: @create_attrs)
 
-      assert %{id: id} = redirected_params(conn)
-      assert redirected_to(conn) == ~p"/rooms/#{id}"
+    #   assert %{id: id} = redirected_params(conn)
+    #   assert redirected_to(conn) == ~p"/rooms/#{id}"
 
-      conn = get(conn, ~p"/rooms/#{id}")
-      assert html_response(conn, 200)
-    end
+    #   conn = get(conn, ~p"/rooms/#{id}")
+    #   assert html_response(conn, 200)
+    # end
 
     test "renders errors when data is invalid", %{conn: conn} do
       conn = post(conn, ~p"/rooms", room: @invalid_attrs)

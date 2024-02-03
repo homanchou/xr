@@ -275,7 +275,7 @@ The objects we are currently seeing in the 3D scene were hardcoded in `scene.ts`
 
 ### Design a Snapshot Payload
 
-If we were able to send the front-end a "snapshot" of all items in our seen, it might look something like this:
+If we send an "entties_state" messsage with all items in our seen, it might look something like this:
 
 ```json
 {
@@ -419,7 +419,7 @@ end
 
 ```
 
-Run the test with `mix test`.  (I haven't been updating tests along the way during every change, if you get some broken tests, just remove them like I did.  They no longer test valid things.  If I have time I'll go back and change this book to modify the tests as we go along TDD style)
+Run the test with `mix test`.  (I haven't been updating tests along the way during every change, if you get some broken tests, just remove them like I did.  They no longer test valid things.  If I have time I'll go back and change this book to modify the tests as we go along TDD style).  This test shows that we can insert entities into the database and we can query the entities back using a query.
 
 ### Add Random Obstacles To A Room Upon Creation
 
@@ -484,14 +484,14 @@ Reset all your data in your dev database using `mix ecto.reset`.  Run your serve
   ...
 ```
 
-### Push Snapshot to Client After Join
+### Push Entities_State to Client After Join
 
 Now let's pass this data to the front-end via the room channel.  After we join the room let's push the entities map down to the client.  Open up `room_channel.ex` and modify the handler for `after_join`.
 
 ```elixir
   def handle_info(:after_join, socket) do
     entities = Xr.Rooms.entities(socket.assigns.room_id)
-    push(socket, "snapshot", entities)
+    push(socket, "entities_state", entities)
     {:noreply, socket}
   end
 ```
@@ -506,7 +506,7 @@ import { config } from "../config";
 
 const { scene, channel } = config;
 
-channel.on("snapshot", (payload) => {
+channel.on("entities_state", (payload) => {
   // payload is an object of entities, let's go through every one of them
   Object.entries(payload).forEach(([key, value]) => {
     process_entity(key, value as any);

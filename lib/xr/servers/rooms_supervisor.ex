@@ -10,8 +10,9 @@ defmodule Xr.Servers.RoomsSupervisor do
   end
 
   def start_room(room_id) do
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.Reflector, room_id})
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.State, room_id})
+    # DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.UserSnapshot, room_id})
+    # DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.Reflector, room_id})
   end
 
   def stop_room(room_id) do

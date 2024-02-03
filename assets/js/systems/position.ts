@@ -1,9 +1,9 @@
 import { StateOperation, componentExists, config } from "../config";
 import { filter } from "rxjs/operators";
 
-const { scene, $room_stream } = config;
+const { scene, $state_mutations } = config;
 
-$room_stream.pipe(
+$state_mutations.pipe(
   filter(evt => (evt.op === StateOperation.create)),
   filter(componentExists("position")),
 ).subscribe((evt) => {

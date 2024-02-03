@@ -1,5 +1,33 @@
 ### Event Driven Architecture
 
+Create a snippet table for storing snapshots of the room entities so we can reset the scene to a particular point.
+
+```
+ mix phx.gen.schema Snippet snippets room_id:references:rooms entity_id:uuid component_name:string component:map
+```
+
+create a domain level event log
+ - store this in a ledger
+ - transform this into state mutation
+   - cache state into DB
+   - send diffs to clients
+
+- initial state is in a json snippet
+- initial state is loaded into components table
+- 
+- modified state is in a gen server :ets table, copy on write
+-   The ops are create, entity, components
+-   followed by update, entity, components
+-   followed by delete, entity, components
+-   These are accumulated and then purged every 50 ms
+-    to both the DB, and to every connected client
+-    
+
+-   
+-   
+- 
+
+
 In a previous chapter we created some random colored obstacles in a room the moment it was created so that we could have something visual to look at that varied from room to room.
 
 Here's a diagram of what we've implemented so far for getting some initial state:

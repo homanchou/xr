@@ -1,11 +1,15 @@
 
 ## Preparing your development workstation
 
-There are quite a few dependencies and tools used in daily web development these days.  These include git for source control, docker for running databases for local development and testing, knowing your way around a linux-like terminal etc.  If you are a seasoned web developer you probably know the best way to setup your workstation dependencies.
+To setup your workstation to start developing a website with Phoenix, the following is a set of dependencies we'll need to install first.  
 
-The following is a list of libraries and tools I installed as I was setting up a new computer on Windows.  Your experience may vary.
+There are quite a few dependencies and tools used in daily web development these days.  A pre-requisite for following these instructions will be knowing your way around a linux/unix terminal shell running bash or zsh.
 
-If you're on Windows, I highly recommend you install the windows subsystem for linux.  That will give you a similar environment as production and make other activities a lot easier such as dockerizing, setting paths or environment variables.
+If you're on Windows, I highly recommend you install the windows subsystem for linux.  
+
+https://learn.microsoft.com/en-us/windows/wsl/install
+
+That will give you a similar environment as production and make other activities a lot easier such as dockerizing, setting paths or environment variables.
 
 If you're on Linux you're already good to go.  If you're on Mac you're fine too.  
 
@@ -19,11 +23,15 @@ Go to the chrome web store and search for webxr.  At the time of this writing th
 
 ### Install Elixir
 
-To develop a code project using Phoenix we're first going to need Elixir.  And to install Elixir, we need to also install Erlang.  You can follow the Elixir online docs for how to install Elixir for your operating system, though I highly recommend you install these using asdf so that you can switch versions.  At some point in the future, you'll be working on several projects, or you may check out some old code you wrote a few months back and want to work on it again, only to find that your new computer that you bought has a different version of Elixir than the old project.
+To develop a code project using Phoenix (a web framework) we're first going to need Elixir (the language and runtime that Phoenix is written in).  You can follow the Elixir online docs for how to install Elixir for your operating system.
+
+https://elixir-lang.org/install.html
+
+The link provides instructions for various operating system.  Or alternatively, for slightly more experienced developers I recommend you install Elixir and Erlang using a utility called `asdf` so that you can switch versions or install multiple Elixir versions on your system.  
 
 Read the asdf instructions for installing Erlang and Elixir, they'll have the latest instructions for your system.  When I tried to install the latest Erlang I had an error regarding wxWidgets and had to do some Googling: https://github.com/asdf-vm/asdf-erlang/issues/203 and had to install some other linux dependencies first.
 
-If all goes well, you should be able to open up a terminal and check which version of elixir you have installed like this:
+Whatever method of installation you choose, if all goes well, you should be able to open up a terminal and check which version of elixir you have installed like this:
 
 ```bash
 erl -s erlang halt

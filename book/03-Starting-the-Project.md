@@ -5,7 +5,7 @@ Now that we have Elixir and Phoenix installed, as well as docker (for our databa
 
 This Phoenix project will serve as the home for all of our code.  
 
-We'll use the mix phx.new generator to create a new project for us.  By default phoenix will come with a postgres database configuration.  I recommend setting the option for binary id, which will make any table we generate use uuid for the id column instead of incrementing integers.  This makes ids for users and rooms random, which is good for making them hard to guess and hard for people to guess how many rooms and users you have in total, as well as making it easier in the future to copy records from one database shard to another shard because you don't have to worry about id conflicts.
+We'll use the mix phx.new generator to create a new project for us.  By default phoenix will come with a postgres database configuration.  I recommend setting the option for binary-id, which will make any table we generate use uuid for the id column instead of incrementing integers.  This makes ids for users and rooms random, which is good for making them hard to guess and hard for people to guess how many rooms and users you have in total, as well as making it easier in the future to copy records from one database shard to another shard because you don't have to worry about id conflicts.
 
 The command below will create a project folder for us.  I named my project xr, but you can call it whatever you want.
 
@@ -109,7 +109,7 @@ The path `/rooms` will show a list of rooms we can manage.  The path `/rooms/:id
 
 The generator also created a database migration file inside your `priv/repo/migrations` folder.
 
-I always like to take a peek at the migration file before executing the `mix ecto.migrate` task so that I know what it will do.
+Open the migration that was created for us:
 
 ```elixir
 defmodule Xr.Repo.Migrations.CreateRooms do
@@ -126,13 +126,78 @@ defmodule Xr.Repo.Migrations.CreateRooms do
   end
 end
 ```
+Let's change `:binary_id` on the `:id` to `:string` so that we can use a shorter random string rather than a long UUID.
 
-Everything looks good.  As you can see this migration will create a new table for us called `rooms` with an id column, name and description columns as well as default timestamps of inserted_at and updated_at.  
+Let's also change, add `null: false` to name, so the database ensures name is always populated on a room.  And we can set a `default` for description to empty string, since it isn't required.
+
+```elixir
+  add :name, :string, null: false
+  add :description, :string, default: ""
+```
+
+Everything else looks good.  As you can see this migration will create a new table for us called `rooms` with an id column, name and description columns as well as default timestamps of inserted_at and updated_at.  
+
+Let's open up the schema file at: `lib/xr/rooms/room.ex` and modify to look like this:
+
+```elixir
+defmodule Xr.Rooms.Room do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key {:id, :string, autogenerate: false}
+  @foreign_key_type :string
+  schema "rooms" do
+    field :name, :string
+    field :description, :string
+
+    timestamps(type: :utc_datetime)
+  end
+
+  @doc false
+  def changeset(room, attrs) do
+    room
+    |> cast(attrs, [:name, :description])
+    |> validate_required([:name])
+  end
+end
+```
+We changed the `@primary_key` to use a `string` and set `autogenerate` to `false`.  We also remove `:description` from `validate_required`.
 
 Go ahead and run the migration now:
 
 ```bash
 mix ecto.migrate
+```
+
+### Create Random Id Generator
+
+
+Instead of using UUID, which I decided was unnecessarily long.  Let's create a function that can generate random strings of any length.  Create a new file at `lib/xr/utils.ex` and paste the following:
+
+```elixir
+defmodule Xr.Utils do
+
+  def random_string(length \\ 5) do
+    for _ <- 1..length,
+        into: "",
+        do: <<Enum.random('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklkmnopqrstuvwxyz')>>
+  end
+end
+
+```
+
+This function will randomly sample from a list of characters ranging between 0-9, A-Z and a-z.  Altogther that is 10 + 26 + 26 = 62 symbols.  If set a length of 5, that's 62^5 or nearly a 1 in a billion chance of collision.  That should be plenty for our uses.
+
+### Use Random ID in the Create Rooms Function
+
+Open up `lib/xr/rooms.ex` and modify the create_room function to set the random id.
+
+```elixir
+  def create_room(attrs \\ %{}) do
+    %Room{id: Xr.Utils.random_string()}
+      |> Room.changeset(attrs)
+      |> Repo.insert()
+  end
 ```
 
 If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.

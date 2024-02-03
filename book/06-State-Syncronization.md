@@ -3,7 +3,7 @@
 Create a snippet table for storing snapshots of the room entities so we can reset the scene to a particular point.
 
 ```
- mix phx.gen.schema Snippet snippets room_id:references:rooms entity_id:uuid component_name:string component:map
+ mix phx.gen.schema Snippet snippets room_id:references:rooms slug:string kind:string data:map
 ```
 
 create a domain level event log

@@ -152,10 +152,10 @@ Now we'll integrate parts of the advice in `user_socket.js` into `app.ts`.  Sinc
 Add the following snippet to `app.ts` after the liveSocket is created.  This creates an `initRoom` function that will join the `room` channel.  Notice the function takes two arguments, room_id and user_id which we can pass from the server to the browser.  This will be useful for knowing who we are.
 
 ```javascript
-window["initRoom"] = async (room_id: string, user_id: string) => {
+window["initRoom"] = async (opts: { room_id: string, user_id: string}) => {
  
   liveSocket.connect(); // make sure we're connected first
-  let channel = liveSocket.channel(`room:${room_id}`, {})
+  let channel = liveSocket.channel(`room:${opts.room_id}`, {})
   channel.join()
     .receive("ok", resp => { console.log("Joined successfully", resp) })
     .receive("error", resp => { console.log("Unable to join", resp) })
@@ -169,7 +169,7 @@ Now we need to call this function, but we need to make sure we wait long enough 
 <body>
 <script>
   window.addEventListener("DOMContentLoaded", function() {
-    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
+    window.initRoom(<%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id}) %>)
   })
 </script>
 </body>
@@ -274,7 +274,7 @@ Open up `router.ex` and type the following function:
  def maybe_assign_user_id(conn, _) do
     case get_session(conn, :user_id) do
       nil ->
-        user_id = Ecto.UUID.generate()
+        user_id = Xr.Utils.random_string()
         conn |> put_session(:user_id, user_id) |> assign(:user_id, user_id)
 
       existing_id ->
@@ -405,7 +405,7 @@ This handler receives the `:after_join` message and will call the `broadcast` ap
 You should see something like:
 
 ```javascript
-I received a 'shout' {joined: '0ba687f4-2dbc-428b-ba3a-a7699845f141', user_id: 'fe7aca02-d76f-4fc4-b92e-76cbd1b99d72'}
+I received a 'shout' {joined: '0ba74', user_id: 'fe7a2'}
 ```
 
 Yay!  We're seeing the user_id now.  Remember that to obtain a different user_id on the same browser, one of your windows needs to use Incognito mode, or just use a different browser on your machine.  This is because the session user_id is tied to the cookie which is shared among tabs and windows of the same browser and domain.  

@@ -5,10 +5,10 @@ defmodule Xr.Rooms.Component do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "components" do
-    field :entity_id, Ecto.UUID
+    field :entity_id, :string
     field :component_name, :string
     field :component, :map
-    field :room_id, :binary_id
+    field :room_id, :string
 
     timestamps(type: :utc_datetime)
   end

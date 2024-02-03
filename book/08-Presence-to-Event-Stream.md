@@ -194,11 +194,34 @@ scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
 });
 ```
 
+The `cam.position.asArray()` will produce too many significant digits.  The units of position are in meters.  That means if there are 2 significant digits after the decimal point then we have centemeter level precision.  Any further precision is not needed.
+
+Add a truncate function at `assets/js/utils.ts`
+
+```typescript
+/**
+ * Takes a float and cuts off significant digits
+ * @param number 
+ * @param places 
+ * @returns 
+ */
+export const truncate = (numberOrArray: number | number[], places = 2) => {
+  if (Array.isArray(numberOrArray)) {
+    return numberOrArray.map(number => truncate(number, places))
+  }
+  let shift = Math.pow(10, places);
+  return ((numberOrArray * shift) | 0) / shift;
+}
+```
+Use this `truncate` function anytime we are passing floats or array of floats to the channel.
+
 Remember to add this new `avatar` system to the `rooms.ts` otherwise this new file is unreachable.
 
 ```typescript
 import "./systems/avatar";
 ```
+
+
 
 
 Babylon.js provides observables. See the 'onWhatever.add' pattern above?  These observables give us a way to trigger a callback function whenever that observable thing happens.  In this case whenever the camera view matrix changes, we push the camera position and rotation data to the channel.  
@@ -246,8 +269,8 @@ config.$channel_joined.pipe(take(1)).subscribe(() => {
   config.$camera_moved.pipe(throttleTime(200)).subscribe(() => {
     const cam = scene.activeCamera;
     config.channel.push("i_moved", {
-      position: cam.position.asArray(),
-      rotation: cam.absoluteRotation.asArray(),
+      position: truncate(cam.position.asArray()),
+      rotation: truncate(cam.absoluteRotation.asArray()),
     });
   });
 });

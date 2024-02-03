@@ -64,15 +64,28 @@ defmodule Xr.RoomsTest do
 
     import Xr.RoomsFixtures
 
+    # when a room is created we need a function to call
+    # to create some random entities
+
+    # a room holds it's entities in a db"
+
+    # The db of entities can be exported into a json snippet
+
+    # the room db is initiated with json snippet
+
+    # room db can be exported to json snippet
+
+
+
     test "create_entity/3 with valid data creates a entity" do
       room = room_fixture()
 
-      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
         "mesh_builder" => "box",
         "position" => [1, 2, 3]
       })
 
-      Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
         "mesh_builder" => "floor",
         "position" => [4, 0, -1]
       })

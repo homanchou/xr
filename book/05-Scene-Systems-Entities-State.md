@@ -182,16 +182,6 @@ The `initRoom` function is now responsible for invoking `config` for the first t
 
 Remember that this `initRoom` function is only invoked by the `show.html.heex` template if it renders:
 
-```html
-<body>
-<script>
-  window.addEventListener("DOMContentLoaded", function() {
-    window.initRoom("<%= @room.id %>", "<%= @user_id %>")
-  })
-</script>
-</body>
-```
-
 You should end up with a `assets/js` folder structure like this, setting us up to create more and more systems:
 
 ```
@@ -293,7 +283,7 @@ There are lots of ways we could design the schema for a database to persist this
 Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.  Execute this Phoenix generator command:
 
 ```bash
- mix phx.gen.schema Rooms.Component components room_id:references:rooms entity_id:uuid component_name:string component:map
+ mix phx.gen.schema Rooms.Component components room_id:references:rooms entity_id:string component_name:string component:map
 ```
 
 This will create two files, a schema and a migration:
@@ -302,7 +292,7 @@ This will create two files, a schema and a migration:
 * creating lib/xr/rooms/component.ex
 * creating priv/repo/migrations/20240105030950_create_components.exs
 ```
-Open the migration file and add two indexes to the change function.  This will aid us when we want to query all entities that belong to a room_id, as well as ensure that no two components that have the same name can exist on the same entity (it wouldn't make sense for an entity to have two "position" components for example).  Also change the references on_delete to :delete_all.  This will make it so whenever we delete a room, all the entities/components will be deleted as well.
+Open the migration file and make it look like the following snippet.  
 
 ```elixir
 defmodule Xr.Repo.Migrations.CreateComponents do
@@ -311,18 +301,21 @@ defmodule Xr.Repo.Migrations.CreateComponents do
   def change do
     create table(:components, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :entity_id, :uuid
-      add :component_name, :string
-      add :component, :map
-      add :room_id, references(:rooms, on_delete: :delete_all, type: :binary_id)
+      add :entity_id, :string, null: false
+      add :component_name, :string, null: false
+      add :component, :map, null: false, default: %{}
+      add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
 
       timestamps(type: :utc_datetime)
     end
 
     create index(:components, [:room_id, :entity_id])
+    # helps look up tags
+    create index(:components, [:room_id, :component_name])
     create index(:components, [:entity_id, :component_name], unique: true)
   end
 end
+
 ```
 
 Run `mix ecto.migrate` to run the migration and create the table.

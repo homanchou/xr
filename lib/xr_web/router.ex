@@ -15,7 +15,7 @@ defmodule XrWeb.Router do
   def maybe_assign_user_id(conn, _) do
     case get_session(conn, :user_id) do
       nil ->
-        user_id = Ecto.UUID.generate()
+        user_id = Xr.Utils.random_string()
         conn |> put_session(:user_id, user_id) |> assign(:user_id, user_id)
 
       existing_id ->

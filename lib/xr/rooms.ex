@@ -50,9 +50,9 @@ defmodule Xr.Rooms do
 
   """
   def create_room(attrs \\ %{}) do
-    %Room{}
-    |> Room.changeset(attrs)
-    |> Repo.insert()
+    %Room{id: Xr.Utils.random_string()}
+      |> Room.changeset(attrs)
+      |> Repo.insert()
   end
 
   def generate_random_content(room_id) do
@@ -60,7 +60,7 @@ defmodule Xr.Rooms do
     color = create_random_color()
     # run this a few random times to create random entities
     for _ <- 1..Enum.random(5..20) do
-      create_entity(room_id, Ecto.UUID.generate(), %{
+      create_entity(room_id, Xr.Utils.random_string(), %{
         "mesh_builder" => ["box", create_random_box_args()],
         "position" => create_random_position(),
         "color" => shift_color(color)
@@ -68,8 +68,8 @@ defmodule Xr.Rooms do
     end
 
     # create spawn_point
-    create_entity(room_id, Ecto.UUID.generate(), %{
-      "spawn_point" => true,
+    create_entity(room_id, Xr.Utils.random_string(), %{
+      "tag" => "spawn_point",
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
   end
@@ -203,7 +203,21 @@ defmodule Xr.Rooms do
     end
   end
 
-  def find_entities_having_component_name(room_id, component_name) do
+  def find_entities_having_component(room_id, component_name, component_value) do
+    q =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.component_name == ^component_name and c.component[^component_name] == ^component_value,
+        select: c.entity_id
+      )
+
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id in subquery(q)
+    )
+    |> Repo.all()
+    |> components_to_map()
+  end
+
+  def find_entities_having_component(room_id, component_name) do
     q =
       from(c in Xr.Rooms.Component,
         where: c.room_id == ^room_id and c.component_name == ^component_name,
@@ -219,7 +233,7 @@ defmodule Xr.Rooms do
 
   def get_head_position_near_spawn_point(room_id) do
     # grab the entities that have spawn_point as a component
-    entities_map = Xr.Rooms.find_entities_having_component_name(room_id, "spawn_point")
+    entities_map = Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point")
 
     # grabs position from first spawn_point's position component
     {_entity_id, %{"position" => [x, y, z]}} =

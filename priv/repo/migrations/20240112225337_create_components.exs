@@ -4,10 +4,10 @@ defmodule Xr.Repo.Migrations.CreateComponents do
   def change do
     create table(:components, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :entity_id, :uuid
-      add :component_name, :string
-      add :component, :map
-      add :room_id, references(:rooms, on_delete: :delete_all, type: :binary_id)
+      add :entity_id, :string, null: false
+      add :component_name, :string, null: false
+      add :component, :map, null: false, default: %{}
+      add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
 
       timestamps(type: :utc_datetime)
     end

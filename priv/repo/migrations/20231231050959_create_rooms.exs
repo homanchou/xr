@@ -3,9 +3,9 @@ defmodule Xr.Repo.Migrations.CreateRooms do
 
   def change do
     create table(:rooms, primary_key: false) do
-      add :id, :binary_id, primary_key: true
-      add :name, :string
-      add :description, :string
+      add :id, :string, primary_key: true
+      add :name, :string, null: false
+      add :description, :string, default: ""
 
       timestamps(type: :utc_datetime)
     end

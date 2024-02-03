@@ -1,7 +1,7 @@
 <body>
   <script>
     window.addEventListener("DOMContentLoaded", function() {
-      window.initRoom("<%= @room.id %>", "<%= @user_id %>")
+      window.initRoom(<%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id}) %>)
     })
   </script>
   <%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>

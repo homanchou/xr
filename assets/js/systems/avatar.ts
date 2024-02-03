@@ -3,6 +3,7 @@ import { Quaternion, TransformNode } from "@babylonjs/core";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 import { filter, throttleTime, take } from "rxjs/operators";
+import { truncate } from "../utils";
 
 const { scene } = config;
 
@@ -11,14 +12,17 @@ scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
   config.$camera_moved.next(new Date().getTime());
 });
 
+const MOVEMENT_SYNC_FREQ = 200; // milliseconds
+
 // subscribe just one time to the channel joined event
-// and create a new subscription that takes all camera movement, throttles it to 200 ms and sends it to the server
+// and create a new subscription that takes all camera movement, 
+// throttles it, truncates the numbers and  sends it to the server
 config.$channel_joined.pipe(take(1)).subscribe(() => {
-  config.$camera_moved.pipe(throttleTime(200)).subscribe(() => {
+  config.$camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
     const cam = scene.activeCamera;
     const payload = {
-      position: cam.position.asArray(),
-      rotation: cam.absoluteRotation.asArray(),
+      position: truncate(cam.position.asArray()),
+      rotation: truncate(cam.absoluteRotation.asArray()),
     }
     config.channel.push("i_moved", payload);
   });

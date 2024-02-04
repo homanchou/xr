@@ -13,13 +13,15 @@ The command below will create a project folder for us.  I named my project xr, b
  mix phx.new xr --binary-id
 ```
 
-Ignore the lengthly output for just a moment.  We'll need to make sure Phoenix has access to a Postgres database before we can proceed with the instructions it output.
+This will take a moment to run.  When it is done it will create a folder called `xr` for us that is our new project home.  It will also spit out some getting started instructions, but if we run `mix ecto.create` without having a database to connect to we'll get some errors.
+
+Let's ignore the lengthly output for just a moment.  We'll need to make sure Phoenix has access to a Postgres database before we can proceed with the instructions.
 
 ### Create a Postgres Database Server
 
-Immediately `cd` into the new project folder that the previous command just created and create a docker-compose.yml file so that we can connect to a postgres database.
+Immediately `cd` into the new project folder that the previous command just created and create a `docker-compose.yml` file so that we can connect to a postgres database.
 
-Paste the following into a docker-compose.yml file in your new project's root directory
+Paste the following into a docker-compose.yml file in your new project's root directory:
 
 ```dockerfile
 version: '3.8'
@@ -39,6 +41,7 @@ volumes:
     driver: local
 ```
 
+(If you're not familiar with docker or docker-compose you might want to study up on it briefly.)
 
 Assuming you have docker and docker-compose or docker desktop already installed, run `docker-compose up -d`.  This will download the postgres image from dockerhub and initialize it with the default user and password.  
 
@@ -58,10 +61,13 @@ Remember this command.  You'll be using it a lot and I may not always spell it o
 
 If you're on linux or (windows subsystem for linux) you may also get an error about needing `inotify-tools`, in which case follow the links in the error message to install that for live-reload.
 
+### Test Phoenix is Up and Running
+
+With our server running, we can navigate to our browser at http://localhost:4000 and see the Phoenix Welcome Page.
 
 ## Creating Rooms
 
-In the last chapter we managed to setup a folder for our code and we can now load up the default Phoenix welcome page in a browser at http://localhost:4000.  Let's change that.  Let's make it so that we can host different meetings in meeting rooms.  So we want a URL path like http://localhost:4000/rooms/some-room-id
+Now that our server is running, let's make some additions so that we can host different meetings in meeting rooms.  So we want a URL path like http://localhost:4000/rooms/some-room-id
 
 Phoenix gives us a generator for writing some CRUD endpoints and databaes migration for us.  We can use that as a starting point then remove any code that we don't need.  It's a great way to get started because we can see example code and patterns that we'll be able to study and copy.
 
@@ -186,7 +192,7 @@ end
 
 ```
 
-This function will randomly sample from a list of characters ranging between 0-9, A-Z and a-z.  Altogther that is 10 + 26 + 26 = 62 symbols.  If set a length of 5, that's 62^5 or nearly a 1 in a billion chance of collision.  That should be plenty for our uses.
+This function will randomly sample from a list of characters ranging between 0-9, A-Z and a-z.  Altogther that is 10 + 26 + 26 = 62 symbols.  If the function makes a random string for a length of 5 symbols, that's 62^5 possible combinations or nearly a 1 in a billion chance of collision.  That should be plenty random enough for our uses.
 
 ### Use Random ID in the Create Rooms Function
 
@@ -200,7 +206,7 @@ Open up `lib/xr/rooms.ex` and modify the create_room function to set the random 
   end
 ```
 
-If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.
+If you run your server and visit http://localhost:4000/rooms you should see a CRUD UI where you can add some rooms.  Go ahead and play with the UI.  Create a few rooms and try out all the CRUD abilities.  Pretty neat considering we got all this functionality without need to write much code.
 
 ### Return to Index After Room Create
 
@@ -469,4 +475,4 @@ If you want to see the assets that our source typescript files turn into, start 
 
 ### Summary
 
-In this chapter we've created our codebase working directory and created a `rooms` resource that will serve as our virtual meeting room.  We've also customized a bare bones header and homepage.  Finally we changed out the way Phoenix packages and bundles its javascript using a custom esbuild script so that we can lean on Typescript for our future front-end coding experience.
+In this chapter we've created our codebase working directory using the `mix phx.new` generator.  We then created a `rooms` resource by running `mix phx.gen.html` generator and built our rooms table.  The room will serve as our virtual meeting room.  We've removed the default Phoenix page headers and customized a bare bones header and homepage.  We swapped out the way Phoenix packages and bundles its javascript using a custom esbuild script so that we can lean on Typescript for our future front-end coding experience.  We replaced the entry point for our javascript `app.js` with `app.ts` so our code is fully typescript.  We enabled esbuild code-splitting option and modified the script tag in the Phoenix layout to use `type="module"` to support the feature.

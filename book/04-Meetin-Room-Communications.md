@@ -147,7 +147,7 @@ That will allow the `UserSocket` to piggyback on the LiveView socket.
 
 ### Join the Room Channel
 
-Now we'll integrate parts of the advice in `user_socket.js` into `app.ts`.  Since app.js is loaded on every page of our website, but we only want the channel to join the room when we're on a URL like `/rooms/:id`.  My solution to that is that we'll create a global function called `initRoom` in `app.ts` that we'll then call from the `show.html.heex`.  This gives us the behavior that I want because that `show.html.heex` template only renders when we're on the rooms `show` CRUD path (when we navigate to a specific room).
+Now we'll integrate parts of the advice in `user_socket.js` into `app.ts` to enable joining a room channel.  We have a slight problem though.  We don't need to join the room channel from every page of our website.  We will use the room channel to communicate events only when we are at the URL `/rooms/:room_id`.  My solution to that is that we'll create a global function called `initRoom` in `app.ts` that we'll then call from the `show.html.heex`.  This gives us the behavior that desired because `show.html.heex` template only renders when we're on the rooms `show` CRUD path (when we navigate to a specific room).
 
 Add the following snippet to `app.ts` after the liveSocket is created.  This creates an `initRoom` function that will join the `room` channel.  Notice the function takes two arguments, room_id and user_id which we can pass from the server to the browser.  This will be useful for knowing who we are.
 
@@ -185,7 +185,7 @@ You won't see that console.log output on any other page you navigate to, which i
 
 ### Send and Receive a Test Message
 
-I've you are new to sending messages with channels, here's a quick demonstration.  Feel free to skim this section if you're already familiar with it.
+If you are new to sending messages with channels, here's a quick demonstration.  Feel free to skim this section if you're already familiar with it.
 
 Since we don't have a pretty UI or even buttons we can press to send any messages.  We're going to cheat a little bit and make a quick little test so we can be satisfied at our progress.  In `app.ts` where we just created the channel, go ahead an assign it to the window object.  This will allow us to access the channel from the browser's console.
 
@@ -414,4 +414,4 @@ We can safely delete `user_socket.js` now because we integrated its javascript c
 
 ### Summary
 
-In this chapter we enabled room specific communications using Phoenix channels.  Using the built in Phoenix generators, we created a UserSocket and a RoomChannel that responds to incoming messages and pushes responses back to the client.  We piggybacked the UserSocket onto the existing liveview socket then customized the RoomChannel to accept any room_id.  In the client we wrote channel subscriptions using `channel.on` to respond to messages coming from the server and responded by printing something to the console.log.  We created sticky a user_id for every visitor.  We then secured the socket and channel by passing a user_token to the front-end and then back to the server for verification. 
+In this chapter we enabled room specific communications using Phoenix channels.  Using the built in Phoenix generators, we created a UserSocket and a RoomChannel that responds to incoming messages and pushes responses back to the client.  We piggybacked the UserSocket onto the existing liveview socket then customized the RoomChannel to accept any room_id.  In the client we wrote channel subscriptions using `channel.on` to respond to messages coming from the server and responded by printing something to the console.log.  We created a sticky user_id for every visitor.  We then secured the socket and channel by passing a user_token to the front-end and then back to the server for verification. At this point we're able to test browser to browser communications without UI by sending messages in the javascript console using `channel.push`.

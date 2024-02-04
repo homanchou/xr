@@ -1,7 +1,7 @@
 
 ## What this book is about
 
-This book is a step-by-step guide to building a website that is also a platform for VR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime that acts like an operating system), WebRTC (voice chat and video streams) and Phoenix Channels (other realtime communications).  I'll take you through the steps of starting a new project from the very first commit.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  I'll be building something specific for my platform, but hopefully it gives you some ideas for building your own worlds.  Or give you a deep understanding of this particular stack so that you can contribute back to my open-source project.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Oculus Quest.
+This book is a step-by-step guide to building a website that is also a platform for VR immersive experiences using Babylon.js (3D graphics in the browser), Elixir (serverside language/runtime), WebRTC (voice chat and video streams) and Phoenix Channels (websocket communications).  I'll take you through the steps of starting a new web project from the very beginning.  We'll gradually build capabilities up that you would expect in a VR immersive world such as seeing each other's avatar, hearing each other talk, being able to grab and throw things etc.  I'll be building a web platform that can host many rooms with different VR games.  Hopefully it gives you some ideas and building blocks for building your own worlds.  You can cherry pick the bits you like.  Hopefully this book gives you a deep understanding of this particular stack I'm using so that you can contribute back to my open-source project.  By the end of the book you'll be able to deploy your own website that folks can easily visit in any head-mounted-display (HMD) that ships with a web browser such as the Quest.
 
 ### Who is this book for?
 
@@ -9,7 +9,7 @@ I wish I could say this book is for everyone that wants to create their own VR e
 
 I assume that the reader is already comfortable with using command lines at a terminal and website concepts like HTML, CSS, and Databases.  It will be helpful to know how to use Git and Docker and some working knowledge of javascript/typescript, Elixir and Phoenix.  I don't spend much time explaining those fundamentals because there are plenty of resources for that already.  Sometimes I explain a little more than I need to, but most times I don't otherwise this guide would be too long.  
 
-Ultimately, web development of any kind is a messy business involving a long list of different technologies that even  experienced web developers have trouble wrangling.  We all need to Google, all the time.  Like constantly.  But if you love building experiences and are good at pushing through to learn, then let's get started!
+Ultimately, web development of any kind is a messy business involving a long list of different technologies that even experienced web developers have trouble wrangling.  We all need to Google, all the time.  Like constantly.  But if you love building experiences and are good at pushing through to learn, then let's get started!
 
 ### Why this particular set of technologies?
 
@@ -76,4 +76,4 @@ But there is also a certain amount of vendor lock-in you get when choosing a pla
 
 ### Summary
 
-This book is about how to use the Phoenix Web Framework (and other building blocks like Babylon.js and WebRTC) to create a website that can host a variety of meeting rooms where each room URL is a 3D immersive web experience for games or meetings.  It's not a book that teaches Phoenix or Elixir (the language it's based on), or Typescript (the language Babylon.js is based on).  However we'll go over the design approach and share code snippets along the way so if you follow along from beginning to end you should have a good understanding of how every piece fits together.
+This book is about how to use the Phoenix Web Framework (and other building blocks like Babylon.js and WebRTC) to create a website that can host a variety of meeting rooms where each room URL is a 3D immersive web experience for games or meetings.  It's not a book that teaches Phoenix or Elixir (the language it's based on), or Typescript (the language Babylon.js is based on).  However we'll go over the design approach and explain code snippets along the way so if you follow along from beginning to end you should have a good understanding of how every piece fits together.

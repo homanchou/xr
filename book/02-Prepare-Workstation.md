@@ -3,9 +3,11 @@
 
 To setup your workstation to start developing a website with Phoenix, the following is a set of dependencies we'll need to install first.  
 
-There are quite a few dependencies and tools used in daily web development these days.  A pre-requisite for following these instructions will be knowing your way around a linux/unix terminal shell running bash or zsh.
+There are quite a few tools used in daily web development these days.  A pre-requisite for following these instructions will be knowing your way around a linux/unix terminal shell, that includes knowing how to install packages or even package installers for your specific shell (e.g, bash or zsh).
 
-If you're on Windows, I highly recommend you install the windows subsystem for linux.  
+### A note for Windows Users
+
+If you're on Windows, I highly recommend you install the windows subsystem for linux, before you start.  
 
 https://learn.microsoft.com/en-us/windows/wsl/install
 
@@ -27,9 +29,15 @@ To develop a code project using Phoenix (a web framework) we're first going to n
 
 https://elixir-lang.org/install.html
 
-The link provides instructions for various operating system.  Or alternatively, for slightly more experienced developers I recommend you install Elixir and Erlang using a utility called `asdf` so that you can switch versions or install multiple Elixir versions on your system.  
+The link above provides instructions for installing Elixir on various operating systems, so I won't bother repeating the instructions here.  Find the appropriate guide for your system (if using WSL, use the linux guide).  
+
+#### ASDF a version manager for Elixir/Erlang
+
+Alternatively, for slightly more experienced developers you can install Elixir and Erlang using a utility called `asdf` so that you can switch versions or install multiple Elixir versions on your system.  
 
 Read the asdf instructions for installing Erlang and Elixir, they'll have the latest instructions for your system.  When I tried to install the latest Erlang I had an error regarding wxWidgets and had to do some Googling: https://github.com/asdf-vm/asdf-erlang/issues/203 and had to install some other linux dependencies first.
+
+#### Verifying Elixir Installation
 
 Whatever method of installation you choose, if all goes well, you should be able to open up a terminal and check which version of elixir you have installed like this:
 
@@ -45,7 +53,9 @@ Elixir 1.15.7 (compiled with Erlang/OTP 26)
 
 ### Preserve iex history.
 
-We're going to be working in the iex terminal from time to time, and surprisingly the up arrow does not bring back the previous command history between iex sessions.  I find that so annoying that that is not the default.  Luckily we can add this to our shell startup script and that will fix that annoyance.
+Elixir comes with a REPL (read-eval-print-loop), `iex`.  It's very useful for testing out elixir commands.
+
+We're going to be working in the iex terminal from time to time, and surprisingly the up arrow does not bring back the previous command history between iex sessions.  I find that so annoying that that is not the default.  Luckily we can add this to our shell profile startup script and that will fix that annoyance.
 
 ```bash
 # Add to shell profile

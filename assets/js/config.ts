@@ -1,6 +1,5 @@
 import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
-import type { Vector3, Quaternion } from "@babylonjs/core/Maths";
 import { Subject } from "rxjs/internal/Subject";
 import type { State } from "./systems/state";
 

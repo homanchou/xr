@@ -1,4 +1,15 @@
 <body>
+  <style>
+    html, body {
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(ellipse at top, #201111, transparent),
+              radial-gradient(ellipse at bottom, #000021, transparent);
+    }
+  </style>
   <script>
     window.addEventListener("DOMContentLoaded", function() {
       window.initRoom(<%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id}) %>)

@@ -1,6 +1,6 @@
 import { StateOperation, componentExists, config } from "../config";
-import { StandardMaterial } from "@babylonjs/core/Materials";
-import { Color3 } from "@babylonjs/core";
+import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { filter } from "rxjs/operators";
 
 const { scene, $state_mutations } = config;

@@ -1,8 +1,8 @@
 import { config } from "../config";
-import { Quaternion, TransformNode } from "@babylonjs/core";
+import { Quaternion } from "@babylonjs/core/Maths/math";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
-import type { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
-import { filter, throttleTime, take } from "rxjs/operators";
+import { throttleTime, take } from "rxjs/operators";
 import { truncate } from "../utils";
 
 const { scene } = config;

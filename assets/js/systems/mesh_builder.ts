@@ -1,4 +1,4 @@
-import { CreateBox } from "@babylonjs/core/Meshes/Builders";
+import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { StateOperation, componentExists, config } from "../config";
 import { filter  } from "rxjs/operators";
 

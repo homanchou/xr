@@ -25,11 +25,3 @@ liveSocket.connect();
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window["liveSocket"] = liveSocket;
-
-window["initRoom"] = async (opts: { room_id: string, user_id: string }) => {
-  const { config } = await import("./config");
-  config.room_id = opts.room_id;
-  config.user_id = opts.user_id;
-  config.socket = liveSocket;
-  await import("./systems");
-};

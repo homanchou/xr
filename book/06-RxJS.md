@@ -30,9 +30,7 @@ Let's modify `config.ts` to add some `rxjs.Subject` that we can use later.
 ```typescript
 import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
-import type { Vector3, Quaternion } from "@babylonjs/core/Maths";
 import { Subject } from "rxjs/internal/Subject";
-
 
 export type Config = {
   room_id: string;
@@ -40,24 +38,27 @@ export type Config = {
   scene: Scene;
   socket: Socket;
   channel: Channel;
-  $room_stream: Subject<{ event: string, payload: any; }>;
+  state: State;
   $channel_joined: Subject<boolean>;
   $room_entered: Subject<boolean>;
-  $camera_moved: Subject<[Vector3, Quaternion]>;
+  $camera_moved: Subject<number>;
 };
+```
 
-export const config: Config = {
-  room_id: "",
-  user_id: "",
+In `orchestrator.ts` we need to initialize those `RxJS.Subject`s.
+
+```typescript
+ const config: Config = {
+  room_id: opts.room_id,
+  user_id: opts.user_id,
   scene: null,
-  socket: null,
+  socket: opts.socket,
   channel: null,
-  $room_stream: new Subject<{ event: string, payload: any; }>(),
+  state: null,
   $channel_joined: new Subject<boolean>(),
   $room_entered: new Subject<boolean>(),
-  $camera_moved: new Subject<[Vector3, Quaternion]>()
+  $camera_moved: new Subject<number>(),
 }
-
 ```
 
 ## Summary

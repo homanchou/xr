@@ -47,19 +47,3 @@ export type Config = {
   $camera_moved: Subject<number>;
   $state_mutations: Subject<StateMutation>;
 };
-
-export const config: Config = {
-  room_id: "",
-  user_id: "",
-  scene: null,
-  socket: null,
-  channel: null,
-  state: null,
-  $channel_joined: new Subject<boolean>(),
-  $room_entered: new Subject<boolean>(),
-  $camera_moved: new Subject<number>(),
-  $state_mutations: new Subject<StateMutation>(),
-}
-
-window["config"] = config
-

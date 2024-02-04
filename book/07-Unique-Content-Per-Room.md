@@ -4,7 +4,7 @@
 
 At this point we're able to draw something 3D on the screen.  We should have in mind a general concept of the experience we want to craft and generally work toward that direction.  
 
-Here's an outline:
+Here's an outline of what we'll work on next:
 
 - Every room URL can host a different visual experience.  
 - The experience has a starting point and ends when you reach an ending point.  
@@ -18,7 +18,9 @@ The objects we are currently seeing in the 3D scene were hardcoded in `scene.ts`
 
 ### Design a Snapshot Payload
 
-If we send an "entties_state" messsage with all items in our seen, it might look something like this:
+In the Entity-Component-System (ECS) architecture, everything in the game is an entity.  And the data associated with the entities are components.
+
+If we send an "entities_state" message with all items in our seen, it might look something like this:
 
 ```json
 {
@@ -194,15 +196,22 @@ Let's create a function that takes a room_id and adds some random sized boxes at
     }
   end
 ```
+Then let's wrap it up nicely in a new function in the `rooms.ex` context:
 
-Open up `room_controller.ex` and modify the `create` room function to look like the following:
+```elixir
+  def create_room_with_random_content(attrs \\ %{}) do
+    {:ok, room} = create_room(attrs)
+    generate_random_content(room.id)
+    {:ok, room}
+  end
+```
+
+Open up `room_controller.ex` and modify and use the new function to look like the following:
 
 ```elixir
   def create(conn, %{"room" => room_params}) do
-    case Rooms.create_room(room_params) do
+    case Rooms.create_room_with_random_content(room_params) do
       {:ok, room} ->
-        Xr.Rooms.generate_random_content(room.id)
-
         conn
         |> put_flash(:info, "Room created successfully.")
         |> redirect(to: ~p"/rooms")
@@ -213,15 +222,14 @@ Open up `room_controller.ex` and modify the `create` room function to look like 
   end
 ```
 
-I added the call to `generate_random_content` as well as made the redirect go to the index instead of putting us in the room when the room is created, which is the behavior I prefer.
-
+I also made the redirect go to the `~p"/rooms"` index instead of putting us in the room when the room is created, which is the behavior I prefer.
 
 Reset all your data in your dev database using `mix ecto.reset`.  Run your server again and create a new room and this time some random objects should be created.  We can check in the iex terminal using:
 
 ```elixir
-> Xr.Rooms.entities("453b6858-9403-4dd9-a58e-17d25737be84") # get your room_id from your browser's URL bar
+> Xr.Rooms.entities("abcde") # get your room_id from your browser's URL bar
 %{
-  "027c850f-13aa-440f-9865-5a65fea6ec70" => %{
+  "34hrj" => %{
     "color" => [18, 124, 84],
     "mesh_builder" => ["box", %{"depth" => 5, "height" => 6, "width" => 5}],
     "position" => [-2, 0, 0]

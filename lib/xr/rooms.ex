@@ -55,6 +55,16 @@ defmodule Xr.Rooms do
       |> Repo.insert()
   end
 
+  def create_room_with_random_content(attrs \\ %{}) do
+    {:ok, room} = create_room(attrs)
+    generate_random_content(room.id)
+    save_entities_to_initial_snapshot(room.id)
+
+    {:ok, room}
+  end
+
+
+
   def generate_random_content(room_id) do
     # pick a random color
     color = create_random_color()
@@ -203,6 +213,27 @@ defmodule Xr.Rooms do
     end
   end
 
+  def delete_entity_component(room_id, entity_id, component_name) do
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id == ^entity_id and c.component_name == ^component_name
+    )
+    |> Repo.delete_all()
+  end
+
+  def delete_entity(room_id, entity_id) do
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id == ^entity_id
+    )
+    |> Repo.delete_all()
+  end
+
+  def delete_entities(room_id) do
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id
+    )
+    |> Repo.delete_all()
+  end
+
   def find_entities_having_component(room_id, component_name, component_value) do
     q =
       from(c in Xr.Rooms.Component,
@@ -243,5 +274,46 @@ defmodule Xr.Rooms do
     offset1 = Enum.random(-100..100) / 100
     offset2 = Enum.random(-100..100) / 100
     [x + offset1, y + 2, z + offset2]
+  end
+
+
+  def create_snippet(room_id, kind, slug, data) do
+    %Xr.Rooms.Snippet{
+      room_id: room_id,
+    } |> Xr.Rooms.Snippet.changeset(%{type: kind, slug: slug, data: data})
+    |> Repo.insert!()
+  end
+
+  def snippets(room_id) do
+    Repo.all(from s in Xr.Rooms.Snippet, where: s.room_id == ^room_id)
+  end
+
+  def snippets_by_slug_and_kind(room_id, kind, slug) do
+    Repo.all(from s in Xr.Rooms.Snippet, where: s.room_id == ^room_id and s.type == ^kind and s.slug == ^slug)
+  end
+
+  def save_entities_to_initial_snapshot(room_id) do
+    data = entities(room_id)
+    create_snippet(room_id, "snapshot", "initial_snapshot", data)
+  end
+
+  def initial_snapshot(room_id) do
+    case snippets_by_slug_and_kind(room_id, "snapshot", "initial_snapshot") do
+      [snapshot] -> snapshot
+      _ -> nil
+    end
+  end
+
+  def replace_entities_with_initial_snapshot(room_id) do
+    # find the initial snapshot
+    case initial_snapshot(room_id) do
+      nil -> :noop
+      snapshot -> # clear old data
+        delete_entities(room_id)
+          # iterate through the map of components and build entities
+        for {entity_id, components} <- snapshot.data do
+          create_entity(room_id, entity_id, components)
+        end
+    end
   end
 end

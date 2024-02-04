@@ -1,3 +1,8 @@
+<script>
+  window["room_vars"] = <%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id, entities: @entities}) %>
+  console.log("here")
+  <%!-- window["get_orchestrator"](); --%>
+</script>
 <body>
   <style>
     html, body {
@@ -10,10 +15,5 @@
               radial-gradient(ellipse at bottom, #000021, transparent);
     }
   </style>
-  <script>
-    window.addEventListener("DOMContentLoaded", function() {
-      window.initRoom(<%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id}) %>)
-    })
-  </script>
   <%= live_render(@conn, XrWeb.RoomMenu.Index, session: %{"room_id" => @room.id}) %>
 </body>

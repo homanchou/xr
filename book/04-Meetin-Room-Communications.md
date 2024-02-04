@@ -147,41 +147,27 @@ That will allow the `UserSocket` to piggyback on the LiveView socket.
 
 ### Join the Room Channel
 
-Now we'll integrate parts of the advice in `user_socket.js` into `app.ts` to enable joining a room channel.  We have a slight problem though.  We don't need to join the room channel from every page of our website.  We will use the room channel to communicate events only when we are at the URL `/rooms/:room_id`.  My solution to that is that we'll create a global function called `initRoom` in `app.ts` that we'll then call from the `show.html.heex`.  This gives us the behavior that desired because `show.html.heex` template only renders when we're on the rooms `show` CRUD path (when we navigate to a specific room).
+Now we'll integrate parts of the advice in `user_socket.js` into `app.ts` to enable joining a room channel.
 
-Add the following snippet to `app.ts` after the liveSocket is created.  This creates an `initRoom` function that will join the `room` channel.  Notice the function takes two arguments, room_id and user_id which we can pass from the server to the browser.  This will be useful for knowing who we are.
+Add the following snippet to `app.ts` after the liveSocket is created.  This code is only temporary so that we can experiement with a channel.  First we grab the room_id from the URL when it is `rooms/:room_id`.  Then we create a channel from the socket that is subscribed to a topic `room:${room_id}`.  This code will automatically run for every page in our website, but we'll fix that later so that we only need to connect to a room when we're entering the game.
 
 ```javascript
-window["initRoom"] = async (opts: { room_id: string, user_id: string}) => {
  
   liveSocket.connect(); // make sure we're connected first
-  let channel = liveSocket.channel(`room:${opts.room_id}`, {})
+  const room_id = window.location.pathname.match(/^\/rooms\/([^\/]+)$/)?.[1];
+  const channel = liveSocket.channel(`room:${room_id}`, {})
   channel.join()
     .receive("ok", resp => { console.log("Joined successfully", resp) })
     .receive("error", resp => { console.log("Unable to join", resp) })
 
-}
 ```
-
-Now we need to call this function, but we need to make sure we wait long enough until the browser has evaluated the initRoom function definition.  We'll get an error that `initRoom` is undefined if we just call it immediately.  Open up `controllers/room_html/show.html.heex` and replace the entire template with this:
-
-```html
-<body>
-<script>
-  window.addEventListener("DOMContentLoaded", function() {
-    window.initRoom(<%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id}) %>)
-  })
-</script>
-</body>
-```
-
-This code waits until all the DOM content is loaded before calling the `initRoom` function.  If you now navigate to any room you previously created and inspect the browser's console logs you should see:
+If you now navigate to any room you previously created and inspect the browser's console logs you should see:
 
 ```
 Joined Successfully
 ```
 
-You won't see that console.log output on any other page you navigate to, which is what we want.  Congrats!  That was a lot of stuff, but we now have our front-end connected over web sockets and a room channel all the way to the backend!  We're ready to send and receive messages!
+Congrats!  That was a lot of stuff, but we now have our front-end connected over web sockets and a room channel all the way to the backend!  We're ready to send and receive messages!
 
 ### Send and Receive a Test Message
 

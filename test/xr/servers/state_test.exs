@@ -13,7 +13,6 @@ defmodule Xr.Servers.State.Test do
     PubSub.broadcast(Xr.PubSub, "room_stream:test1", %{"event" => "user_moved", "payload" => %{"user_id" => "1", "position" => [1,2,3], "rotation" => [1,2,3,4]}})
     :timer.sleep(500)
     # check that the state has been updated
-    State.state("test1") |> IO.inspect
   end
 
 end

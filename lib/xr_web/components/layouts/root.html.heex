@@ -9,8 +9,10 @@
       <%= assigns[:page_title] || "Xr" %>
     </.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
-    <script defer phx-track-static type="module" src={~p"/assets/app.js"}>
-    </script>
+    <script defer phx-track-static type="module" src={~p"/assets/app.js"}></script>
+    <%= if assigns[:orchestrator] do %>
+    <script defer phx-track-static type="module" src={~p"/assets/orchestrator.js"}></script>
+    <% end %>
   </head>
   <body class="bg-white antialiased">
     <%= @inner_content %>

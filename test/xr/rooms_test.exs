@@ -91,9 +91,42 @@ defmodule Xr.RoomsTest do
       })
 
       assert Rooms.entities(room.id)
-             |> IO.inspect(label: "entities")
              |> Map.keys()
              |> Enum.count() == 2
     end
+
+    test "create snippet" do
+      room = room_fixture()
+      snippet = Rooms.create_snippet(room.id, "some kind", "some slug", %{"some" => "data"})
+      assert snippet.room_id == room.id
+    end
+
+    # save room entities to snapshot
+    test "save entities to snapshot then load entities from snapshot" do
+      room = room_fixture()
+
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "mesh_builder" => "box",
+        "position" => [1, 2, 3]
+      })
+
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "mesh_builder" => "floor",
+        "position" => [4, 0, -1]
+      })
+      Rooms.save_entities_to_initial_snapshot(room.id)
+      assert Rooms.snippets(room.id) |> Enum.count() == 1
+
+      Rooms.delete_entities(room.id)
+      assert Rooms.entities(room.id) == %{}
+
+
+      Rooms.replace_entities_with_initial_snapshot(room.id)
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
+
+    end
+
+
+
   end
 end

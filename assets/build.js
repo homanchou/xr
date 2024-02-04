@@ -16,7 +16,7 @@ const plugins = [
 
 // Define esbuild options
 let opts = {
-  entryPoints: ["js/app.ts"],
+  entryPoints: ["js/app.ts", "js/orchestrator.ts"],
   bundle: true,
   format: "esm",
   splitting: true,

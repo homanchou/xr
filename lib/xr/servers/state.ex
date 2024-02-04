@@ -52,10 +52,8 @@ defmodule Xr.Servers.State do
         acc
       end)
       #only sync if there is something to sync
-      IO.inspect(to_sync, label: "to sync")
     state = if to_sync != empty_diff do
       # broad cast on channel
-      IO.inspect(to_sync, label: "to sync")
       XrWeb.Endpoint.broadcast("room:" <> state.room_id, "state_diff", to_sync)
 
       # clear the ets table

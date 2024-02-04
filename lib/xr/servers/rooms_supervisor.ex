@@ -16,14 +16,14 @@ defmodule Xr.Servers.RoomsSupervisor do
   end
 
   def stop_room(room_id) do
-    DynamicSupervisor.terminate_child(
-      __MODULE__,
-      Xr.Servers.UserSnapshot.via_tuple(room_id) |> GenServer.whereis()
-    )
+    # DynamicSupervisor.terminate_child(
+    #   __MODULE__,
+    #   Xr.Servers.UserSnapshot.via_tuple(room_id) |> GenServer.whereis()
+    # )
 
-    DynamicSupervisor.terminate_child(
-      __MODULE__,
-      Xr.Servers.Reflector.via_tuple(room_id) |> GenServer.whereis()
-    )
+    # DynamicSupervisor.terminate_child(
+    #   __MODULE__,
+    #   Xr.Servers.Reflector.via_tuple(room_id) |> GenServer.whereis()
+    # )
   end
 end

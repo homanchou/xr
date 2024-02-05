@@ -38,7 +38,7 @@ if (deploy) {
 if (watch) {
   opts = {
     ...opts,
-    sourcemap: "inline",
+    sourcemap: "linked",
   };
   esbuild
     .context(opts)

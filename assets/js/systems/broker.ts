@@ -1,18 +1,24 @@
-import { Config } from "../config";
+import { Config, StateOperation } from "../config";
 
 export const init = (config: Config) => {
   
   // channel connection
-  const socket = config.socket;
+  const {socket, $state_mutations} = config;
   socket.connect();
   let channel = socket.channel(`room:${config.room_id}`, {});
   config.channel = channel;
 
   // channel subscriptions
-
-  channel.on("state_mutations", (event) => {
-    config.$state_mutations.next(event);
+  channel.on("entities_state", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
+    for (const [entity_id, components] of Object.entries(payload)) {
+      $state_mutations.next({op: StateOperation.create, eid: entity_id, com: components});
+    }
   });
+
+
+  // channel.on("state_mutations", (event) => {
+  //   config.$state_mutations.next(event);
+  // });
 
   // for debugging
   channel.onMessage = (event, payload, _) => {

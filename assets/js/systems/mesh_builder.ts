@@ -4,18 +4,7 @@ import { filter  } from "rxjs/operators";
 
 export const init = (config: Config) => {
   
-
-
-  const { scene, $state_mutations, channel } = config;
-
-
-  channel.on("entities_state", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
-    for (const [entity_id, components] of Object.entries(payload)) {
-      $state_mutations.next({op: StateOperation.create, eid: entity_id, com: components});
-    }
-  });
-
-
+  const { scene, $state_mutations } = config;
 
   $state_mutations.pipe(
     filter(evt => (evt.op === StateOperation.create)),

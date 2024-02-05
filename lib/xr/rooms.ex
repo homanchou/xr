@@ -169,7 +169,6 @@ defmodule Xr.Rooms do
   @doc """
   Get all components for a room, sorted by entity_id so all components for entities are next to each other
   """
-
   def components(room_id) do
     Repo.all(from e in Xr.Rooms.Component, where: e.room_id == ^room_id, order_by: e.entity_id)
   end
@@ -177,12 +176,14 @@ defmodule Xr.Rooms do
   @doc """
   Get a map of entities and their components for a room
   """
-
   def entities(room_id) do
     components(room_id)
     |> components_to_map()
   end
 
+  @doc """
+  given a list of components, build a map of entity key to components map
+  """
   def components_to_map(components) when is_list(components) do
     components
     |> Enum.reduce(%{}, fn record, acc ->

@@ -15,7 +15,6 @@ export type StateMutation = {
   com?: {
     [component_name: string]: any;
   };
-  note?: string;
 }
 
 

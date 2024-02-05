@@ -312,7 +312,6 @@ Add an `assets/build.js` file like this:
 const esbuild = require("esbuild");
 const { typecheckPlugin } = require('@jgoz/esbuild-plugin-typecheck');
 
-
 const args = process.argv.slice(2);
 const watch = args.includes('--watch');
 const deploy = args.includes('--deploy');
@@ -328,7 +327,7 @@ const plugins = [
 
 // Define esbuild options
 let opts = {
-  entryPoints: ["js/app.ts"],
+  entryPoints: ["js/app.ts", "js/orchestrator.ts"],
   bundle: true,
   format: "esm",
   splitting: true,
@@ -350,7 +349,7 @@ if (deploy) {
 if (watch) {
   opts = {
     ...opts,
-    sourcemap: "inline",
+    sourcemap: "linked",
   };
   esbuild
     .context(opts)

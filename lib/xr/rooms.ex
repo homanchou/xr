@@ -51,8 +51,8 @@ defmodule Xr.Rooms do
   """
   def create_room(attrs \\ %{}) do
     %Room{id: Xr.Utils.random_string()}
-      |> Room.changeset(attrs)
-      |> Repo.insert()
+    |> Room.changeset(attrs)
+    |> Repo.insert()
   end
 
   def create_room_with_random_content(attrs \\ %{}) do
@@ -62,8 +62,6 @@ defmodule Xr.Rooms do
 
     {:ok, room}
   end
-
-
 
   def generate_random_content(room_id) do
     # pick a random color
@@ -166,11 +164,24 @@ defmodule Xr.Rooms do
     Room.changeset(room, attrs)
   end
 
+  def get_entity_state(room_id, entity_id) do
+    components_for_entity_id(room_id, entity_id)
+    |> components_to_map()
+    |> Map.values()
+    |> List.first()
+  end
+
   @doc """
   Get all components for a room, sorted by entity_id so all components for entities are next to each other
   """
   def components(room_id) do
     Repo.all(from e in Xr.Rooms.Component, where: e.room_id == ^room_id, order_by: e.entity_id)
+  end
+
+  def components_for_entity_id(room_id, entity_id) do
+    Repo.all(
+      from e in Xr.Rooms.Component, where: e.room_id == ^room_id and e.entity_id == ^entity_id
+    )
   end
 
   @doc """
@@ -216,7 +227,9 @@ defmodule Xr.Rooms do
 
   def delete_entity_component(room_id, entity_id, component_name) do
     from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.entity_id == ^entity_id and c.component_name == ^component_name
+      where:
+        c.room_id == ^room_id and c.entity_id == ^entity_id and
+          c.component_name == ^component_name
     )
     |> Repo.delete_all()
   end
@@ -238,7 +251,9 @@ defmodule Xr.Rooms do
   def find_entities_having_component(room_id, component_name, component_value) do
     q =
       from(c in Xr.Rooms.Component,
-        where: c.room_id == ^room_id and c.component_name == ^component_name and c.component[^component_name] == ^component_value,
+        where:
+          c.room_id == ^room_id and c.component_name == ^component_name and
+            c.component[^component_name] == ^component_value,
         select: c.entity_id
       )
 
@@ -277,11 +292,11 @@ defmodule Xr.Rooms do
     [x + offset1, y + 2, z + offset2]
   end
 
-
   def create_snippet(room_id, kind, slug, data) do
     %Xr.Rooms.Snippet{
-      room_id: room_id,
-    } |> Xr.Rooms.Snippet.changeset(%{type: kind, slug: slug, data: data})
+      room_id: room_id
+    }
+    |> Xr.Rooms.Snippet.changeset(%{type: kind, slug: slug, data: data})
     |> Repo.insert!()
   end
 
@@ -290,7 +305,10 @@ defmodule Xr.Rooms do
   end
 
   def snippets_by_slug_and_kind(room_id, kind, slug) do
-    Repo.all(from s in Xr.Rooms.Snippet, where: s.room_id == ^room_id and s.type == ^kind and s.slug == ^slug)
+    Repo.all(
+      from s in Xr.Rooms.Snippet,
+        where: s.room_id == ^room_id and s.type == ^kind and s.slug == ^slug
+    )
   end
 
   def save_entities_to_initial_snapshot(room_id) do
@@ -308,10 +326,13 @@ defmodule Xr.Rooms do
   def replace_entities_with_initial_snapshot(room_id) do
     # find the initial snapshot
     case initial_snapshot(room_id) do
-      nil -> :noop
-      snapshot -> # clear old data
+      nil ->
+        :noop
+
+      # clear old data
+      snapshot ->
         delete_entities(room_id)
-          # iterate through the map of components and build entities
+        # iterate through the map of components and build entities
         for {entity_id, components} <- snapshot.data do
           create_entity(room_id, entity_id, components)
         end

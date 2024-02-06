@@ -45,46 +45,20 @@ defmodule Xr.Servers.State do
   def handle_info(:sync, state) do
     Process.send_after(self(), :sync, @sync_interval)
 
-    case MapSet.size(state.entities_to_sync) do
-      0 ->
-        {:noreply, state}
-
-      _ ->
-        empty_diff = %{creates: %{}, updates: %{}, deletes: %{}}
-
-        to_sync =
-          MapSet.to_list(state.entities_to_sync)
-          |> Enum.reduce(empty_diff, fn entity_id, acc ->
-            [{_, %{create: create, update: update, delete: delete}}] =
-              :ets.lookup(state.table, entity_id)
-
-            acc =
-              if(create != nil,
-                do: Map.put(acc, :creates, Map.put(acc[:creates], entity_id, create)),
-                else: acc
-              )
-
-            acc =
-              if(update != nil,
-                do: Map.put(acc, :updates, Map.put(acc[:updates], entity_id, update)),
-                else: acc
-              )
-
-            acc =
-              if(delete != nil,
-                do: Map.put(acc, :deletes, Map.put(acc[:deletes], entity_id, delete)),
-                else: acc
-              )
-
-            acc
-          end)
-
+    case Xr.Utils.get_entities_diff(
+           MapSet.to_list(state.entities_to_sync),
+           state.table
+         ) do
+      {:ok, to_sync} ->
         XrWeb.Endpoint.broadcast("room:" <> state.room_id, "entities_diff", to_sync)
 
         # clear the ets table
         :ets.delete_all_objects(state.table)
         # clear the entities to sync
         {:noreply, %{state | entities_to_sync: MapSet.new()}}
+
+      _ ->
+        {:noreply, state}
     end
   end
 

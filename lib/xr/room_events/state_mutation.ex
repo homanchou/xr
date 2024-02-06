@@ -1,4 +1,4 @@
-defmodule Xr.Servers.EventToState do
+defmodule Xr.RoomEvents.StateMutation do
   # table is an ets table
 
   import Xr.Utils, only: [insert: 4]

@@ -14,7 +14,7 @@ defmodule Xr.Utils do
     case :ets.lookup(table, entity_id) do
       [] ->
         map =
-          %{:create => nil, :update => nil, :delete => nil}
+          %{create: nil, update: nil, delete: nil}
           |> Map.put(operation, payload)
 
         :ets.insert(table, {entity_id, map})
@@ -36,16 +36,18 @@ defmodule Xr.Utils do
   @doc """
   convert table contents into entities_diff payload
   """
-  def get_entities_diff([], _table) do
-    :nothing_to_sync
+  def get_entities_diff(table) when not is_list(table) do
+    case :ets.tab2list(table) do
+      [] -> :nothing_to_sync
+      data -> get_entities_diff(data)
+    end
   end
 
-  def get_entities_diff(entities_list, table) when is_list(entities_list) do
+  def get_entities_diff(data) when is_list(data) do
     empty_diff = %{creates: %{}, updates: %{}, deletes: %{}}
 
     to_sink =
-      Enum.reduce(entities_list, empty_diff, fn entity_id, acc ->
-        [{_, row_value}] = :ets.lookup(table, entity_id)
+      Enum.reduce(data, empty_diff, fn {entity_id, row_value}, acc ->
         get_entities_diff(acc, entity_id, row_value)
       end)
 

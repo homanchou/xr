@@ -21,12 +21,12 @@ defmodule XrWeb.RoomChannel do
   end
 
   @impl true
-  def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
-    Xr.Utils.to_room_stream(socket.assigns.room_id, "user_moved", %{
-      "user_id" => socket.assigns.user_id,
-      "head_pos" => position,
-      "head_rot" => rotation
-    })
+  def handle_in("i_moved", payload, socket) do
+    Xr.Utils.to_room_stream(
+      socket.assigns.room_id,
+      "user_moved",
+      Map.put(payload, "user_id", socket.assigns.user_id)
+    )
 
     {:noreply, socket}
   end

@@ -24,9 +24,10 @@ export const init = (config: Config) => {
   $channel_joined.pipe(take(1)).subscribe(() => {
     $camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
       const cam = scene.activeCamera;
+      const position = truncate(cam.position.asArray());
+      const rotation = truncate(cam.absoluteRotation.asArray());
       const payload = {
-        position: truncate(cam.position.asArray()),
-        rotation: truncate(cam.absoluteRotation.asArray()),
+        pose: { head: position.concat(rotation) },
       };
       channel.push("i_moved", payload);
     });
@@ -40,9 +41,8 @@ export const init = (config: Config) => {
     filter(e => e.op === StateOperation.create),
     filter(e => e.eid !== config.user_id),
     filter(componentExists("tag", "avatar")),
-    tap(e => console.log("tap ta", e)),
   ).subscribe(e => {
-    createSimpleUser(e.eid, e.com.head_pos, e.com.head_rot);
+    createSimpleUser(e.eid, e.com.pose);
   });
 
   // user_left
@@ -56,10 +56,15 @@ export const init = (config: Config) => {
   // user_moved
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.update),
+    tap(e => console.log("user moved", e)),
     filter(e => e.eid !== config.user_id),
-    filter(componentExists("head_pos")),
+    filter(componentExists("tag", "avatar")),
   ).subscribe(e => {
-    poseUser(e.eid, e.com.head_pos, e.com.head_rot);
+    console.log("other user moved");
+    if (!cache.has(e.eid)) {
+      createSimpleUser(e.eid, e.com.pose);
+    }
+    poseUser(e.eid, e.com.pose);
   });
 
 
@@ -75,21 +80,25 @@ export const init = (config: Config) => {
 
 
 
-  const createSimpleUser = (user_id: string, head_pos: number[], head_rot: number[]) => {
+  const createSimpleUser = (user_id: string, pose: { head: number[]; }) => {
 
 
     let head = cache.get(headId(user_id));
     if (!head) {
       head = CreateBox(headId(user_id), { width: 0.15, height: 0.3, depth: 0.25 }, scene);
       cache.set(headId(user_id), head);
-      poseUser(user_id, head_pos, head_rot);
+      poseUser(user_id, pose);
     }
 
   };
 
-  const poseUser = (user_id: string, position: number[], rotation: number[]) => {
-    let head = cache.get(headId(user_id));
+  const poseUser = (user_id: string, pose: { head: number[]; }) => {
+    const head = cache.get(headId(user_id));
     if (!head) { return; }
+    //position is first 3 elements of pose array
+    const position = pose.head.slice(0, 3);
+    //rotation is last 4 elements of pose array
+    const rotation = pose.head.slice(3);
     head.position.fromArray(position);
     if (!head.rotationQuaternion) {
       head.rotationQuaternion = Quaternion.FromArray(rotation);

@@ -41,11 +41,14 @@ defmodule XrWeb.Presence do
   def emit_joined(room_id, user_id) do
     case Rooms.get_entity_state(room_id, user_id) do
       nil ->
+        default_rotation = [0, 0, 0, 1]
+
         default_user_state = %{
           "color" => Xr.Rooms.create_random_color(),
           "tag" => "avatar",
-          "head_rot" => [0, 0, 0, 1],
-          "head_pos" => Rooms.get_head_position_near_spawn_point(room_id),
+          "pose" => %{
+            "head" => Rooms.get_head_position_near_spawn_point(room_id) ++ default_rotation
+          },
           "user_id" => user_id
         }
 

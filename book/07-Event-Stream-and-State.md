@@ -52,7 +52,9 @@ What are room events and how are they different than entities_diff events?  Basi
 {event: "user_moved", payload: {user_id: "bob", position: [...], rotation: [...]}}
 {event: "user_left", payload: {user_id: "bob"}}
 ```
-These events should read like a story.  They don't know about entities or components or state, (although there is a lot of data overlap).  A room event can involve more than one entity, for example a user grabbing a thing.  The room event is about the "what", and the entities_diff is more about the "how".  entities_diff events are focused on syncing state and therefore it's more difficult to read them and know the intent.  Room events and entities_diff are related but decoupled such that we can retain the original room events yet change out the implementation of components in entities_diff that we decide to produce from the room events.
+These events should read like a story.  The event name is always in the past tense.  It's something that happened.  The room events describe "what" happened and don't focus don't know about entities or components or state, (although there is a lot of data overlap).  A room event can involve more than one entity, for example a user grabbing a thing, which can potentially influence multiple entities being updated in the state.  The room event is about the "what", and the entities_diff is more about the "how".  
+
+entities_diff events must be completely deterministic based off of the room event.  It cannot randomly create new data otherwise playback would change.  entities_diff events are focused on syncing state and therefore it's more difficult to read them to know the intent.  Room events and entities_diff are related but decoupled such that we can retain the original room events yet change out the implementation of components in entities_diff that we decide to produce from the room events.
 
 ### Transformation Example
 
@@ -62,9 +64,9 @@ For example, a "user_joined" event translates from:
 
 ```json
 // room event
-{ event: "user_joined", payload: {user_id: "123abc", position: [...], rotation: [...]}}
+{ event: "user_joined", payload: {user_id: "123abc", head_pos: [...], head_rot: [...]}}
 // translates into entities_diff event
-{creates: {123abc: {position:[...], rotation:[...]}}}
+{ creates: {123abc: {head_pos:[...], head_rot:[...]}}}
 ```
 
 A "user_left" event:
@@ -73,8 +75,23 @@ A "user_left" event:
 // room event
 { event: "user_left", payload: {user_id: "123abc"}}
 // translates into entities_diff event
-{deletes: {123abc: {}}}
+{ deletes: {123abc: {}}}
 ```
+User events are straight forward, not much data changes, it seems we can easily rearrange the payload.  Is this even necessary, you might ask.  (I ask too).
+
+Here's a more interesting example.  Drawing on a whiteboard:
+
+```json
+// room event, someone started drawing
+{ event: "stroke_start", payload: {stroke_id: "rand123", color: [1,0,0], board_id: "b123", user: "tom"}}
+// since the user, board and color don't change the next event can just be x,y pairs and a timestamp
+{ event: "stroke_continue", payload: { stroke_id: "rand123", points: [{x:2,y:5,t:0}...]} }
+{ event: "stroke_continue", payload: { stroke_id: "rand123", points: [{x:2.5,y:5.6,t:5}...]} }
+// when the user is done with that stroke they lift their pen or release the trigger
+{ event: "stroke_end", payload: {stroke_id: "rand123"}}
+```
+
+In this case as the stroke itself has a life cycle.  The room message begins sending sparse bits of information for just the new points that are being traced at the moment (every few milliseconds) until the stroke is completed.  The way we store this state with entities and components is up to us to define later.  We could update state in a few ways.  For example we could nest the current stroke into a series of objects in an array that is within a board entity.  Arrays are useful for keeping order in case we want to do an undo operation and pop off the last stroke.  But we don't need to think about that now, we can defer that design until later.  Suffice to say that this is the reason we have room events divorced from state operation (entities_diff) events.  It's so that we can separate our design of how we persist state independent from our messages conveying what is happening.
 
 ### Phoenix PubSub as an Event Stream
 

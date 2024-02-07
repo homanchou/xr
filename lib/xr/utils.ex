@@ -6,6 +6,16 @@ defmodule Xr.Utils do
   end
 
   @doc """
+  to_room_stream pipes an event to the room stream on Phoneix pubsub
+  """
+  def to_room_stream(room_id, event_name, payload) do
+    Phoenix.PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
+      "event" => event_name,
+      "payload" => payload
+    })
+  end
+
+  @doc """
   internal api to insert a state change into the ets table
    operation must be one of :create, :update, :delete
    returns state with the entities_to_sync set updated

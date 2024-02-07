@@ -1,12 +1,11 @@
 defmodule XrWeb.RoomChannel do
   use XrWeb, :channel
   alias XrWeb.Presence
-  alias Xr.Servers.State
-  import Xr.Events
 
   @impl true
   def join("room:" <> room_id, _payload, socket) do
     if socket.assigns.user_id do
+      Xr.Servers.RoomsSupervisor.start_room(room_id)
       send(self(), :after_join)
       {:ok, assign(socket, :room_id, room_id)}
     else
@@ -23,12 +22,11 @@ defmodule XrWeb.RoomChannel do
 
   @impl true
   def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
-    event(socket.assigns.room_id, "user_moved", %{
+    Xr.Utils.to_room_stream(socket.assigns.room_id, "user_moved", %{
       "user_id" => socket.assigns.user_id,
-      "position" => position,
-      "rotation" => rotation
+      "head_pos" => position,
+      "head_rot" => rotation
     })
-    |> to_room_stream()
 
     {:noreply, socket}
   end
@@ -41,14 +39,5 @@ defmodule XrWeb.RoomChannel do
     push(socket, "entities_state", entities)
     # push(socket, "user_snapshot", user_snapshot(socket))
     {:noreply, socket}
-  end
-
-  def user_snapshot(socket) do
-    user_states = State.state(socket.assigns.room_id)
-
-    Presence.list(socket)
-    |> Enum.reduce(%{}, fn {user_id, _}, acc ->
-      Map.put(acc, user_id, user_states[user_id])
-    end)
   end
 end

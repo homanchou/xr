@@ -1,40 +1,23 @@
 import { StateOperation, Config } from "../config";
 
-export type EntityComponentValue = Map<symbol, any>;
-export type ComponentName = string;
-export type State = Map<ComponentName, EntityComponentValue>;
-
-export const state = new Map<ComponentName, EntityComponentValue>();
-
 export const init = (config: Config) => {
-  
-  const { channel, $state_mutations } = config;
-  config.state = state;
+
+  const { $state_mutations, state } = config;
 
   // keep state updated
 
   $state_mutations.subscribe((evt) => {
+    console.log('state mutation', JSON.stringify(evt));
     if (evt.op === StateOperation.create) {
-        for (const [component_name, component_value] of Object.entries(
-        evt.com 
-        )) {
-          state.set(component_name, state.get(component_name) || new Map());
-          state.get(component_name)!.set(Symbol.for(evt.eid), component_value);
-        }
-      
+      state.set(evt.eid, evt.com);
+
     } else if (evt.op === StateOperation.update) {
-        for (const [component_name, component_value] of Object.entries(
-          evt.com
-        )) {
-          state.set(component_name, state.get(component_name) || new Map());
-          state.get(component_name)!.set(Symbol.for(evt.eid), component_value);
-        }
-      
+      const prev = state.get(evt.eid) || {};
+      state.set(evt.eid, { ...prev, ...evt.com });
+
     } else if (evt.op === StateOperation.delete) {
-        for (const component_name of Object.keys(state)) {
-          state.get(component_name)!.delete(Symbol.for(evt.eid));
-        }
+      state.delete(evt.eid);
     }
   });
 
-}
+};

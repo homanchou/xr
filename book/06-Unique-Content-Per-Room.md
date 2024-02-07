@@ -309,6 +309,9 @@ export type StateMutation = {
   com?: {
     [component_name: string]: any;
   };
+  prev?: {
+    [component_name: string]: any;
+  }
 }
 // rxjs filter helper for matching if a component exists in event
 export const componentExists = (component_name: string) => {

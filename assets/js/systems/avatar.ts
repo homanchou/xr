@@ -1,18 +1,19 @@
-import { Config } from "../config";
+import { Config, StateOperation, componentExists } from "../config";
 import { Quaternion } from "@babylonjs/core/Maths/math";
-import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
-import { throttleTime, take } from "rxjs/operators";
+import { throttleTime, take, filter, tap } from "rxjs/operators";
 import { truncate } from "../utils";
+import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 
 export const init = (config: Config) => {
-  
 
-  const { scene } = config;
+  const cache = new Map<string, AbstractMesh>();
+
+  const { scene, $channel_joined, $camera_moved, channel, $state_mutations } = config;
 
   // create a signal that the camera moved
   scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
-    config.$camera_moved.next(new Date().getTime());
+    $camera_moved.next(true);
   });
 
   const MOVEMENT_SYNC_FREQ = 200; // milliseconds
@@ -20,87 +21,85 @@ export const init = (config: Config) => {
   // subscribe just one time to the channel joined event
   // and create a new subscription that takes all camera movement, 
   // throttles it, truncates the numbers and  sends it to the server
-  config.$channel_joined.pipe(take(1)).subscribe(() => {
-    config.$camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
+  $channel_joined.pipe(take(1)).subscribe(() => {
+    $camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
       const cam = scene.activeCamera;
       const payload = {
         position: truncate(cam.position.asArray()),
         rotation: truncate(cam.absoluteRotation.asArray()),
-      }
-      config.channel.push("i_moved", payload);
+      };
+      channel.push("i_moved", payload);
     });
   });
 
   // reacting to incoming events to draw other users, not self
 
+
   // user_joined
-  // config.$room_stream.pipe(
-  //   filter(e => e.event === "user_joined"),
-  // ).subscribe(e => {
-  //   if (e.payload.user_id !== config.user_id) {
-  //     createSimpleUser(e.payload.user_id, e.payload.position, e.payload.rotation);
-  //   } else {
-  //     console.log("it is me so set camera position", e)
-  //     const cam = scene.activeCamera as FreeCamera;
-  //     cam.position.fromArray(e.payload.position);
-  //     cam.rotationQuaternion = Quaternion.FromArray(e.payload.rotation);
-  //   }
-  // });
+  $state_mutations.pipe(
+    filter(e => e.op === StateOperation.create),
+    filter(e => e.eid !== config.user_id),
+    filter(componentExists("tag", "avatar")),
+    tap(e => console.log("tap ta", e)),
+  ).subscribe(e => {
+    createSimpleUser(e.eid, e.com.head_pos, e.com.head_rot);
+  });
 
   // user_left
-  // config.$room_stream.pipe(
-  //   filter(e => e.event === "user_left"),
-  //   filter(e => e.payload.user_id !== config.user_id)
-  // ).subscribe(e => {
-  //   removeUser(e.payload.user_id);
-  // });
+  $state_mutations.pipe(
+    filter(e => e.op === StateOperation.delete),
+    filter(componentExists("tag", "avatar")),
+  ).subscribe(e => {
+    removeUser(e.eid);
+  });
 
   // user_moved
-  // config.$room_stream.pipe(
-  //   filter(e => e.event === "user_moved"),
-  //   filter(e => e.payload.user_id !== config.user_id)
-  // ).subscribe(e => {
-  //   poseUser(e.payload.user_id, e.payload.position, e.payload.rotation);
-  // });
+  $state_mutations.pipe(
+    filter(e => e.op === StateOperation.update),
+    filter(e => e.eid !== config.user_id),
+    filter(componentExists("head_pos")),
+  ).subscribe(e => {
+    poseUser(e.eid, e.com.head_pos, e.com.head_rot);
+  });
+
+
+  const headId = (user_id: string) => `head_${user_id}`;
 
   const removeUser = (user_id: string) => {
-    const user = scene.getTransformNodeByName(user_id);
-    if (user) {
-      user.dispose();
+    const head = cache.get(headId(user_id));
+    if (head) {
+      head.dispose();
+      cache.delete(headId(user_id));
     }
   };
 
-  const createSimpleUser = (user_id: string, position: number[], rotation: number[]) => {
-    if (user_id !== config.user_id) {
-      const user = scene.getTransformNodeByName(user_id);
-      if (!user) {
-        const transform = new TransformNode(user_id, scene);
-        const box = CreateBox("head");
-        box.parent = transform;
-        poseUser(user_id, position, rotation);
-      }
+
+
+  const createSimpleUser = (user_id: string, head_pos: number[], head_rot: number[]) => {
+
+
+    let head = cache.get(headId(user_id));
+    if (!head) {
+      head = CreateBox(headId(user_id), { width: 0.15, height: 0.3, depth: 0.25 }, scene);
+      cache.set(headId(user_id), head);
+      poseUser(user_id, head_pos, head_rot);
     }
+
   };
 
   const poseUser = (user_id: string, position: number[], rotation: number[]) => {
-    const transform = scene.getTransformNodeByName(user_id);
-    if (transform) {
-      transform.position.fromArray(position);
-      if (!transform.rotationQuaternion) { transform.rotationQuaternion = Quaternion.FromArray(rotation); } else {
-        transform.rotationQuaternion.x = rotation[0];
-        transform.rotationQuaternion.y = rotation[1];
-        transform.rotationQuaternion.z = rotation[2];
-        transform.rotationQuaternion.w = rotation[3];
-      }
+    let head = cache.get(headId(user_id));
+    if (!head) { return; }
+    head.position.fromArray(position);
+    if (!head.rotationQuaternion) {
+      head.rotationQuaternion = Quaternion.FromArray(rotation);
+    } else {
+      head.rotationQuaternion.x = rotation[0];
+      head.rotationQuaternion.y = rotation[1];
+      head.rotationQuaternion.z = rotation[2];
+      head.rotationQuaternion.w = rotation[3];
     }
+
   };
 
-  // config.channel.on("user_snapshot", (payload: { user_id: string, position: number[], rotation: number[]; }[]) => {
-  //   Object.entries(payload).forEach(([user_id, state]) => {
-  //     if (user_id !== config.user_id) {
-  //       createSimpleUser(user_id, state.position, state.rotation);
-  //     }
-
-  //   });
-  // });
-}
+};

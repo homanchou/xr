@@ -11,8 +11,6 @@ defmodule XrWeb.Presence do
 
   alias Xr.Rooms
 
-  import Xr.Events
-
   @doc """
   Presence is great for external clients, such as JavaScript applications,
   but it can also be used from an Elixir client process to keep track of presence changes
@@ -26,14 +24,7 @@ defmodule XrWeb.Presence do
 
   def handle_metas("room:" <> room_id, %{joins: joins, leaves: leaves}, _presences, state) do
     for {user_id, _} <- joins do
-      # if we have previous user state data, then broadcast it
-      case Rooms.get_entity_state(room_id, user_id) do
-        nil ->
-          emit_join_at_spawn_point(room_id, user_id)
-
-        user_state ->
-          emit_join_from_previous_state(room_id, user_id, user_state)
-      end
+      emit_joined(room_id, user_id)
     end
 
     for {user_id, _} <- leaves do
@@ -44,30 +35,25 @@ defmodule XrWeb.Presence do
   end
 
   def emit_left(room_id, user_id) do
-    event(room_id, "user_left", %{"user_id" => user_id})
-    |> to_room_stream()
+    Xr.Utils.to_room_stream(room_id, "user_left", %{"user_id" => user_id})
   end
 
-  def emit_join_at_spawn_point(room_id, user_id) do
-    event(room_id, "user_joined", %{
-      "user_id" => user_id,
-      "position" => Rooms.get_head_position_near_spawn_point(room_id),
-      "rotation" => [0, 0, 0, 1]
-    })
-    |> to_room_stream()
-  end
+  def emit_joined(room_id, user_id) do
+    case Rooms.get_entity_state(room_id, user_id) do
+      nil ->
+        default_user_state = %{
+          "color" => Xr.Rooms.create_random_color(),
+          "tag" => "avatar",
+          "head_rot" => [0, 0, 0, 1],
+          "head_pos" => Rooms.get_head_position_near_spawn_point(room_id),
+          "user_id" => user_id
+        }
 
-  def emit_join_from_previous_state(room_id, user_id, %{
-        create: create,
-        update: update
-      }) do
-    data = update || create
+        Xr.Utils.to_room_stream(room_id, "user_joined", default_user_state)
 
-    event(room_id, "user_joined", %{
-      "user_id" => user_id,
-      "position" => data["position"],
-      "rotation" => data["rotation"]
-    })
-    |> to_room_stream()
+      components ->
+        # resume previous user state
+        Xr.Utils.to_room_stream(room_id, "user_joined", Map.put(components, "user_id", user_id))
+    end
   end
 end

@@ -75,8 +75,6 @@ defmodule Xr.RoomsTest do
 
     # room db can be exported to json snippet
 
-
-
     test "create_entity/3 with valid data creates a entity" do
       room = room_fixture()
 
@@ -114,19 +112,54 @@ defmodule Xr.RoomsTest do
         "mesh_builder" => "floor",
         "position" => [4, 0, -1]
       })
+
       Rooms.save_entities_to_initial_snapshot(room.id)
       assert Rooms.snippets(room.id) |> Enum.count() == 1
 
       Rooms.delete_entities(room.id)
       assert Rooms.entities(room.id) == %{}
 
-
       Rooms.replace_entities_with_initial_snapshot(room.id)
       assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
-
     end
 
+    test "find entities by component name" do
+      room = room_fixture()
 
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
 
+      entity = Rooms.find_entities_having_component(room.id, "tag")
+      assert entity |> Map.keys() |> Enum.count() == 1
+      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+    end
+
+    test "find entities by component name and value" do
+      room = room_fixture()
+
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
+
+      entity = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
+      assert entity |> Map.keys() |> Enum.count() == 1
+      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+    end
+
+    test "get position near spawn point" do
+      room = room_fixture()
+
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
+
+      position = Rooms.get_head_position_near_spawn_point(room.id)
+      assert position |> length() == 3
+      assert position != [0, 0, 0]
+    end
   end
 end

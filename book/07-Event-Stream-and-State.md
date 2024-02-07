@@ -444,14 +444,18 @@ We want to start this supervisor automatically when Phoenix starts our applicati
   ]
 ```
 
-Now we can use the RoomsSupervisor to create our UserSnapshot GenServer when we launch into our room from the `show` function in the RoomsController.  Modify the show function like this:
+Now we can use the RoomsSupervisor to create our EntitiesDiff GenServer when we join the room channel.  Update the RoomChannel join function to look like this.  
 
 ```elixir
-def show(conn, %{"id" => id}) do
-  room = Rooms.get_room!(id)
-  Xr.Servers.RoomsSupervisor.start_room(room.id)
-  render(conn, :show, room: room)
-end
+  def join("room:" <> room_id, _payload, socket) do
+    if socket.assigns.user_id do
+      Xr.Servers.RoomsSupervisor.start_room(room_id)
+      send(self(), :after_join)
+      {:ok, assign(socket, :room_id, room_id)}
+    else
+      {:error, %{reason: "unauthorized"}}
+    end
+  end
 ```
 This starts the EntitiesDiff Genserver if it hasn't already started, and if it has it will silently fail.
 
@@ -505,13 +509,7 @@ Now when we start that GenServer its pid is registered in the Registry.  Let's a
   end
 ```
 
-### Update the Database Whenever Entities Diff is Broadcast
-
-Let's write a test first:
-
-
-
 
 ### Summary
 
-In this chapter we created an EntitiesDiff GenServer that can receive "room events" on a "room_stream:#{room_id}" pub/sub topic.  The GenServer is supervised under a RoomSupervisor and can be dynamically started and stopped.  The GenServer transforms incoming room messages into state mutations and stores them in an ETS table.  It will broadcast state mutations in a "entities_diff" message every @sync_internal time in ms.  We wrote unit tests to ensure our functions works and that the GenServer can update entitites state in the database.
+In this chapter we created a "server" that can receive "room events" and produce entities_diff events.  We created a GenServer that is subscribed on a "room_stream:#{room_id}" pub/sub topic.  The GenServer is supervised under a RoomSupervisor and can be dynamically started and stopped.  The GenServer transforms incoming room messages into state mutations and stores them in an ETS table.  It will broadcast state mutations in a "entities_diff" message every @sync_internal time in ms.  We wrote unit tests to ensure our functions work.

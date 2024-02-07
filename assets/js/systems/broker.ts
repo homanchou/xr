@@ -1,24 +1,34 @@
-import { Config, StateOperation } from "../config";
+import { Config, EntityPayload, StateOperation } from "../config";
 
 export const init = (config: Config) => {
-  
+
   // channel connection
-  const {socket, $state_mutations} = config;
+  const { socket, $state_mutations, state } = config;
   socket.connect();
   let channel = socket.channel(`room:${config.room_id}`, {});
   config.channel = channel;
 
   // channel subscriptions
-  channel.on("entities_state", (payload: { [entity_id: string]: {[component_name: string]: any} }) => {
+  channel.on("entities_state", (payload: EntityPayload) => {
     for (const [entity_id, components] of Object.entries(payload)) {
-      $state_mutations.next({op: StateOperation.create, eid: entity_id, com: components});
+      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components });
     }
   });
 
 
-  // channel.on("state_mutations", (event) => {
-  //   config.$state_mutations.next(event);
-  // });
+  channel.on("entities_diff", (payload: { creates: EntityPayload, updates: EntityPayload, deletes: EntityPayload; }) => {
+    for (const [entity_id, components] of Object.entries(payload.creates)) {
+      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components });
+    }
+    for (const [entity_id, components] of Object.entries(payload.updates)) {
+      const prev = state.get(entity_id) || {};
+      $state_mutations.next({ op: StateOperation.update, eid: entity_id, com: components, prev });
+    }
+    for (const [entity_id, components] of Object.entries(payload.deletes)) {
+      const prev = state.get(entity_id) || {};
+      $state_mutations.next({ op: StateOperation.delete, eid: entity_id, com: components, prev });
+    }
+  });
 
   // for debugging
   channel.onMessage = (event, payload, _) => {

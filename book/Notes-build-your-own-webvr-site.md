@@ -1137,7 +1137,7 @@ Now create `assets/js/systems/scene.ts`.  This file will inject a 3D scene onto 
 
 ```typescript
 import { config } from "../config";
-import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";

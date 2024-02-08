@@ -1,5 +1,3 @@
-
-
 import * as Scene from "./systems/scene";
 import * as Broker from "./systems/broker";
 import * as State from "./systems/state";
@@ -40,7 +38,7 @@ export const orchestrator = {
         Color.init(config);
 
         for (const [entity_id, components] of Object.entries(opts.entities)) {
-            config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components });
+            config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
         }
 
     }

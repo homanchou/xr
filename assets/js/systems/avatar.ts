@@ -5,7 +5,7 @@ import { throttleTime, take, filter, tap } from "rxjs/operators";
 import { truncate } from "../utils";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 // import { UniversalCamera } from "@babylonjs/core/Cameras/";
-import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
+import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 
 export const init = (config: Config) => {
 

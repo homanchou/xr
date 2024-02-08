@@ -51,6 +51,9 @@ export const init = (config: Config) => {
         })
         .receive("error", (resp) => {
           console.log("Unable to join", resp);
+          // redirect to index page so they can start over
+          window.location.href = "/rooms";
+
         });
 
     }

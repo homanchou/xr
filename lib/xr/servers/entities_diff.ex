@@ -37,7 +37,10 @@ defmodule Xr.Servers.EntitiesDiff do
 
     case Xr.Utils.get_entities_diff(state.table) do
       {:ok, to_sync} ->
+        # broadcast to clients connect to the room
         XrWeb.Endpoint.broadcast("room:" <> state.room_id, "entities_diff", to_sync)
+        # also publish to phoenix pubsub
+        PubSub.broadcast(Xr.PubSub, "entities_diff_stream:" <> state.room_id, to_sync)
 
         # clear the ets table
         :ets.delete_all_objects(state.table)

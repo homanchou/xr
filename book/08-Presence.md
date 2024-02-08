@@ -536,3 +536,125 @@ If you test this in two browser windows you should see a small rectangle represe
 
 ### Update Database with Entities Diff Events
 
+Let's create a new server that will listen to entities_diff messages.  Create a new server file at `lib/xr/servers/entities_state.ex`:
+
+```elixir
+@moduledoc """
+Listens to entities diff msg and updates the database.  
+"""
+defmodule Xr.Servers.EntitiesState do
+  use GenServer
+  
+  use GenServer
+  alias Phoenix.PubSub
+  
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "entities_state:#{room_id}"}}
+  end
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
+  end
+
+  @impl true
+  def init({:ok, room_id}) do
+    # subscribe to the room stream
+    PubSub.subscribe(Xr.PubSub, "entities_diff_stream:#{room_id}")
+
+    {:ok, %{room_id: room_id}}
+  end
+  
+  @impl true
+  def handle_info(msg, state) do
+    # save changes to db
+  end
+end
+```
+
+This server subscribes to a PubSub topic of `entities_state:#{room_id}`.  Back in entities_diff server let's publish to this topic.
+
+```elixir
+def handle_info(:sync, state) do
+  Process.send_after(self(), :sync, @sync_interval)
+
+  case Xr.Utils.get_entities_diff(state.table) do
+    {:ok, to_sync} ->
+      # broadcast to clients connect to the room
+      XrWeb.Endpoint.broadcast("room:" <> state.room_id, "entities_diff", to_sync)
+      # also publish to phoenix pubsub
+      PubSub.broadcast(Xr.PubSub, "entities_diff_stream:" <> state.room_id, to_sync)
+
+      # clear the ets table
+      :ets.delete_all_objects(state.table)
+      # clear the entities to sync
+      {:noreply, state}
+
+    :nothing_to_sync ->
+      {:noreply, state}
+  end
+end
+```
+
+We need to add this new server to the `rooms_supervisor.ex` start_room function so it gets started at the same time as the entities_diff server.
+
+```elixir
+def start_room(room_id) do
+  DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesDiff, room_id})
+  DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesState, room_id})
+end
+
+def stop_room(room_id) do
+  DynamicSupervisor.terminate_child(
+    __MODULE__,
+    Xr.Servers.EntitiesDiff.via_tuple(room_id) |> GenServer.whereis()
+  )
+
+  DynamicSupervisor.terminate_child(
+    __MODULE__,
+    Xr.Servers.EntitiesState.via_tuple(room_id) |> GenServer.whereis()
+  )
+end
+```
+
+Let's write a helper function that takes the entities_diff payload and saves the changes to the db.  Open up `rooms.ex` and add this function:
+
+```elixir
+
+
+  def update_component(room_id, entity_id, component_name, component_value) do
+    case Repo.get_by(Xr.Rooms.Component,
+           room_id: room_id,
+           entity_id: entity_id,
+           component_name: component_name
+         ) do
+      nil ->
+        :noop
+
+      component ->
+        component
+        |> Xr.Rooms.Component.changeset(%{component: %{component_name => component_value}})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Update entities in a room by applying entities_diff event to the database
+  """
+  def update_entities(room_id, %{creates: creates, updates: updates, deletes: deletes}) do
+    for {entity_id, components} <- creates do
+      create_entity(room_id, entity_id, components)
+    end
+
+    for {entity_id, components} <- updates do
+      for {component_name, component_value} <- components do
+        update_component(room_id, entity_id, component_name, component_value)
+      end
+    end
+
+    # delete
+    for entity_id <- deletes do
+      delete_entity(room_id, entity_id)
+    end
+  end
+
+```

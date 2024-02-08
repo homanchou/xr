@@ -17,7 +17,6 @@ defmodule XrWeb.RoomController do
   def create(conn, %{"room" => room_params}) do
     case Rooms.create_room_with_random_content(room_params) do
       {:ok, _room} ->
-
         conn
         |> put_flash(:info, "Room created successfully.")
         |> redirect(to: ~p"/rooms")
@@ -28,13 +27,21 @@ defmodule XrWeb.RoomController do
   end
 
   def show(conn, %{"id" => id}) do
-    room = Rooms.get_room!(id)
-    case Xr.Servers.RoomsSupervisor.start_room(room.id) do
-      {:ok, _pid} -> Rooms.replace_entities_with_initial_snapshot(room.id)
-      _ -> :noop
+    case Rooms.get_room(id) do
+      nil ->
+        conn
+        |> put_flash(:error, "No such room \"#{id}\"")
+        |> redirect(to: ~p"/rooms")
+
+      room ->
+        case Xr.Servers.RoomsSupervisor.start_room(room.id) do
+          {:ok, _pid} -> Rooms.replace_entities_with_initial_snapshot(room.id)
+          _ -> :noop
+        end
+
+        initial_snapshot = Rooms.initial_snapshot(room.id)
+        render(conn, :show, orchestrator: true, room: room, entities: initial_snapshot.data)
     end
-    initial_snapshot = Rooms.initial_snapshot(room.id)
-    render(conn, :show, orchestrator: true, room: room, entities: initial_snapshot.data)
   end
 
   def edit(conn, %{"id" => id}) do

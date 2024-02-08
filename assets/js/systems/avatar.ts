@@ -4,6 +4,8 @@ import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { throttleTime, take, filter, tap } from "rxjs/operators";
 import { truncate } from "../utils";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+// import { UniversalCamera } from "@babylonjs/core/Cameras/";
+import { FreeCamera } from "@babylonjs/core/Cameras/freeCamera";
 
 export const init = (config: Config) => {
 
@@ -39,9 +41,16 @@ export const init = (config: Config) => {
   // user_joined
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.create),
-    filter(e => e.eid !== config.user_id),
+
     filter(componentExists("tag", "avatar")),
   ).subscribe(e => {
+    if (e.eid === config.user_id) {
+      // when reloading the page, set scene camera to last known position, or spawn point
+      const cam = scene.activeCamera as FreeCamera;
+      cam.position.fromArray(e.com.pose.head.slice(0, 3));
+      cam.rotationQuaternion = Quaternion.FromArray(e.com.pose.head.slice(3));
+      return;
+    }
     createSimpleUser(e.eid, e.com.pose);
   });
 

@@ -37,6 +37,8 @@ defmodule Xr.Rooms do
   """
   def get_room!(id), do: Repo.get!(Room, id)
 
+  def get_room(id), do: Repo.get(Room, id)
+
   @doc """
   Creates a room.
 
@@ -172,15 +174,43 @@ defmodule Xr.Rooms do
   end
 
   @doc """
-  Get all components for a room, sorted by entity_id so all components for entities are next to each other
+  Get all components for a room, sorted by entity_id so all components for entities are next to each other,
+  where not soft deleted
   """
   def components(room_id) do
-    Repo.all(from e in Xr.Rooms.Component, where: e.room_id == ^room_id, order_by: e.entity_id)
+    Repo.all(
+      from e in Xr.Rooms.Component,
+        where: e.room_id == ^room_id and is_nil(e.deleted_at),
+        order_by: e.entity_id
+    )
   end
 
+  def update_component(room_id, entity_id, component_name, component_value) do
+    case Repo.get_by(Xr.Rooms.Component,
+           room_id: room_id,
+           entity_id: entity_id,
+           component_name: component_name
+         ) do
+      nil ->
+        :noop
+
+      component ->
+        component
+        |> Xr.Rooms.Component.changeset(%{
+          component: %{component_name => component_value},
+          deleted_at: nil
+        })
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Get all components for an entity that are not soft deleted
+  """
   def components_for_entity_id(room_id, entity_id) do
     Repo.all(
-      from e in Xr.Rooms.Component, where: e.room_id == ^room_id and e.entity_id == ^entity_id
+      from e in Xr.Rooms.Component,
+        where: e.room_id == ^room_id and e.entity_id == ^entity_id
     )
   end
 
@@ -221,7 +251,10 @@ defmodule Xr.Rooms do
         component_name: component_name,
         component: %{component_name => component_value}
       }
-      |> Xr.Repo.insert!()
+      |> Xr.Repo.insert!(
+        on_conflict: [set: [component: %{component_name => component_value}, deleted_at: nil]],
+        conflict_target: [:entity_id, :component_name]
+      )
     end
   end
 
@@ -248,6 +281,13 @@ defmodule Xr.Rooms do
     |> Repo.delete_all()
   end
 
+  def soft_delete_entity(room_id, entity_id) do
+    from(c in Xr.Rooms.Component,
+      where: c.room_id == ^room_id and c.entity_id == ^entity_id
+    )
+    |> Repo.update_all(set: [deleted_at: DateTime.utc_now()])
+  end
+
   def find_entities_having_component(room_id, component_name, component_value) do
     q =
       from(c in Xr.Rooms.Component,
@@ -257,11 +297,17 @@ defmodule Xr.Rooms do
         select: c.entity_id
       )
 
-    from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.entity_id in subquery(q)
-    )
-    |> Repo.all()
-    |> components_to_map()
+    components =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.entity_id in subquery(q)
+      )
+      |> Repo.all()
+
+    if components |> length() == 0 do
+      {:error, :not_found}
+    else
+      {:ok, components |> components_to_map()}
+    end
   end
 
   def find_entities_having_component(room_id, component_name) do
@@ -271,26 +317,62 @@ defmodule Xr.Rooms do
         select: c.entity_id
       )
 
-    from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.entity_id in subquery(q)
-    )
-    |> Repo.all()
-    |> components_to_map()
+    components =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.entity_id in subquery(q)
+      )
+      |> Repo.all()
+
+    if components |> length() == 0 do
+      {:error, :not_found}
+    else
+      {:ok, components |> components_to_map()}
+    end
   end
 
   def get_head_position_near_spawn_point(room_id) do
     # grab the entities that have spawn_point as a component
-    entities_map = Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point")
+    case Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point") do
+      # grabs position from first spawn_point's position component
+      {:ok, entities_map} ->
+        {_entity_id, %{"position" => [x, y, z]}} =
+          entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
 
-    # grabs position from first spawn_point's position component
-    {_entity_id, %{"position" => [x, y, z]}} =
-      entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
+        # randomly calculate a position near it where the player head should be
+        offset1 = Enum.random(-100..100) / 100
+        offset2 = Enum.random(-100..100) / 100
+        [x + offset1, y + 2, z + offset2]
 
-    # randomly calculate a position near it where the player head should be
-    offset1 = Enum.random(-100..100) / 100
-    offset2 = Enum.random(-100..100) / 100
-    [x + offset1, y + 2, z + offset2]
+      _ ->
+        [0, 1.8, 0]
+    end
   end
+
+  @doc """
+  Update entities in a room by applying entities_diff event to the database
+  """
+  def update_entities(room_id, %{creates: creates, updates: updates, deletes: deletes}) do
+    for {entity_id, components} <- creates do
+      create_entity(room_id, entity_id, components)
+    end
+
+    for {entity_id, components} <- updates do
+      for {component_name, component_value} <- components do
+        update_component(room_id, entity_id, component_name, component_value)
+      end
+    end
+
+    # soft delete
+    for {entity_id, components} <- deletes do
+      for {component_name, component_value} <- components do
+        update_component(room_id, entity_id, component_name, component_value)
+      end
+
+      soft_delete_entity(room_id, entity_id)
+    end
+  end
+
+  ### snippets
 
   def create_snippet(room_id, kind, slug, data) do
     %Xr.Rooms.Snippet{

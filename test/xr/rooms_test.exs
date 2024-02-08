@@ -93,6 +93,17 @@ defmodule Xr.RoomsTest do
              |> Enum.count() == 2
     end
 
+    test "recreate soft deleted entity is ok" do
+      room = room_fixture()
+      user_id = Xr.Utils.random_string()
+      Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
+      Rooms.soft_delete_entity(room.id, user_id)
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 0
+      Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
+      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
+    end
+
     test "create snippet" do
       room = room_fixture()
       snippet = Rooms.create_snippet(room.id, "some kind", "some slug", %{"some" => "data"})
@@ -131,7 +142,7 @@ defmodule Xr.RoomsTest do
         "position" => [0, 0, 0]
       })
 
-      entity = Rooms.find_entities_having_component(room.id, "tag")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag")
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end
@@ -144,7 +155,7 @@ defmodule Xr.RoomsTest do
         "position" => [0, 0, 0]
       })
 
-      entity = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end

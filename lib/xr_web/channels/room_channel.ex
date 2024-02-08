@@ -5,9 +5,16 @@ defmodule XrWeb.RoomChannel do
   @impl true
   def join("room:" <> room_id, _payload, socket) do
     if socket.assigns.user_id do
-      Xr.Servers.RoomsSupervisor.start_room(room_id)
-      send(self(), :after_join)
-      {:ok, assign(socket, :room_id, room_id)}
+      # make sure room record exists (could have been deleted in the meanwhile)
+      case Xr.Rooms.get_room(room_id) do
+        nil ->
+          {:error, %{reason: "room_not_found"}}
+
+        _ ->
+          Xr.Servers.RoomsSupervisor.start_room(room_id)
+          send(self(), :after_join)
+          {:ok, assign(socket, :room_id, room_id)}
+      end
     else
       {:error, %{reason: "unauthorized"}}
     end

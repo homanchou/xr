@@ -9,7 +9,8 @@ defmodule Xr.Rooms.Component do
     field :component_name, :string
     field :component, :map
     field :room_id, :string
-
+    # soft delete
+    field :deleted_at, :utc_datetime
     timestamps(type: :utc_datetime)
   end
 

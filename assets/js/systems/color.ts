@@ -4,7 +4,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { filter } from "rxjs/operators";
 
 export const init = (config: Config) => {
-  
+
 
   const { scene, $state_mutations } = config;
 
@@ -18,13 +18,13 @@ export const init = (config: Config) => {
       let material = new StandardMaterial(value, scene);
       material.alpha = 1;
       material.diffuseColor = new Color3(
-        value[0] / 255,
-        value[1] / 255,
-        value[2] / 255
+        value[0],
+        value[1],
+        value[2]
       );
       mesh.material = material;
     }
-    
-  })
 
-}
+  });
+
+};

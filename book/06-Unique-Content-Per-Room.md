@@ -27,10 +27,10 @@ There are lots of ways we could design the schema for a database to persist this
 
 ### Create the Components Table
 
-Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then load them and create them in 3D instead of hardcoding them.  Execute this Phoenix generator command:
+Let's create a database table to be able to store some meta data about simple background objects.  We can then query this table for any objects that are supposed to be in the room and then create them.  Execute this Phoenix generator command:
 
 ```bash
- mix phx.gen.schema Rooms.Component components room_id:references:rooms entity_id:string component_name:string component:map
+ mix phx.gen.schema Rooms.Component components room_id:references:rooms entity_id:string component_name:string component:map 
 ```
 
 This will create two files, a schema and a migration:
@@ -52,18 +52,17 @@ defmodule Xr.Repo.Migrations.CreateComponents do
       add :component_name, :string, null: false
       add :component, :map, null: false, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
-
       timestamps(type: :utc_datetime)
     end
 
-    create index(:components, [:room_id, :entity_id])
-    # helps look up tags
-    create index(:components, [:room_id, :component_name])
     create index(:components, [:entity_id, :component_name], unique: true)
   end
 end
 
 ```
+The id is a random UUID that the database will generate for us.  However we won't be using it much, because we'll use the entity_id and component_name normally to update a component.  The component field is a map type which means we must store a key/value pair but it gives us flexibility to store any kind of type for the value.  
+
+The index ensures that a particular entity can only have one component of the same name.
 
 Run `mix ecto.migrate` to run the migration and create the table.
 
@@ -72,11 +71,12 @@ Run `mix ecto.migrate` to run the migration and create the table.
 Let's make ourselves a helper function to create an entity from a map:
 
 ```elixir
-@doc """
-Insert entity from a map.  Our entities table actually contains individual components so we'll loop through
-the components map and insert an entity record for each pair.
-"""
- def create_entity(room_id, entity_id, components = %{}) do
+
+  @doc """
+  Insert entity from a map.  Our entities table actually contains individual components so we'll loop through
+  the components map and insert an entity record for each pair.
+  """
+  def create_entity(room_id, entity_id, components = %{}) do
     # loop through components
     for {component_name, component_value} <- components do
       %Xr.Rooms.Component{
@@ -304,13 +304,11 @@ export enum StateOperation {
 }
 
 export type StateMutation = {
-  op: StateOperation;
-  eid: string;
-  com?: {
-    [component_name: string]: any;
-  };
-  prev?: {
-    [component_name: string]: any;
+    op: StateOperation;
+    eid: string;
+    com?: {
+      [component_name: string]: any;
+    };
   }
 }
 // rxjs filter helper for matching if a component exists in event
@@ -467,25 +465,26 @@ end
 Also define a function that can create a random color:
 
 ```elixir
-def create_random_color() do
-  for _ <- 1..3 do
-    Enum.random(0..255)
-  end
-end
-
-def shift_color(color) do
-  # color is a list with 3 elements
-  # pick one of the element positions
-  position = Enum.random(0..2)
-  # modify the value at that position
-  offset = case Enum.at(color, position) + Enum.random(-50..50) do
-    offset when offset < 0 -> 0
-    offset when offset > 255 -> 255
-    offset -> offset
+  def create_random_color() do
+    for _ <- 1..3 do
+      Enum.random(0..100) / 100
+    end
   end
 
-  List.replace_at(color, position, offset)
-end
+  def shift_color(color) do
+    # color is a list with 3 elements
+    # pick one of the element positions
+    position = Enum.random(0..2)
+    # modify the value at that position
+    offset =
+      case Enum.at(color, position) + Enum.random(-500..500) / 1000 do
+        offset when offset < 0 -> 0
+        offset when offset > 1 -> 1
+        offset -> offset
+      end
+
+    List.replace_at(color, position, offset)
+  end
 ```
 
 I pick one base random color for a room, then just color shift all the other colors for the boxes.  That way each room tends to have a similar hue rather than having every room look like confetti.
@@ -501,7 +500,8 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { filter } from "rxjs/operators";
 
 export const init = (config: Config) => {
-  
+
+
   const { scene, $state_mutations } = config;
 
   $state_mutations.pipe(
@@ -514,16 +514,16 @@ export const init = (config: Config) => {
       let material = new StandardMaterial(value, scene);
       material.alpha = 1;
       material.diffuseColor = new Color3(
-        value[0] / 255,
-        value[1] / 255,
-        value[2] / 255
+        value[0],
+        value[1],
+        value[2]
       );
       mesh.material = material;
     }
-    
-  })
 
-}
+  });
+
+};
 ```
 
 Don't forget to add the new system to `orchestrator.ts` just as we did previously.

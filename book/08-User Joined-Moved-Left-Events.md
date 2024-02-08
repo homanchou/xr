@@ -1,18 +1,18 @@
 
 ## Presence
 
-Virtual presence is the concept of being able to see each other online at the same time in a shared space.  The first events that we will work on will help us establish our avatar positions and rotations.  Our goal is to produce some events like this:
+Virtual presence is the concept of being able to see each other online at the same time in a shared space.  The first events that we will work on will help us establish our avatar head position and rotation.  Our goal is to produce some room events like this:
 
 ```
-{event: "user_joined", payload: {user_id: "tom", position: [...], rotation: [...]}}
-{event: "user_moved", payload: {user_id: "tom", position: [...], rotation: [...]}}
+{event: "user_joined", payload: {user_id: "tom", pose: {head: [...]}}
+{event: "user_moved", payload: {user_id: "tom", pose: {head: [...]}}
 {event: "user_left", payload: {user_id: "tom"}}
 ```
 This way as soon as someone joins the room, we know where to draw them.  And when someone moves we know where to move them.
 
 ### Joining Needs a Position
 
-Starting with the "user_joined" event, it makes sense that when we join a room we first appear in a location that is dictated by the kind of environment the room is hosting.  Thus far we've hardcoded our camera at a fixed location in the scene like security camera overseeing everything.  But just like the other entities that a room stores about itself stored in the components table, we ought to have one entity specifically purposed to tell us where the game starts.  This entity is called the spawn_point.
+Starting with the "user_joined" event, it makes sense that when we join a room we first appear in a location that is dictated by the kind of environment the room is hosting.  Thus far we've hardcoded our camera at a fixed location in the scene like security camera overseeing everything.  But just like the other entities that a room stores about itself in the components table, we ought to have one entity specifically purposed to tell us where the game starts.  This entity is called the spawn_point.
 
 ### Create Spawn Point Entity
 
@@ -25,11 +25,11 @@ Create a new entity called `spawn_point` in the `generate_random_content` functi
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
 ```
-We'd like to re-use common component names if they represent the same idea, so we are re-using the "position" component.  We also need to be able to somehow tag (aka label) this entity as a "spawn_point".  Since the entity itself is just an id with no other information, all data is stored in some kind of component so we added a "spawn_point" tag just so we can find this entity later by one of its component names.
+We'd like to re-use common component names since we'll have a suite of systems that are listening for particular component names.  We also need to be able to somehow tag (aka label) this entity as a "spawn_point".  Since the entity itself is just an id with no other information, all data is stored in some kind of component so we added a "spawn_point" tag just so we can find this entity later by one of its component names.
 
 The spawn_point for now is just a random point in 3D space between -10 and 10 on the x and z axis and slightly above y = 0 which is a common place to put the floor.  We may change this later for multi-leveled rooms.
 
-Let's add some convenience functions for finding entities that have a particular component or component equal to a value.
+In order to find a particular entity that has a particular component, or a particular component that matches a particular value let's define some additional helper functions in `rooms.ex`
 
 ```elixir
   def find_entities_having_component(room_id, component_name, component_value) do
@@ -41,11 +41,17 @@ Let's add some convenience functions for finding entities that have a particular
         select: c.entity_id
       )
 
-    from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.entity_id in subquery(q)
-    )
-    |> Repo.all()
-    |> components_to_map()
+    components =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.entity_id in subquery(q)
+      )
+      |> Repo.all()
+
+    if components |> length() == 0 do
+      {:error, :not_found}
+    else
+      {:ok, components |> components_to_map()}
+    end
   end
 
   def find_entities_having_component(room_id, component_name) do
@@ -55,31 +61,52 @@ Let's add some convenience functions for finding entities that have a particular
         select: c.entity_id
       )
 
-    from(c in Xr.Rooms.Component,
-      where: c.room_id == ^room_id and c.entity_id in subquery(q)
-    )
-    |> Repo.all()
-    |> components_to_map()
-  end
+    components =
+      from(c in Xr.Rooms.Component,
+        where: c.room_id == ^room_id and c.entity_id in subquery(q)
+      )
+      |> Repo.all()
 
+    if components |> length() == 0 do
+      {:error, :not_found}
+    else
+      {:ok, components |> components_to_map()}
+    end
+  end
 ```
+
+These queries first look in the components table for any component matching a name or name and value.  Then that result is used to find all components for entity_ids that were found.  The result is that we get everything about entities where the entities had a particular component.  This is similar to when we call `Xr.Rooms.entities(room_id)` getting a map of all entities except we're filtering by the matching criteria.  We also return a tuple of {:ok, result} vs {:error, :not_found}.
+
+To help with these queries, let's add two more indexes to the components table.  Create a new migration (I just added to my existing migration since I didn't push my code to any build system yet):
+
+```elixir
+    create index(:components, [:room_id, :entity_id])
+    # helps look up tags
+    create index(:components, [:room_id, :component_name])
+```
+
+These indexes help us find any component_name in a room, to help us first find the entity_id.  Then find all components matching that entity_id in a room.
 
 Let's also add a convenience function for looking up the spawn point and getting a location near a spawn_point.  This is useful for assigning positions to players when they join a room without them piling directly on top of each other:
 
 ```elixir
-  def get_head_position_near_spawn_point(room_id) do
-    # grab the entities that have spawn_point as a component
-    entities_map = Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point")
-
+def get_head_position_near_spawn_point(room_id) do
+  # grab the entities that have spawn_point as a component
+  case Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point") do
     # grabs position from first spawn_point's position component
-    {_entity_id, %{"position" => [x, y, z]}} =
-      entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
+    {:ok, entities_map} ->
+      {_entity_id, %{"position" => [x, y, z]}} =
+        entities_map |> Enum.find(fn {_k, v} -> %{"position" => _} = v end)
 
-    # randomly calculate a position near it where the player head should be
-    offset1 = Enum.random(-100..100) / 100
-    offset2 = Enum.random(-100..100) / 100
-    [x + offset1, y + 2, z + offset2]
+      # randomly calculate a position near it where the player head should be
+      offset1 = Enum.random(-100..100) / 100
+      offset2 = Enum.random(-100..100) / 100
+      [x + offset1, y + 2, z + offset2]
+
+    _ ->
+      [0, 1.8, 0]
   end
+end
 ```
 
 
@@ -90,47 +117,49 @@ You can clear all the rooms in the database you've created so far by stopping yo
 We can test these new functions by adding to the `rooms_test.exs` file:
 
 ```elixir
-  test "find entities by component name" do
-    room = room_fixture()
+ 
+    test "find entities by component name" do
+      room = room_fixture()
 
-    Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-      "tag" => "spawn_point",
-      "position" => [0, 0, 0]
-    })
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
 
-    entity = Rooms.find_entities_having_component(room.id, "tag")
-    assert entity |> Map.keys() |> Enum.count() == 1
-    assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
-  end
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag")
+      assert entity |> Map.keys() |> Enum.count() == 1
+      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+    end
 
-  test "find entities by component name and value" do
-    room = room_fixture()
+    test "find entities by component name and value" do
+      room = room_fixture()
 
-    Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-      "tag" => "spawn_point",
-      "position" => [0, 0, 0]
-    })
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
 
-    entity = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
-    assert entity |> Map.keys() |> Enum.count() == 1
-    assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
-  end
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
+      assert entity |> Map.keys() |> Enum.count() == 1
+      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+    end
 
-  test "get position near spawn point" do
-    room = room_fixture()
+    test "get position near spawn point" do
+      room = room_fixture()
 
-    Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-      "tag" => "spawn_point",
-      "position" => [0, 0, 0]
-    })
+      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+        "tag" => "spawn_point",
+        "position" => [0, 0, 0]
+      })
 
-    position = Rooms.get_head_position_near_spawn_point(room.id)
-    assert position |> length() == 3
-    assert position != [0, 0, 0]
+      position = Rooms.get_head_position_near_spawn_point(room.id)
+      assert position |> length() == 3
+      assert position != [0, 0, 0]
+    end
   end
 ```
 
-Now that our room contains the concept of a spawn_point, we'll be able to use it when we emit our user_joined event.
+Now that our room contains the concept of a spawn_point, we'll be able to use it when we join a room for the very first time.
 
 ### Add Phoenix Presence
 
@@ -246,27 +275,27 @@ defmodule XrWeb.Presence do
   end
 
   def emit_joined(room_id, user_id) do
-    case Rooms.get_entity_state(room_id, user_id) do
-      nil ->
-        default_user_state = %{
-          "color" => Xr.Rooms.create_random_color(),
-          "tag" => "avatar",
-          "rotation" => [0, 0, 0, 1],
-          "position" => Rooms.get_head_position_near_spawn_point(room_id),
-          "user_id" => user_id
-        }
+    
+    default_rotation = [0, 0, 0, 1]
 
-        Xr.Utils.to_room_stream(room_id, "user_joined", default_user_state)
+    default_user_state = %{
+      "color" => Xr.Rooms.create_random_color(),
+      "tag" => "avatar",
+      "pose" => %{
+        "head" => Rooms.get_head_position_near_spawn_point(room_id) ++ default_rotation
+      },
+      "user_id" => user_id
+    }
 
-      components ->
-        # resume previous user state
-        Xr.Utils.to_room_stream(room_id, "user_joined", Map.put(components, "user_id", user_id))
-    end
+    Xr.Utils.to_room_stream(room_id, "user_joined", default_user_state)
+
   end
 end
 ```
 
-handle_metas receives a map of user_ids that have joined or left and we can iterate through them and reshape them into "user_joined" and "user_left" events.  The user_joined has two scenarios, we either have some memory in the ETS table from before, or have no data at all in which case we load the position from the room's spawn point.  We can't test this in the front-end yet because these messages are being sent to the room_stream, which isn't going to the front-end.  To send messages to the Phoenix Pub/Sub topic, I added another convenience function to `Xr.Utils` module.  Add this function to `lib/xr/utils.ex`.
+handle_metas receives a map of user_ids that have joined or left and we can iterate through them and reshape them into "user_joined" and "user_left" events.  When we create the "user_joined" event, the payload includes the position and rotation of the head so that the front-end knows where to spawn the avatar.
+
+To send messages to the Phoenix Pub/Sub topic, I added another convenience function to `Xr.Utils` module.  Add this function to `lib/xr/utils.ex`.
 
 ```elixir
   def to_room_stream(room_id, event_name, payload) do
@@ -295,7 +324,8 @@ import { truncate } from "../utils";
 export const init = (config: Config) => {
   
 
-  const { scene } = config;
+  const { scene, $channel_joined, $camera_moved, channel, $state_mutations } = config;
+
 
   // create a signal that the camera moved
   scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
@@ -307,14 +337,15 @@ export const init = (config: Config) => {
   // subscribe just one time to the channel joined event
   // and create a new subscription that takes all camera movement, 
   // throttles it, truncates the numbers and  sends it to the server
-  config.$channel_joined.pipe(take(1)).subscribe(() => {
-    config.$camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
+   $channel_joined.pipe(take(1)).subscribe(() => {
+    $camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
       const cam = scene.activeCamera;
+      const position = truncate(cam.position.asArray());
+      const rotation = truncate(cam.absoluteRotation.asArray());
       const payload = {
-        position: truncate(cam.position.asArray()),
-        rotation: truncate(cam.absoluteRotation.asArray()),
-      }
-      config.channel.push("i_moved", payload);
+        pose: { head: position.concat(rotation) },
+      };
+      channel.push("i_moved", payload);
     });
   });
 }
@@ -385,21 +416,24 @@ Back in `avatar.ts` we listen for that event, but pipe it and use the `take(1)` 
 Now we'll be getting "i_moved" channel events in the RoomChannel.  Update `room_channel.ex` with this handler:
 
 ```elixir
-  def handle_in("i_moved", %{"position" => position, "rotation" => rotation}, socket) do
-    Xr.Utils.to_room_stream(socket.assigns.room_id, "user_moved", %{
-      "user_id" => socket.assigns.user_id,
-      "position" => position,
-      "rotation" => rotation
-    })
+  def handle_in("i_moved", payload, socket) do
+    Xr.Utils.to_room_stream(
+      socket.assigns.room_id,
+      "user_moved",
+      Map.put(payload, "user_id", socket.assigns.user_id)
+    )
 
     {:noreply, socket}
   end
+
 ```
 This handler forwards "i_moved" events into "user_moved" events in the room_stream.  Now we should be receiving a complete set of user events in our rooom_stream: "user_joined", "user_left", "user_moved".
 
+
+
 ### Respond to entities_diff in the Frontend
 
-Our frontend should be receiving "entities_diff" event now whenever a client joins, leaves or moves in a room.  Now we need to draw something on the screen to represent an avatar.
+Our frontend should be receiving "entities_diff" event now whenever a client joins, leaves or moves in a room.  Now we need to transform the "entities_diff" event into a format that is easy for systems to filter for just the component_names (or values) they are interested in.
 
 I created a `EntityPayload` type to `config.ts` to describe the channel subscriptions more succinctly.
 
@@ -427,7 +461,46 @@ Modified `broker.ts`:
   });
 
 ```
-This sends the current component and also previous components to any subscribers.  To do that we retain the history in a state.  Add a state.ts system:
+The "entities_diff" event comes in groups of creates, updates and deletes, so we know the operation.  This way components can listen for the type of operation in the event.  
+
+In the receiving system, say we want to match when an avatar is deleted.  We'll want to use the `componentExists` function to see if the `StateMutation` has a component name "tag" = "avatar" in the components object.  However, we won't successfully match unless we make a slight tweak because on a delete situation our payload hardly includes any components at all.  And the same is true for entity update mutations, because the event will only include the components that were updated, which may not include the components it was originally created with, like "tag" = "avatar.  
+
+Therefore we need a frontend cache of the state.  That way we can look up the previous state right before we change it and then send the current component and also previous components to any subscribers.  
+
+That's what this line does.
+```typescript
+const prev = state.get(entity_id) || {};
+```
+Then we extend the `StateMutation` type to have a `prev` attribute:
+
+```typescript
+export type StateMutation = {
+  op: StateOperation;
+  eid: string;
+  com: {
+    [component_name: string]: any;
+  };
+  prev: {
+    [component_name: string]: any;
+  };
+};
+```
+
+And we modify `componentExists` function to match component_name or value either within the `com` object or the `prev` object:
+
+```typescript
+export const componentExists = (component_name: string, component_value?: any) => {
+  return (evt: StateMutation) => {
+    if (component_value != undefined) {
+      // only simple equality on primitives, no objects or arrays
+      return evt.com[component_name] === component_value || (evt.prev[component_name] === component_value);
+    }
+    return evt.com[component_name] !== undefined || (evt.prev[component_name] !== undefined);
+  };
+};
+```
+
+Now let's add a simple Map database.  Create file `assets/js/systems/state.ts`:
 
 
 ```typescript
@@ -457,6 +530,23 @@ export const init = (config: Config) => {
 
 ```
 
+Remember to initialize this State system in the `orchestrator.ts` as well.
+
+```typescript
+import * as State from "./systems/state";
+...
+  Broker.init(config);
+  State.init(config);
+  MeshBuilder.init(config);
+  Position.init(config);
+  Avatar.init(config);
+  Color.init(config);
+
+  for (const [entity_id, components] of Object.entries(opts.entities)) {
+      config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
+  }
+```
+
 ### Create Simple Avatar Mesh
 
 Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
@@ -466,11 +556,16 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
   // user_joined
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.create),
-    filter(e => e.eid !== config.user_id),
     filter(componentExists("tag", "avatar")),
-    tap(e => console.log("tap ta", e)),
   ).subscribe(e => {
-    createSimpleUser(e.eid, e.com.head_pos, e.com.head_rot);
+    if (e.eid === config.user_id) {
+      // the user_joined event contains spawn point, set the camera there
+      const cam = scene.activeCamera as FreeCamera;
+      cam.position.fromArray(e.com.pose.head.slice(0, 3));
+      cam.rotationQuaternion = Quaternion.FromArray(e.com.pose.head.slice(3));
+      return;
+    }
+    createSimpleUser(e.eid, e.com.pose);
   });
 
   // user_left
@@ -484,12 +579,16 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
   // user_moved
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.update),
+    tap(e => console.log("user moved", e)),
     filter(e => e.eid !== config.user_id),
-    filter(componentExists("head_pos")),
+    filter(componentExists("tag", "avatar")),
   ).subscribe(e => {
-    poseUser(e.eid, e.com.head_pos, e.com.head_rot);
+    console.log("other user moved");
+    if (!cache.has(e.eid)) {
+      createSimpleUser(e.eid, e.com.pose);
+    }
+    poseUser(e.eid, e.com.pose);
   });
-
 
   const headId = (user_id: string) => `head_${user_id}`;
 
@@ -503,21 +602,25 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
 
 
 
-  const createSimpleUser = (user_id: string, head_pos: number[], head_rot: number[]) => {
+  const createSimpleUser = (user_id: string, pose: { head: number[]; }) => {
 
 
     let head = cache.get(headId(user_id));
     if (!head) {
       head = CreateBox(headId(user_id), { width: 0.15, height: 0.3, depth: 0.25 }, scene);
       cache.set(headId(user_id), head);
-      poseUser(user_id, head_pos, head_rot);
+      poseUser(user_id, pose);
     }
 
   };
 
-  const poseUser = (user_id: string, position: number[], rotation: number[]) => {
-    let head = cache.get(headId(user_id));
+  const poseUser = (user_id: string, pose: { head: number[]; }) => {
+    const head = cache.get(headId(user_id));
     if (!head) { return; }
+    //position is first 3 elements of pose array
+    const position = pose.head.slice(0, 3);
+    //rotation is last 4 elements of pose array
+    const rotation = pose.head.slice(3);
     head.position.fromArray(position);
     if (!head.rotationQuaternion) {
       head.rotationQuaternion = Quaternion.FromArray(rotation);
@@ -532,129 +635,8 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
 
 ```
 
-If you test this in two browser windows you should see a small rectangle representing a head.  You might notice however, that only the first browser to join the room can see the second client that joins the room and the second client cannot see the first client.  Why is that?  The reason is because the entities_state message doesn't include the users yet.  Our database was seeded with random colored boxes but we haven't yet reacted to new state mutations.  Therefore our clients only received information about users through entities_diff events.  And the first user to join is ready to receive the entities_diff event when the second user joins, but the second user never gets the entities_diff with the create key when the first user joined because that event was streamed before they entered the room.  If we update the database continuously with entities_diff events then it should have the most updated scene information for all clients at the moment they connect.
+You should be able to test this two browser windows.  Use the mouse to click and drag to move the camera, use the cursor keys to navigate.  You should be able to see each other represented as a small white rectangular box.
 
-### Update Database with Entities Diff Events
+### Summary
 
-Let's create a new server that will listen to entities_diff messages.  Create a new server file at `lib/xr/servers/entities_state.ex`:
-
-```elixir
-@moduledoc """
-Listens to entities diff msg and updates the database.  
-"""
-defmodule Xr.Servers.EntitiesState do
-  use GenServer
-  
-  use GenServer
-  alias Phoenix.PubSub
-  
-  def via_tuple(room_id) do
-    {:via, Registry, {Xr.RoomsRegistry, "entities_state:#{room_id}"}}
-  end
-
-  def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
-  end
-
-  @impl true
-  def init({:ok, room_id}) do
-    # subscribe to the room stream
-    PubSub.subscribe(Xr.PubSub, "entities_diff_stream:#{room_id}")
-
-    {:ok, %{room_id: room_id}}
-  end
-  
-  @impl true
-  def handle_info(msg, state) do
-    # save changes to db
-  end
-end
-```
-
-This server subscribes to a PubSub topic of `entities_state:#{room_id}`.  Back in entities_diff server let's publish to this topic.
-
-```elixir
-def handle_info(:sync, state) do
-  Process.send_after(self(), :sync, @sync_interval)
-
-  case Xr.Utils.get_entities_diff(state.table) do
-    {:ok, to_sync} ->
-      # broadcast to clients connect to the room
-      XrWeb.Endpoint.broadcast("room:" <> state.room_id, "entities_diff", to_sync)
-      # also publish to phoenix pubsub
-      PubSub.broadcast(Xr.PubSub, "entities_diff_stream:" <> state.room_id, to_sync)
-
-      # clear the ets table
-      :ets.delete_all_objects(state.table)
-      # clear the entities to sync
-      {:noreply, state}
-
-    :nothing_to_sync ->
-      {:noreply, state}
-  end
-end
-```
-
-We need to add this new server to the `rooms_supervisor.ex` start_room function so it gets started at the same time as the entities_diff server.
-
-```elixir
-def start_room(room_id) do
-  DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesDiff, room_id})
-  DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesState, room_id})
-end
-
-def stop_room(room_id) do
-  DynamicSupervisor.terminate_child(
-    __MODULE__,
-    Xr.Servers.EntitiesDiff.via_tuple(room_id) |> GenServer.whereis()
-  )
-
-  DynamicSupervisor.terminate_child(
-    __MODULE__,
-    Xr.Servers.EntitiesState.via_tuple(room_id) |> GenServer.whereis()
-  )
-end
-```
-
-Let's write a helper function that takes the entities_diff payload and saves the changes to the db.  Open up `rooms.ex` and add this function:
-
-```elixir
-
-
-  def update_component(room_id, entity_id, component_name, component_value) do
-    case Repo.get_by(Xr.Rooms.Component,
-           room_id: room_id,
-           entity_id: entity_id,
-           component_name: component_name
-         ) do
-      nil ->
-        :noop
-
-      component ->
-        component
-        |> Xr.Rooms.Component.changeset(%{component: %{component_name => component_value}})
-        |> Repo.update()
-    end
-  end
-
-  @doc """
-  Update entities in a room by applying entities_diff event to the database
-  """
-  def update_entities(room_id, %{creates: creates, updates: updates, deletes: deletes}) do
-    for {entity_id, components} <- creates do
-      create_entity(room_id, entity_id, components)
-    end
-
-    for {entity_id, components} <- updates do
-      for {component_name, component_value} <- components do
-        update_component(room_id, entity_id, component_name, component_value)
-      end
-    end
-
-    # delete
-    for entity_id <- deletes do
-      delete_entity(room_id, entity_id)
-    end
-  end
-
-```
+In this chapter we used Phoenix.Presence module to generate user_joined and user_left room events.  We used the `mix phx.gen.presence` generator to create the presence file.  We added its module to Applications.ex so it would start automatically.  We included it in RoomChannel so we started tracking users.  Then we added a handle_metas call back so we should shape the events to our satisfaction and publish a message to our room_stream.  Then in the frontend we added an avatar system.  The avatar system listens to camera movements then sends position and rotation data to the RoomChannel.  The room channel then pipes that message into the room_stream Phoenix PubSub, which will be converted to "entities_diff" message as well as persisted to the database.  In the system we also created other listeners for the specific avatar related components and then created functions to create a box and a user joins, remove the box when the user leaves and move the box when the user moves.

@@ -18,10 +18,10 @@ export enum StateOperation {
 export type StateMutation = {
   op: StateOperation;
   eid: string;
-  com?: {
+  com: {
     [component_name: string]: any;
   };
-  prev?: {
+  prev: {
     [component_name: string]: any;
   };
 };
@@ -36,9 +36,9 @@ export const componentExists = (component_name: string, component_value?: any) =
   return (evt: StateMutation) => {
     if (component_value != undefined) {
       // only simple equality on primitives, no objects or arrays
-      return evt.com[component_name] === component_value || (evt["prev"] && evt["prev"][component_name] === component_value);
+      return evt.com[component_name] === component_value || (evt.prev[component_name] === component_value);
     }
-    return evt.com[component_name] !== undefined || (evt["prev"] && evt["prev"][component_name] !== undefined);
+    return evt.com[component_name] !== undefined || (evt.prev[component_name] !== undefined);
   };
 };
 

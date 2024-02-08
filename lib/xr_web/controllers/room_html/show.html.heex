@@ -1,7 +1,5 @@
 <script>
   window["room_vars"] = <%= raw Jason.encode!(%{room_id: @room.id, user_id: @user_id, entities: @entities}) %>
-  console.log("here")
-  <%!-- window["get_orchestrator"](); --%>
 </script>
 <body>
   <style>

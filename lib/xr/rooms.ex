@@ -90,25 +90,25 @@ defmodule Xr.Rooms do
     [Enum.random(-25..25) + offset, Enum.random(-2..2) + offset, Enum.random(-25..25) + offset]
   end
 
+  def create_random_color() do
+    for _ <- 1..3 do
+      Enum.random(0..100) / 100
+    end
+  end
+
   def shift_color(color) do
     # color is a list with 3 elements
     # pick one of the element positions
     position = Enum.random(0..2)
     # modify the value at that position
     offset =
-      case Enum.at(color, position) + Enum.random(-50..50) do
+      case Enum.at(color, position) + Enum.random(-500..500) / 1000 do
         offset when offset < 0 -> 0
-        offset when offset > 255 -> 255
+        offset when offset > 1 -> 1
         offset -> offset
       end
 
     List.replace_at(color, position, offset)
-  end
-
-  def create_random_color() do
-    for _ <- 1..3 do
-      Enum.random(0..255)
-    end
   end
 
   def create_random_box_args() do

@@ -44,7 +44,6 @@ defmodule XrWeb.Presence do
         default_rotation = [0, 0, 0, 1]
 
         default_user_state = %{
-          "color" => Xr.Rooms.create_random_color(),
           "tag" => "avatar",
           "pose" => %{
             "head" => Rooms.get_head_position_near_spawn_point(room_id) ++ default_rotation

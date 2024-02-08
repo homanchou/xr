@@ -11,14 +11,14 @@ export const init = (config: Config) => {
   // channel subscriptions
   channel.on("entities_state", (payload: EntityPayload) => {
     for (const [entity_id, components] of Object.entries(payload)) {
-      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components });
+      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
     }
   });
 
 
   channel.on("entities_diff", (payload: { creates: EntityPayload, updates: EntityPayload, deletes: EntityPayload; }) => {
     for (const [entity_id, components] of Object.entries(payload.creates)) {
-      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components });
+      $state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
     }
     for (const [entity_id, components] of Object.entries(payload.updates)) {
       const prev = state.get(entity_id) || {};

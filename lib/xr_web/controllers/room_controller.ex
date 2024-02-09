@@ -54,7 +54,7 @@ defmodule XrWeb.RoomController do
     room = Rooms.get_room!(id)
 
     case Rooms.update_room(room, room_params) do
-      {:ok, room} ->
+      {:ok, _room} ->
         conn
         |> put_flash(:info, "Room updated successfully.")
         |> redirect(to: ~p"/rooms/")

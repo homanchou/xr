@@ -46,7 +46,7 @@ export const init = (config: Config) => {
   ).subscribe(e => {
     if (e.eid === config.user_id) {
       // when reloading the page, set scene camera to last known position, or spawn point
-      const cam = scene.activeCamera as FreeCamera;
+      const cam = scene.activeCamera as UniversalCamera;
       cam.position.fromArray(e.com.pose.head.slice(0, 3));
       cam.rotationQuaternion = Quaternion.FromArray(e.com.pose.head.slice(3));
       return;

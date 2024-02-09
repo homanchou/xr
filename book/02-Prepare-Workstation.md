@@ -86,6 +86,45 @@ At the time of this writing I'm using:
 - phoenixframework.phoenix
 - bradlc.vscode-tailwindcss
 
+This is my vscode settings.json
+
+```json
+{
+  "window.commandCenter": false,
+  "files.associations": {
+    "*.heex": "phoenix-heex",
+  },
+  "[elixir]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "JakeBecker.elixir-ls"
+  },
+  "[phoenix-heex]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "JakeBecker.elixir-ls"
+  },
+  "emmet.includeLanguages": {
+    "phoenix-heex": "html",
+    "elixir": "html",
+  },
+  "tailwindCSS.includeLanguages": {
+    "phoenix-heex": "html",
+    "elixir": "html",
+  },
+  "codeium.enableConfig": {
+    "*": true,
+    "phoenix-heex": true
+  },
+  "git.confirmSync": false,
+  "editor.formatOnSave": true,
+  "editor.indentSize": "tabSize",
+  "editor.tabSize": 2,
+  "javascript.format.semicolons": "insert",
+  "typescript.format.semicolons": "insert",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "remote.autoForwardPortsSource": "hybrid",
+  "editor.codeActionsOnSave": {},
+}
+```
 
 ### Install Phoenix
 

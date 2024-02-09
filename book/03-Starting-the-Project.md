@@ -210,7 +210,7 @@ If you run your server and visit http://localhost:4000/rooms you should see a CR
 
 ### Return to Index After Room Create
 
-One thing that I don't like is that after I create a room, we are immediately redirected to the room's `show` route.  I would like to remain on the index.  That way if I hit my back button from within the room, I'm returned to the index.  We can make this change now.  Open up `room_controller.ex` and edit the `create` function to redirect us back to the index route:
+One thing that I don't like is that after I create a room (or edit a room), we are immediately redirected to the room's `show` route.  I would like to remain on the index so that we can continue where we left off and are not immediately thrown into a room.  Additionally, if I hit my back button from within the room, I'm returned to the index.  We can make this change now.  Open up `room_controller.ex` and edit the `create` and `update` functions to redirect us back to the index route `~p"/rooms"`:
 
 ```elixir
     ...

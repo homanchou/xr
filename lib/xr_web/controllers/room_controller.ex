@@ -57,7 +57,7 @@ defmodule XrWeb.RoomController do
       {:ok, room} ->
         conn
         |> put_flash(:info, "Room updated successfully.")
-        |> redirect(to: ~p"/rooms/#{room}")
+        |> redirect(to: ~p"/rooms/")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         render(conn, :edit, room: room, changeset: changeset)

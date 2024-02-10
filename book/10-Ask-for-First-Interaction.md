@@ -131,6 +131,22 @@ Then to subscribe to this event in the front-end we can open up our `broker.ts` 
 
 This is the same channel joining code we had before, just now wrapped in an event listener to the "live_to_xr" event.  We can also hide the model after the click without involving a round trip to the server by just using `JS.hide(to: "#room_modal")` which is piped inside the `phx-click`.
 
+You may have noticed that when we dismiss the model and immediately try to move forward or backward with the cursor keys, we can't.  And this is because the canvas does not have the focus so Babylon.js isn't receiving any keyboard input events.  We have to use the mouse to click on the canvas first before we can move the camera with the keyboard.  We fix this by programmatically setting the focus on the canvas:
+
+```typescript
+canvas.focus()
+```
+
+However this was previously impossible because we needed a user's first interaction.  Now we have it.  Let's open up `scene.ts` system and in the `init` function add a listener for when the room is joined to set the focus.
+
+```typescript
+  config.$channel_joined.subscribe(() => {
+    canvas.focus();
+  });
+```
+Now after we dismiss the modal the camera will respond to keyboard cursor presses.
+
+
 ### Summary
 
 With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  This satisfies the browser's requirement for a "first interaction" which will unlock API's such as asking user permission for immersive-vr, and enable microphone.

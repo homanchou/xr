@@ -1,9 +1,9 @@
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
 import { StateOperation, componentExists, Config } from "../config";
-import { filter  } from "rxjs/operators";
+import { filter } from "rxjs/operators";
 
 export const init = (config: Config) => {
-  
+
   const { scene, $state_mutations } = config;
 
   $state_mutations.pipe(
@@ -11,12 +11,13 @@ export const init = (config: Config) => {
     filter(componentExists("mesh_builder")),
   ).subscribe((evt) => {
     const value = evt.com["mesh_builder"];
-    const [mesh_type, mesh_args] = value
+    const [mesh_type, mesh_args] = value;
     if (mesh_type === "box") {
       const box =
         scene.getMeshByName(evt.eid) ||
         CreateBox(evt.eid, mesh_args, scene);
-    } 
-  })
+      box.checkCollisions = true;
+    }
+  });
 
-}
+};

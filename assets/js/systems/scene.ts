@@ -9,7 +9,9 @@ import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
 import "@babylonjs/core/Materials/standardMaterial";
 import { Config } from "../config";
 
+import { WalkInput } from "../inputs/walk";
 
+import "@babylonjs/core/Collisions/collisionCoordinator";
 
 // create the babylonjs engine and scene
 
@@ -28,17 +30,33 @@ document.body.appendChild(canvas);
 // initialize babylon scene and engine
 const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
-// This creates and positions a free camera (non-mesh)
+
+scene.gravity = new Vector3(0, -9.81, 0);
+scene.collisionsEnabled = true;
+
+
+
+
 
 // create a birds-eye-view pointed at the origin
 const default_position = new Vector3(0, 15, 50);
 const camera = new UniversalCamera("my head", default_position, scene);
+camera.inertia = 0.7;
 
+camera.minZ = 0.05;
 // This targets the camera to scene origin
 camera.setTarget(Vector3.Zero());
 
 // This attaches the camera to the canvas
 camera.attachControl(canvas, true);
+
+camera.inputs.remove(camera.inputs.attached.keyboard);
+camera.inputs.add(new WalkInput());
+
+camera.checkCollisions = true;
+camera.applyGravity = true;
+// camera.inputs.remove(camera.inputs.attached)
+
 new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
 
 // Create a grid material
@@ -55,6 +73,7 @@ const ground = CreateGround("ground1", { width: 100, height: 100, subdivisions: 
 
 // Affect a material
 ground.material = material;
+ground.checkCollisions = true;
 
 // hide/show the Inspector
 window.addEventListener("keydown", async (ev) => {
@@ -83,4 +102,7 @@ engine.runRenderLoop(() => {
 
 export const init = (config: Config) => {
   config.scene = scene;
+  config.$channel_joined.subscribe(() => {
+    canvas.focus();
+  });
 };

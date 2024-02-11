@@ -494,7 +494,10 @@ Give this a try in your browser and you should see that we can no longer pass th
     camera.minZ = 0.05;
 ```
 
-With this last change we can bump up against boxes and still see the box we're bumping up against.
+With this last change we can bump up against boxes and still see the box we're bumping up against.  Now we have a keyboard camera movement that is more more like a first person shooter.
+
+Next let's customize the mouse to be able to lock to the window, and (if not locked) be able to click and drag to pull our orientation toward the direction we dragged from.
+
 
 ### Summary
 

@@ -65,7 +65,17 @@ defmodule Xr.Rooms do
     {:ok, room}
   end
 
+  def create_floor(room_id) do
+    create_entity(room_id, Xr.Utils.random_string(), %{
+      "mesh_builder" => ["ground", %{"width" => 100, "height" => 100, "subdivisions" => 2}],
+      "position" => [0, 0, 0],
+      "material" => "grid"
+    })
+  end
+
   def generate_random_content(room_id) do
+    # create a ground
+    create_floor(room_id)
     # pick a random color
     color = create_random_color()
     # run this a few random times to create random entities

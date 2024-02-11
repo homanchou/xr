@@ -5,8 +5,7 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import { Scene } from "@babylonjs/core/scene";
-import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
-import "@babylonjs/core/Materials/standardMaterial";
+
 import { Config } from "../config";
 
 import { WalkInput } from "../inputs/walk";
@@ -58,22 +57,6 @@ camera.applyGravity = true;
 // camera.inputs.remove(camera.inputs.attached)
 
 new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
-
-// Create a grid material
-const material = new GridMaterial("grid", scene);
-
-// Our built-in 'sphere' shape.
-const sphere = CreateSphere("sphere1", { segments: 16, diameter: 2 }, scene);
-
-// Move the sphere upward 1/2 its height
-sphere.position.y = 2;
-
-// Our built-in 'ground' shape.
-const ground = CreateGround("ground1", { width: 100, height: 100, subdivisions: 2 }, scene);
-
-// Affect a material
-ground.material = material;
-ground.checkCollisions = true;
 
 // hide/show the Inspector
 window.addEventListener("keydown", async (ev) => {

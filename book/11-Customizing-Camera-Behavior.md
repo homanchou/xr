@@ -373,15 +373,91 @@ box.checkCollissions = true;
 
 We can make the changes to the scene and the camera in the `scene.ts` system file.  Then for every obstacles we are creating in the `mesh_builder.ts` system we can also set the checkCollissions to be true.
 
-The floor is currently not created by mesh builder, it's still hardcoded by `scene.ts`.  Let's port that over to a system and generate an entity for that on the back end.
+The floor is currently not created by mesh builder, it's still hardcoded by `scene.ts`.  The ground mesh also needs to check collisions otherwise the gravity will make us floor through the floor forever.  Let's port that over to `mesh_builder` system so it can be created with a collission detector the same way our boxes get it automaticallh now.  We'll generate an entity for that on the back end in the database just like we do the random colored boxes.
 
-In the backend in `rooms.ex` add a ground entity
-:
+In the backend in `rooms.ex` add a ground entity through `mesh_builder` component.
+
+```elixir
+
+  def create_floor(room_id) do
+    create_entity(room_id, Xr.Utils.random_string(), %{
+      "mesh_builder" => ["ground", %{"width" => 100, "height" => 100, "subdivisions" => 2}],
+      "position" => [0, 0, 0],
+      "material" => "grid"
+    })
+  end
+
+  def generate_random_content(room_id) do
+    # create a ground
+    create_floor(room_id)
+    # pick a random color
+    ...
+```
+
+All new rooms created will get exactly one entity that is a floor.  We also added a material component to keep that grid texture on it for now.
+
+In the front end we need to create and use a new material system, then modify the mesh_builder system to account for "ground" values.
+
+Update file `assets/js/systems/mesh_builder.ts`:
+
+```typescript
+ ...
+
+  $state_mutations.pipe(
+    filter(evt => (evt.op === StateOperation.create)),
+    filter(componentExists("mesh_builder")),
+  ).subscribe((evt) => {
+    const value = evt.com["mesh_builder"];
+    const [mesh_type, mesh_args] = value;
+    let mesh;
+    switch(mesh_type) {
+      case "box":
+        mesh = CreateBox(evt.eid, mesh_args, scene);
+        break;
+      case "ground":
+        mesh = CreateGround(evt.eid, mesh_args, scene);
+        break;
+    }
+    mesh.checkCollisions = true;
+
+  });
+```
+
+Add file `assets/js/systems/material.ts`
+
+```typescript
+import { StateOperation, componentExists, Config } from "../config";
+import { filter } from "rxjs/operators";
+import { GridMaterial } from "@babylonjs/materials/grid/gridMaterial";
+import "@babylonjs/core/Materials/standardMaterial";
+
+export const init = (config: Config) => {
 
 
+  const { scene, $state_mutations } = config;
 
+  $state_mutations.pipe(
+    filter(evt => (evt.op === StateOperation.create)),
+    filter(componentExists("material")),
+  ).subscribe((evt) => {
+    const value = evt.com["material"];
+    const mesh = scene.getMeshByName(evt.eid);
+    if (!mesh) {
+      return
+    }
+    if (value === "grid") {
 
-Remove these lines from `scene.ts`, we're going to move them to a system:
+      // Create a grid material
+      const material = new GridMaterial("grid", scene);
+      mesh.material = material;
+    }
+
+  });
+
+};
+```
+
+REMOVE these lines from `scene.ts`, because they are now handled by mesh_builder and material system:
 
 ```typescript
 // Create a grid material
@@ -396,10 +472,21 @@ ground.material = material;
 ground.checkCollisions = true;
 ```
 
-Now create a new system at `assets/js/systems/ground.ts` and paste the following:
+Remember to import and initialize the material system in orchestrator.ts.
 
+```typescript
 
+...
 
+import * as Material from "./systems/material";
+
+...
+        Material.init(config);
+...
+        
+```
+
+Now our ground is no longer hard-coded by the scene but is provided by a mesh_builder component and has the check collision boolean set.
 
 Give this a try in your browser and you should see that we can no longer pass through boxes and we stay on the ground.  However when we get up very close to objects they disappear.  This is because of the clipping plane of the camera.  Let's adjust that along with some other fine tuning:
 
@@ -407,6 +494,10 @@ Give this a try in your browser and you should see that we can no longer pass th
     camera.minZ = 0.05;
 ```
 
+With this last change we can bump up against boxes and still see the box we're bumping up against.
+
 ### Summary
 
-In this chapter we customize the keyboard input for the camera.  We also added collision checking and gravity so the camera stays on the ground surface and cannot penetrate meshes that we created in the mesh_builder system.
+In this chapter we customized the keyboard input for the camera.  We also added collision checking and gravity so the camera stays on the ground surface and cannot penetrate meshes that we created in the mesh_builder system.  We ported the hard-coded ground that was in scene.ts into the mesh_builder system and we created a new material system to handle putting a grid texture on the floor.
+
+

@@ -4,10 +4,12 @@ import * as State from "./systems/state";
 import * as MeshBuilder from "./systems/mesh_builder";
 import * as Position from "./systems/position";
 import * as Color from "./systems/color";
+import * as Material from "./systems/material";
 import * as Avatar from "./systems/avatar";
 import { Components, Config, EntityId, StateMutation, StateOperation } from "./config";
 import type { Socket } from "phoenix";
 import { Subject } from "rxjs/internal/Subject";
+import { take } from "rxjs/operators";
 
 
 export const orchestrator = {
@@ -36,10 +38,18 @@ export const orchestrator = {
         Position.init(config);
         Avatar.init(config);
         Color.init(config);
+        Material.init(config);
 
+        
         for (const [entity_id, components] of Object.entries(opts.entities)) {
             config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
         }
+
+        config.$room_entered.pipe(take(1)).subscribe(() => {
+            Object.keys(opts.entities).forEach((entity_id) => {
+                config.scene.getMeshByName(entity_id)?.dispose(false, true);
+            })
+        })
 
     }
 };

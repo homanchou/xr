@@ -1,4 +1,5 @@
 import { CreateBox } from "@babylonjs/core/Meshes/Builders/boxBuilder";
+import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
 import { StateOperation, componentExists, Config } from "../config";
 import { filter } from "rxjs/operators";
 
@@ -12,12 +13,17 @@ export const init = (config: Config) => {
   ).subscribe((evt) => {
     const value = evt.com["mesh_builder"];
     const [mesh_type, mesh_args] = value;
-    if (mesh_type === "box") {
-      const box =
-        scene.getMeshByName(evt.eid) ||
-        CreateBox(evt.eid, mesh_args, scene);
-      box.checkCollisions = true;
+    let mesh;
+    switch(mesh_type) {
+      case "box":
+        mesh = CreateBox(evt.eid, mesh_args, scene);
+        break;
+      case "ground":
+        mesh = CreateGround(evt.eid, mesh_args, scene);
+        break;
     }
+    mesh.checkCollisions = true;
+
   });
 
 };

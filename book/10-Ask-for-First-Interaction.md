@@ -108,7 +108,7 @@ Then to subscribe to this event in the front-end we can open up our `broker.ts` 
 
 ```typescript
   window.addEventListener("live_to_xr", e => {
-    console.log("live_to_xr", e);
+    config.$room_entered.next(true) 
     if (e["detail"]["event"] == "enter_room") {
 
       channel
@@ -146,8 +146,43 @@ However this was previously impossible because we needed a user's first interact
 ```
 Now after we dismiss the modal the camera will respond to keyboard cursor presses.
 
+### Display Room Preview Before Entering Room
+
+In a previous chapter we introduced the room initial snippet.  We can pass that down to the page so the orchestrator can load it up as a preview.  That way people can see what entities (usually buildings etc) are in the room before they even enter it.  But they won't see any people yet because the snapshot initial snippet was made before the room was changed by adding any people entities into it.
+
+Modify orchestrator.ts to accepts the entities from initial snapshot like so:
+
+```typescript
+
+export const orchestrator = {
+    init: (opts: { socket: Socket, room_id: string, user_id: string, entities: { [entity_id: string]: any; }; }) => {
+        ...
+        ...
+        for (const [entity_id, components] of Object.entries(opts.entities)) {
+            config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
+        }
+
+    }
+};
+```
+This change will draw the initial snapshot entities in the scene.  However there is a slight problem.  We send the entities_state message after the user has joined the channel.  This could duplicate all the entities in the snapshot.  Or if an entity in the snapshot was deleted in the scene, entities_state will not contain it, but the initial snapshot would have included it.  Either way the scene isn't correct when the user joins the room unless we delete all the entities created in the initial snapshot once the user joins the room.  We can fix this with a RxJS subscription to when the room is entered.
+
+```typescript
+   for (const [entity_id, components] of Object.entries(opts.entities)) {
+            config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });
+        }
+
+        config.$room_entered.pipe(take(1)).subscribe(() => {
+            Object.keys(opts.entities).forEach((entity_id) => {
+                config.scene.getMeshByName(entity_id)?.dispose(false, true);
+            })
+        })
+
+```
+
+The `take(1)` operator will remove the subscription after it sees one event.  It will loop through the entity ids given in the snapshot and remove them from the scene.
 
 ### Summary
 
-With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  This satisfies the browser's requirement for a "first interaction" which will unlock API's such as asking user permission for immersive-vr, and enable microphone.
+With these changes we have implemented a click-to-join type of model.  Instead of joining the channel as soon as possible, we're only joining once the enter room button was clicked.  This satisfies the browser's requirement for a "first interaction" which will unlock API's such as asking user permission for immersive-vr, enable microphone, focusing on the canvas etc.  We also loaded a preview of the scene before the user joins the room and then remove the preview as soon as the user joins the room.
 

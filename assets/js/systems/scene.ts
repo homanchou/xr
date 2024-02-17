@@ -2,9 +2,10 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
-import { CreateGround } from "@babylonjs/core/Meshes/Builders/groundBuilder";
-import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
+
 import { Scene } from "@babylonjs/core/scene";
+import "@babylonjs/core/Materials/Node/Blocks";
+import "@babylonjs/loaders/glTF";
 
 import { Config } from "../config";
 

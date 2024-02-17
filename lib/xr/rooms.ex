@@ -69,7 +69,8 @@ defmodule Xr.Rooms do
     create_entity(room_id, Xr.Utils.random_string(), %{
       "mesh_builder" => ["ground", %{"width" => 100, "height" => 100, "subdivisions" => 2}],
       "position" => [0, 0, 0],
-      "material" => "grid"
+      "material" => "grid",
+      "floor" => true
     })
   end
 

@@ -15,9 +15,8 @@ The default behavior of the controls is cursor keys is:
   - right arrow is a side-step to the right.
   - left arrow side-steps left.
 
-The mouse behavior is if you click and drag, the camera moves toward the direction you dragged in.
 
-### Define New Behavior
+### Define New Keyboard Behavior
 
 I would like to enable both the cursor keys and the WASD keys.  The cursor keys should behave like the game DOOM, so that left and right arrows will turn you instead of side step.  But if you still want to strafe left and right you can use the A and D keys.  The mouse should have an option to lock the mouse to the screen so whatever direction you pull your mouse toward your camera will turn that way.  However if not locked, then I want the mouse to behave like a touch pad in that you tap and drag to pull the scene toward you (opposite to the default.)
 
@@ -495,8 +494,6 @@ Give this a try in your browser and you should see that we can no longer pass th
 ```
 
 With this last change we can bump up against boxes and still see the box we're bumping up against.  Now we have a keyboard camera movement that is more more like a first person shooter.
-
-Next let's customize the mouse to be able to lock to the window, and (if not locked) be able to click and drag to pull our orientation toward the direction we dragged from.
 
 
 ### Summary

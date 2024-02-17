@@ -1,6 +1,7 @@
 import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
-import { Subject } from "rxjs/internal/Subject";
+import type { Subject } from "rxjs/internal/Subject";
+import type { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
 
 export enum StateOperation {
   create = "c",
@@ -61,4 +62,7 @@ export type Config = {
   $room_entered: Subject<boolean>;
   $camera_moved: Subject<any>;
   $state_mutations: Subject<StateMutation>;
+  $xr_helper_created: Subject<WebXRDefaultExperience>;
+  $xr_entered: Subject<boolean>;
+  $xr_exited: Subject<boolean>;
 };

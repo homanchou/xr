@@ -8,8 +8,9 @@ import * as Material from "./systems/material";
 import * as Avatar from "./systems/avatar";
 import * as XRExperience from "./systems/xr-experience";
 import * as Floor from "./systems/floor";
+import * as XRHandController from "./systems/xr-hand-controller";
 
-import { Components, Config, EntityId, StateMutation, StateOperation } from "./config";
+import { Components, Config, EntityId, StateMutation, StateOperation, XRButtonChange } from "./config";
 import type { Socket } from "phoenix";
 import { Subject } from "rxjs/internal/Subject";
 import { take } from "rxjs/operators";
@@ -32,6 +33,14 @@ export const orchestrator = {
             $xr_helper_created: new Subject<WebXRDefaultExperience>(),
             $xr_entered: new Subject<boolean>(),
             $xr_exited: new Subject<boolean>(),
+            hand_controller: {
+                left_button: new Subject<XRButtonChange>(),
+                left_axes: new Subject<{ x: number; y: number; }>(),
+                left_moved: new Subject<any>(),
+                right_button: new Subject<XRButtonChange>(),
+                right_axes: new Subject<{ x: number; y: number; }>(),
+                right_moved: new Subject<any>(),
+            }
         };
 
         // debug
@@ -48,6 +57,7 @@ export const orchestrator = {
         Material.init(config);
         XRExperience.init(config);
         Floor.init(config);
+        XRHandController.init(config);
 
 
         for (const [entity_id, components] of Object.entries(opts.entities)) {

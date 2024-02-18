@@ -2,6 +2,7 @@ import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Subject } from "rxjs/internal/Subject";
 import type { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
+import { AbstractMesh } from "babylonjs";
 
 export enum StateOperation {
   create = "c",
@@ -65,4 +66,27 @@ export type Config = {
   $xr_helper_created: Subject<WebXRDefaultExperience>;
   $xr_entered: Subject<boolean>;
   $xr_exited: Subject<boolean>;
+  hand_controller: {
+    left_button: Subject<XRButtonChange>;
+    left_axes: Subject<{ x: number; y: number; }>;
+    left_moved: Subject<any>;
+    left_grip?: AbstractMesh;
+    right_button: Subject<XRButtonChange>;
+    right_axes: Subject<{ x: number; y: number; }>;
+    right_moved: Subject<any>;
+    right_grip?: AbstractMesh;
+  };
+};
+
+// values are only populated if they have changed from their previous value
+export type XRButtonChange = {
+  id: string; // component id (examples: "x-standard-thumbstick", "xr-standard-trigger", "b-button", "a-button", etc.)
+  type: string; // "trigger" | "squeeze" | "thumbstick" | "button"
+  value?: { current: number; previous: number; };
+  touched?: { current: boolean; previous: boolean; };
+  pressed?: { current: boolean; previous: boolean; };
+  axes?: {  // axes at time of change
+    current: { x: number; y: number; };
+    previous: { x: number; y: number; };
+  };
 };

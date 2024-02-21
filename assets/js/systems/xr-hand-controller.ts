@@ -1,7 +1,7 @@
 import { Config } from "../config";
 import { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
-import { fromBabylonObservable } from "../utils";
-import { filter, take, takeUntil } from "rxjs/operators";
+import { fromBabylonObservable, truncate } from "../utils";
+import { filter, map, take, takeUntil, scan } from "rxjs/operators";
 import type { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 import { Observable } from "rxjs/internal/Observable";
 
@@ -38,12 +38,20 @@ export const init = async (config: Config) => {
 
       config.hand_controller[`${handedness}_grip`] = input_source.grip;
       fromBabylonObservable(input_source.grip.onAfterWorldMatrixUpdateObservable).pipe(
-        takeUntil($controller_removed)
-      ).subscribe(() => {
-        config.hand_controller[movement_bus].next(true);
+        takeUntil($controller_removed),
+        map(data => truncate(data.position.asArray(), 3)), // remove excessive significant digits
+        scan((acc, data) => {
+          const new_sum = data.reduce((a, el) => a + el, 0); // compute running delta between position samples
+          return { diff: new_sum - acc.sum, sum: new_sum, data };
+        }, { diff: 9999, sum: 0, data: [0, 0, 0] }),
+        filter(result => Math.abs(result.diff) > 0.001), // if difference is big enough
+        map(result => result.data)
+      ).subscribe((pos: number[]) => {
+        config.hand_controller[movement_bus].next(pos);
       });
 
     });
+
   };
 
 
@@ -76,9 +84,6 @@ export const init = async (config: Config) => {
       }
     });
 
-
-
-
-  }; // ends init
+  };
 
 };

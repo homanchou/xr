@@ -19,10 +19,10 @@ Let's design the data shape for button changes and add it into the config.ts fil
   hand_controller: {
     left_button: Subject<XRButtonChange>;
     left_axes: Subject<{ x: number; y: number; }>;
-    left_moved: Subject<any>;
+    left_moved: Subject<number[]>;
     right_button: Subject<XRButtonChange>;
     right_axes: Subject<{ x: number; y: number; }>;
-    right_moved: Subject<any>;
+    right_moved: Subject<number[]>;
   };
 }
 
@@ -113,9 +113,7 @@ To do this, inside the subscription to the `onControllerAddedObservable` we crea
       }
     });
 
-
-  }; // ends init
-
+  }; 
 };
 
 ```
@@ -124,7 +122,7 @@ To do this, inside the subscription to the `onControllerAddedObservable` we crea
 
 Add the new system to the `orchestrator.ts` and initialize it like we always do.
 
-We can test this in a desktop browser that has the WebXR emulator extension.  At the bottom of the init function add this:
+We can test this in a desktop browser that has the WebXR emulator extension.  At the bottom of the init function add this little test subscription so we can see data being output (we'll remove it right after we confirmed it works):
 
 ```typescript
 config.hand_controller.left_axes.subscribe((evt) => {
@@ -144,13 +142,12 @@ left axes {x: 0.96, y: 0.27}
 left axes {x: 0.98, y: 0.22}
 ```
 
-We now have separate data streams for left and right button and joystick events.
+At this point we now have separate data streams for left and right button and joystick events.
 
 ### Create Data Stream for Hand Movement
 
-Following the pattern of what we did for camera movement, we'll just send a stream of empty data when we detect movement.  This way the subscriber can throttle the frequency and truncate the output for themselves if they can get to it.  Otherwise we'll spend extra computation power truncating the data at the source which has more frequent samples.
-
-On the `inputSource` there is an object called `grip` that seems to contain an observer we can use.
+Let's also create a stream of movement for the left and right hand controllers.
+The `inputSource` has an object called `grip` that seems to contain an observer we can use `onAfterWorldMatrixUpdateObservable`.  Unlike the camera's `onViewMatrixChangedObservable`, which does not emit anything when the camera is at rest, the `onAfterWorldMatrixUpdateObservable` appears to get called on every frame regardless if the position changed.  That's ok, we'll just transform the signal a bit so we only produce a signal if the position changes.
 
 ```typescript
 
@@ -160,17 +157,38 @@ On the `inputSource` there is an object called `grip` that seems to contain an o
 
     input_source.onMeshLoadedObservable.addOnce(() => {
       // grip should be available
+
       config.hand_controller[`${handedness}_grip`] = input_source.grip;
       fromBabylonObservable(input_source.grip.onAfterWorldMatrixUpdateObservable).pipe(
-        takeUntil($controller_removed)
-      ).subscribe(() => {
-        config.hand_controller[movement_bus].next(true);
+        takeUntil($controller_removed),
+        map(data => truncate(data.position.asArray(), 3)), // remove excessive significant digits
+        scan((acc, data) => {
+          const new_sum = data.reduce((a, el) => a + el, 0); // compute running delta between position samples
+          return { diff: new_sum - acc.sum, sum: new_sum, data };
+        }, { diff: 9999, sum: 0, data: [0, 0, 0] }),
+        filter(result => Math.abs(result.diff) > 0.001), // if difference is big enough
+        map(result => result.data)
+      ).subscribe((pos: number[]) => {
+        config.hand_controller[movement_bus].next(pos);
       });
 
     });
+
   };
 
+```
+This movement detector gets a TransformNode on every frame.  It pulls the position data from the TransformNode and sends that down the pipe justing RxJS map operator.  Then we use an RxJS scan operator to fold in some state.  We pass in an accumulator with a data field to preserve the position array, a sum field to remember the previous sum, and a diff field to calculate the difference between the previous sample.  In the next pipeline operator we use a filter to only allow samples through that had a diff > 0.001.  Finally we use map to remove the extra fields we created on the payload and return just the position array again.
 
+Add this function after the previous component setup function we created:
+
+```typescript
+input_source.onMotionControllerInitObservable.addOnce(mc => {
+  mc.onModelLoadedObservable.addOnce(() => {
+    observe_components(input_source, $controller_removed);
+    /* add it here */
+    observe_motion(input_source, $controller_removed);
+  });
+});
 ```
 
 Let's update Config to support the two extra properties:
@@ -183,3 +201,179 @@ Let's update Config to support the two extra properties:
     right_grip?: AbstractMesh;
   };
 ```
+
+By exposing the grip on the config, we can pull other information off of it later, such as rotation.
+
+Now let's combine all the signals for head and each hand movement and send it out to the RoomChannel via the "i_moved" event.  We were doing this in avatar.ts.  Update the function like so:
+
+```typescript
+
+$channel_joined.pipe(take(1)).subscribe(() => {
+
+    const head_pos_rot = () => {
+      const cam = scene.activeCamera;
+      const position = truncate(cam.position.asArray());
+      const rotation = truncate(cam.absoluteRotation.asArray());
+      return position.concat(rotation);
+    };
+
+    const pose = { head: head_pos_rot(), left: null, right: null };
+
+    config.hand_controller.left_moved.subscribe(left_pos => {
+      const rot = truncate(config.hand_controller.left_grip.rotationQuaternion.asArray());
+      pose.left = left_pos.concat(rot);
+    });
+
+    config.hand_controller.right_moved.subscribe(right_pos => {
+      const rot = truncate(config.hand_controller.right_grip.rotationQuaternion.asArray());
+      pose.right = right_pos.concat(rot);
+    });
+
+    config.$camera_moved.subscribe(() => {
+      pose.head = head_pos_rot();
+    });
+
+    config.$xr_exited.subscribe(() => {
+      pose.left = null;
+      pose.right = null;
+    });
+
+    $camera_moved.pipe(mergeWith(config.hand_controller.left_moved, config.hand_controller.right_moved)).pipe(
+      throttleTime(MOVEMENT_SYNC_FREQ),
+    ).subscribe(() => {
+      channel.push("i_moved", { pose });
+    });
+
+  });
+  ```
+
+To combine the head and hands we first create a `pose` staging area.  We always have a head position and rotation so we write function to grab that from the current active camera.  Then we create 3 subscriptions, one for each hand and one for head movement to update the `pose` with position and rotation when there is any movement.  If we leave xr we'll set the left and right hand data to null on the `pose`.  Finally we create a subscription based on all three movements and send the combined `pose` but throttled by time.
+
+Now let's improve the `createSimpleUser` function in `avatar.ts` to render boxes for hands.
+
+```typescript
+
+  
+  const headId = (user_id: string) => `head_${user_id}`;
+  
+  // add some functions for getting the mesh for left and right boxe names
+  const leftId = (user_id: string) => `left_${user_id}`;
+  const rightId = (user_id: string) => `right_${user_id}`;
+
+  ....
+
+  const createSimpleUser = (user_id: string, pose: { head: number[]; left?: number[]; right?: number[]; }) => {
+
+    let head = cache.get(headId(user_id));
+    if (!head) {
+      head = CreateBox(headId(user_id), { width: 0.15, height: 0.3, depth: 0.25 }, scene);
+      cache.set(headId(user_id), head);
+
+    }
+    let left = cache.get(leftId(user_id));
+    if (!left) {
+      left = CreateBox(leftId(user_id), { width: 0.1, height: 0.1, depth: 0.2 }, scene);
+      cache.set(leftId(user_id), left);
+    }
+    let right = cache.get(rightId(user_id));
+    if (!right) {
+      right = CreateBox(rightId(user_id), { width: 0.1, height: 0.1, depth: 0.2 }, scene);
+      cache.set(rightId(user_id), right);
+    }
+
+    poseUser(user_id, pose);
+
+  };
+
+```
+And update the poseUser function to handle moving hands to new locations
+
+```typescript
+
+  const poseUser = (user_id: string, pose: { head: number[]; left?: number[]; right?: number[]; }) => {
+
+    const head = cache.get(headId(user_id));
+    if (head) {
+      //position is first 3 elements of pose array
+      const position = pose.head.slice(0, 3);
+      //rotation is last 4 elements of pose array
+      const rotation = pose.head.slice(3);
+      head.position.fromArray(position);
+      if (!head.rotationQuaternion) {
+        head.rotationQuaternion = Quaternion.FromArray(rotation);
+      } else {
+        head.rotationQuaternion.x = rotation[0];
+        head.rotationQuaternion.y = rotation[1];
+        head.rotationQuaternion.z = rotation[2];
+        head.rotationQuaternion.w = rotation[3];
+      }
+    }
+
+    if (pose.left) {
+      const left = cache.get(leftId(user_id));
+      if (left) {
+        const position = pose.left.slice(0, 3);
+        const rotation = pose.left.slice(3);
+        left.position.fromArray(position);
+        if (!left.rotationQuaternion) {
+          left.rotationQuaternion = Quaternion.FromArray(rotation);
+        } else {
+          left.rotationQuaternion.x = rotation[0];
+          left.rotationQuaternion.y = rotation[1];
+          left.rotationQuaternion.z = rotation[2];
+          left.rotationQuaternion.w = rotation[3];
+        }
+      }
+    }
+
+    if (pose.right) {
+      const right = cache.get(rightId(user_id));
+      if (right) {
+        const position = pose.right.slice(0, 3);
+        const rotation = pose.right.slice(3);
+        right.position.fromArray(position);
+        if (!right.rotationQuaternion) {
+          right.rotationQuaternion = Quaternion.FromArray(rotation);
+        } else {
+          right.rotationQuaternion.x = rotation[0];
+          right.rotationQuaternion.y = rotation[1];
+          right.rotationQuaternion.z = rotation[2];
+          right.rotationQuaternion.w = rotation[3];
+        }
+      }
+    }
+
+
+  };
+
+```
+
+While we're at it update function that would delete a user if they left:
+
+```typescript
+
+  const removeUser = (user_id: string) => {
+    const head = cache.get(headId(user_id));
+    if (head) {
+      head.dispose();
+      cache.delete(headId(user_id));
+    }
+    const left = cache.get(leftId(user_id));
+    if (left) {
+      left.dispose();
+      cache.delete(leftId(user_id));
+    }
+    const right = cache.get(rightId(user_id));
+    if (right) {
+      right.dispose();
+      cache.delete(rightId(user_id));
+    }
+  };
+
+```
+
+Test it, jump into a headset and wave your arms around.  If you have your desktop computer in front of you as well you can observe your headset "self" on the desktop while peaking under the headset.  You should see three colorless boxes representing head and hands.
+
+### Summary
+
+In this chapter we added simple box hands to our simple box head "avatar".  To grab the data for the hand controllers we set up some more RxJS subjects to stream the data to.  Then we pushed that data to the room channel.  Since we already have in place a pipeline to get that data and draw an avatar, we just extended that function to also create and render box hands.

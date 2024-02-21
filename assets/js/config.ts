@@ -69,11 +69,11 @@ export type Config = {
   hand_controller: {
     left_button: Subject<XRButtonChange>;
     left_axes: Subject<{ x: number; y: number; }>;
-    left_moved: Subject<any>;
+    left_moved: Subject<number[]>;
     left_grip?: AbstractMesh;
     right_button: Subject<XRButtonChange>;
     right_axes: Subject<{ x: number; y: number; }>;
-    right_moved: Subject<any>;
+    right_moved: Subject<number[]>;
     right_grip?: AbstractMesh;
   };
 };

@@ -420,7 +420,7 @@ We added the ETS to this genserver.  Whenever we process a room event, we'll sta
 
 ### Add Dynamic Supervisor
 
-GenServers ought to be supervised so that if they crash they can be restarted.Let's add a supervisor for our State.  Create a new file at `lib/xr/servers/rooms_supervisor`
+GenServers ought to be supervised so that if they crash they can be restarted.  Let's add a supervisor for our State.  Create a new file at `lib/xr/servers/rooms_supervisor`
 
 ```elixir
 defmodule Xr.Servers.RoomsSupervisor do

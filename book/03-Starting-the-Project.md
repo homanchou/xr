@@ -292,18 +292,25 @@ The `root.html.heex` looks fine for now.  It's job is to wrap all of the HTML an
 
 ### Customize EsBuild
 
-There's one more big change I want to make to our Phoenix build system and that is regarding how javascript is bundled.  By default, the EsBuild system that comes with Phoenix does not use any plugins, and I would specifically like to add a plugin that can do typescript type-checking.  That way we can switch all javascript to typescript for improved reliability.
+There's one more big change I want to make to our Phoenix build system and that is regarding how javascript is bundled.  It's not strictly mandatory, but I recommended it to have more control.  By default, the EsBuild system that comes with Phoenix does not use any plugins, and I would specifically like to add a plugin that can do typescript type-checking.  That way we can switch all javascript to typescript for improved reliability.
+
+Tip:
 
 If I forget to mention it everytime, commands that start with `npm` should be run from the project's `assets` folder.  Commands that start with `mix` should be run from the project's root folder.
 
 The following command will create a package.json file and a node_modules folder that contain packages that we'll need.
+
+Depending on your version of node you might need to run `npm init` first.
+
 ```bash
 npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix @babylonjs/core @babylonjs/gui @babylonjs/materials @babylonjs/inspector --save-dev
+```
 
+```bash
 npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
 ```
 
-Next let's create a custom esbuild script and remove the default esbuild dependency that comes with Phoenix.
+Next let's create a custom esbuild script and remove the default esbuild dependency that comes with Phoenix.  This build script does the same thing that Phoenix's Esbuild was doing for us, but we'll be able to customize it.
 
 ### Configure esbuild script
 
@@ -327,7 +334,7 @@ const plugins = [
 
 // Define esbuild options
 let opts = {
-  entryPoints: ["js/app.ts", "js/orchestrator.ts"],
+  entryPoints: ["js/app.ts"],
   bundle: true,
   format: "esm",
   splitting: true,
@@ -369,7 +376,7 @@ if (watch) {
 Modify config/dev.exs so that the script runs whenever you change files, replacing the existing :esbuild configuration under watchers:
 
 ```elixir
-config :hello, HelloWeb.Endpoint,
+config :xr, HelloWeb.Endpoint,
   ...
   watchers: [
     node: ["build.js", "--watch", cd: Path.expand("../assets", __DIR__)]
@@ -396,10 +403,15 @@ Modify the `aliases` task in `mix.exs` to install npm packages during mix setup 
     ]
   end
 ```
+### Remove Esbuild Config
 
-Remove the esbuild configuration from `config/config.exs`.  Remove the esbuild dependency from `mix.exs`.
+Remove the esbuild configuration from `config/config.exs`.  
 
-Unlock the esbuild dependency so that it is also removed from the lock file:
+### Remove EsBuild from mix.exs
+
+Remove the esbuild dependency from `mix.exs`.  Look for `defp deps do` and remove the line that contains esbuild.
+
+When you remove that line you also need to unlock the esbuild dependency so that it is also removed from the lock file:
 
 ```bash
 mix deps.unlock esbuild
@@ -410,6 +422,8 @@ At this point we have successfully removed the Phoenix default esbuild mix depen
 ### Enable Bundle Code-Splitting
 
 If you look at `build.js`, notice that the options will use the experimental code splitting ability recently added to esbuild.  The splitting option only supports "esm" format for now and therefore and we need to add `type="module"` to the script tag that brings in `app.js` in root layout or we'll get an error like "Cannot use import statement outside a module".  
+
+Open up `root.html.heex` and modify the script tag to include `type="module"`
 
 ```html
 <!-- add type="module" to the script tag >
@@ -446,7 +460,7 @@ liveSocket.connect();
 
 ### Add tsconfig.json
 
-Since we'll be switch to typescript, add this file `assets/tsconfig.json`
+Since we're switching to typescript, add this file `assets/tsconfig.json`
 
 ```json
 {
@@ -469,7 +483,7 @@ Since we'll be switch to typescript, add this file `assets/tsconfig.json`
 
 ### Verify Asset Bundles
 
-If you want to see the assets that our source typescript files turn into, start your dev server `iex -S mix phx.server` then take a look inside `priv/static/assets` folder.  The watchers are hard at work observing any changes to the typescript files and then esbuild is bundling and splitting the files here.  If these look very big during development keep in mind that we're not minifying any code and we're also including source maps inline in the file.  To see what the file sizes will look like for production run `mix assets.deploy`.  This will create the minified, no sourcemap, gzipped versions of the files.  You can run `mix phx.digest.clean --all` to remove digest files created.
+If you want to see the assets that our source typescript files turn into, start your dev server `iex -S mix phx.server` then take a look inside `priv/static/assets` folder.  The watchers are hard at work observing any changes to the typescript files and then esbuild is bundling and splitting the files here.  If these look very big during development keep in mind that we're not minifying any code in development.  To see what the file sizes will look like for production run `mix assets.deploy`.  This will create the minified, no sourcemap, gzipped versions of the files.  You can run `mix phx.digest.clean --all` to remove digest files created.
 
 
 ### Summary

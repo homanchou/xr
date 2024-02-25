@@ -16,8 +16,10 @@ defmodule Xr.Utils do
   end
 
   @doc """
+  insert(entity_id, operation, payload, table)
   internal api to insert a state change into the ets table
    operation must be one of :create, :update, :delete
+   payload is a map of components
    returns state with the entities_to_sync set updated
   """
   def insert(entity_id, operation, payload, table) when is_atom(operation) and is_map(payload) do

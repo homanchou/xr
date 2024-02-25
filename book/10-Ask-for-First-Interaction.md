@@ -180,7 +180,25 @@ This change will draw the initial snapshot entities in the scene.  However there
 
 ```
 
-The `take(1)` operator will remove the subscription after it sees one event.  It will loop through the entity ids given in the snapshot and remove them from the scene.
+The `take(1)` operator will remove the subscription after it sees one event.  It will loop through the entity ids given in the snapshot and remove them from the scene.  This way when we receive the `entities_state` message we can create the state as it is at that point in time, which may differ than the snapshot.  The entities_state message, however will be sent whenever the channel reconnects, for whenever there is a netsplit or a server crash.  In that rare event we probably don't need to wipe all the entities away and redraw everything, instead we'll just make sure that mesh_builder does not re-create meshes that it has already created.  
+
+At that guard to mesh_builder.ts.
+
+```typescript
+  ...
+    let mesh = scene.getMeshByName(evt.eid);
+    if (mesh) {
+      return;
+    }
+    switch (mesh_type) {
+      case "box":
+        mesh = CreateBox(evt.eid, mesh_args, scene);
+        break;
+    ...
+```
+
+
+
 
 ### Summary
 

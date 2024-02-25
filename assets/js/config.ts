@@ -2,7 +2,9 @@ import type { Channel, Socket } from "phoenix";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Subject } from "rxjs/internal/Subject";
 import type { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
-import { AbstractMesh } from "babylonjs";
+import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
+import type { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 
 export enum StateOperation {
   create = "c",
@@ -45,13 +47,6 @@ export const componentExists = (component_name: string, component_value?: any) =
 };
 
 
-// export type RoomEvent = {
-//   create?: {[entity_id: string]: {[component_name: string]: any}};
-//   update?: {[entity_id: string]: {[component_name: string]: any}};
-//   delete?: {[entity_id: string]: any};
-//   note?: string;
-// }
-
 export type Config = {
   room_id: string;
   user_id: string;
@@ -61,27 +56,24 @@ export type Config = {
   state: Map<EntityId, Components>;
   $channel_joined: Subject<boolean>;
   $room_entered: Subject<boolean>;
-  $camera_moved: Subject<any>;
+  $camera_moved: Subject<UniversalCamera>;
   $state_mutations: Subject<StateMutation>;
-  $xr_helper_created: Subject<WebXRDefaultExperience>;
+  $xr_helper_ready: Subject<WebXRDefaultExperience>;
   $xr_entered: Subject<boolean>;
   $xr_exited: Subject<boolean>;
+  $xr_button_changes: Subject<XRButtonChange>;
+  $xr_axes: Subject<{ x: number; y: number; handedness: "left" | "right" | "none"; }>;
   hand_controller: {
-    left_button: Subject<XRButtonChange>;
-    left_axes: Subject<{ x: number; y: number; }>;
-    left_moved: Subject<number[]>;
     left_grip?: AbstractMesh;
-    right_button: Subject<XRButtonChange>;
-    right_axes: Subject<{ x: number; y: number; }>;
-    right_moved: Subject<number[]>;
     right_grip?: AbstractMesh;
   };
 };
 
 // values are only populated if they have changed from their previous value
 export type XRButtonChange = {
+  handedness: "left" | "right" | "none";
   id: string; // component id (examples: "x-standard-thumbstick", "xr-standard-trigger", "b-button", "a-button", etc.)
-  type: string; // "trigger" | "squeeze" | "thumbstick" | "button"
+  type: "trigger" | "squeeze" | "thumbstick" | "button" | "touchpad";
   value?: { current: number; previous: number; };
   touched?: { current: boolean; previous: boolean; };
   pressed?: { current: boolean; previous: boolean; };

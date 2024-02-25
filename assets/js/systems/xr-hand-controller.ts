@@ -1,14 +1,14 @@
-import { Config } from "../config";
+import { Config, XRButtonChange } from "../config";
 import { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
 import { fromBabylonObservable, truncate } from "../utils";
-import { filter, map, take, takeUntil, scan } from "rxjs/operators";
+import { filter, map, take, takeUntil, scan, tap, throttleTime } from "rxjs/operators";
 import type { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 import { Observable } from "rxjs/internal/Observable";
 
 export const init = async (config: Config) => {
-  const { $xr_helper_created } = config;
-  $xr_helper_created.subscribe((xrHelper: WebXRDefaultExperience) => {
-    setup_hand_controllers(xrHelper);
+
+  config.$xr_helper_ready.subscribe((xr_helper) => {
+    setup_hand_controllers(xr_helper);
   });
 
   const setup_hand_controllers = (xrHelper: WebXRDefaultExperience) => {
@@ -22,45 +22,25 @@ export const init = async (config: Config) => {
       // wait until model is ready
       input_source.onMotionControllerInitObservable.addOnce(mc => {
         mc.onModelLoadedObservable.addOnce(() => {
+          console.log("setting up hand controllers");
           observe_components(input_source, $controller_removed);
-          observe_motion(input_source, $controller_removed);
+          // observe_motion(input_source, $controller_removed);
+          // observe_squeeze_and_trigger(input_source, $controller_removed);
+          // cache the grip so we can easily get to the position and rotation
+          input_source.onMeshLoadedObservable.addOnce(() => {
+            config.hand_controller[`${handedness}_grip`] = input_source.grip;
+          });
         });
       });
     });
   };
 
-  const observe_motion = (input_source: WebXRInputSource, $controller_removed: Observable<WebXRInputSource>) => {
-    const handedness = input_source.inputSource.handedness;
-    const movement_bus = `${handedness}_moved`;
-
-    input_source.onMeshLoadedObservable.addOnce(() => {
-      // grip should be available
-
-      config.hand_controller[`${handedness}_grip`] = input_source.grip;
-      fromBabylonObservable(input_source.grip.onAfterWorldMatrixUpdateObservable).pipe(
-        takeUntil($controller_removed),
-        map(data => truncate(data.position.asArray(), 3)), // remove excessive significant digits
-        scan((acc, data) => {
-          const new_sum = data.reduce((a, el) => a + el, 0); // compute running delta between position samples
-          return { diff: new_sum - acc.sum, sum: new_sum, data };
-        }, { diff: 9999, sum: 0, data: [0, 0, 0] }),
-        filter(result => Math.abs(result.diff) > 0.001), // if difference is big enough
-        map(result => result.data)
-      ).subscribe((pos: number[]) => {
-        config.hand_controller[movement_bus].next(pos);
-      });
-
-    });
-
-  };
-
-
 
   const observe_components = (input_source: WebXRInputSource, $controller_removed: Observable<WebXRInputSource>) => {
 
     const handedness = input_source.inputSource.handedness;
-    const button_subject = `${handedness}_button`;
-    const axes_subject = `${handedness}_axes`;
+    // const button_subject = `${handedness}_button`;
+    // const axes_subject = `${handedness}_axes`;
 
     const componentIds = input_source.motionController.getComponentIds() || [];
     // for every button type (component), stream changes to subject
@@ -69,8 +49,10 @@ export const init = async (config: Config) => {
       fromBabylonObservable(webXRComponent.onButtonStateChangedObservable).pipe(
         takeUntil($controller_removed)
       ).subscribe((evt) => {
-        config.hand_controller[button_subject].next({
+        config.$xr_button_changes.next({
+          handedness,
           id: webXRComponent.id,
+          type: webXRComponent.type,
           ...evt.changes
         });
       });
@@ -79,11 +61,36 @@ export const init = async (config: Config) => {
         fromBabylonObservable(webXRComponent.onAxisValueChangedObservable).pipe(
           takeUntil($controller_removed)
         ).subscribe((evt) => {
-          config.hand_controller[axes_subject].next(evt);
+          config.$xr_axes.next({
+            handedness,
+            ...evt
+          });
         });
       }
     });
 
   };
+
+
+  // const observe_squeeze_and_trigger = (input_source: WebXRInputSource, $controller_removed: Observable<WebXRInputSource>) => {
+  //   const handedness = input_source.inputSource.handedness;
+  //   const button_subject = `${handedness}_button`;
+  //   const squeeze_subject = `${handedness}_squeeze`;
+  //   const trigger_subject = `${handedness}_trigger`;
+
+  //   config.hand_controller[button_subject].pipe(
+  //     takeUntil($controller_removed),
+  //     filter((evt: XRButtonChange) => evt.type === "squeeze" && evt.pressed?.current !== evt.pressed?.previous),
+  //   ).subscribe((evt) => {
+  //     config.hand_controller[squeeze_subject].next(evt.pressed.current);
+  //   });
+
+  //   config.hand_controller[trigger_subject].pipe(
+  //     takeUntil($controller_removed),
+  //     filter((evt: XRButtonChange) => evt.type === "trigger" && evt.pressed?.current !== evt.pressed?.previous),
+  //   ).subscribe((evt) => {
+  //     config.hand_controller[trigger_subject].next(evt.pressed.current);
+  //   });
+  // };
 
 };

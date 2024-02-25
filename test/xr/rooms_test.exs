@@ -84,7 +84,7 @@ defmodule Xr.RoomsTest do
       })
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "floor",
+        "mesh_builder" => "teleportable",
         "position" => [4, 0, -1]
       })
 
@@ -120,7 +120,7 @@ defmodule Xr.RoomsTest do
       })
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "floor",
+        "mesh_builder" => "teleportable",
         "position" => [4, 0, -1]
       })
 

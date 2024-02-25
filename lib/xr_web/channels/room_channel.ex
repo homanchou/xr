@@ -38,6 +38,11 @@ defmodule XrWeb.RoomChannel do
     {:noreply, socket}
   end
 
+  def handle_in("event", %{"event_name" => event_name, "payload" => payload}, socket) do
+    Xr.Utils.to_room_stream(socket.assigns.room_id, event_name, payload)
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_info(:after_join, socket) do
     {:ok, _} = Presence.track(socket, socket.assigns.user_id, %{})

@@ -7,8 +7,9 @@ import * as Color from "./systems/color";
 import * as Material from "./systems/material";
 import * as Avatar from "./systems/avatar";
 import * as XRExperience from "./systems/xr-experience";
-import * as Floor from "./systems/floor";
+import * as Teleportable from "./systems/teleportable";
 import * as XRHandController from "./systems/xr-hand-controller";
+import * as Holdable from "./systems/holdable";
 
 import { Components, Config, EntityId, StateMutation, StateOperation, XRButtonChange } from "./config";
 import type { Socket } from "phoenix";
@@ -30,17 +31,12 @@ export const orchestrator = {
             $room_entered: new Subject<boolean>(),
             $camera_moved: new Subject<any>(),
             $state_mutations: new Subject<StateMutation>(),
-            $xr_helper_created: new Subject<WebXRDefaultExperience>(),
+            $xr_helper_ready: new Subject<WebXRDefaultExperience>(),
             $xr_entered: new Subject<boolean>(),
             $xr_exited: new Subject<boolean>(),
-            hand_controller: {
-                left_button: new Subject<XRButtonChange>(),
-                left_axes: new Subject<{ x: number; y: number; }>(),
-                left_moved: new Subject<any>(),
-                right_button: new Subject<XRButtonChange>(),
-                right_axes: new Subject<{ x: number; y: number; }>(),
-                right_moved: new Subject<any>(),
-            }
+            $xr_button_changes: new Subject<XRButtonChange & { handedness: "left" | "right"; }>(),
+            $xr_axes: new Subject<{ x: number; y: number; } & { handedness: "left" | "right"; }>(),
+            hand_controller: {}
         };
 
         // debug
@@ -56,8 +52,9 @@ export const orchestrator = {
         Color.init(config);
         Material.init(config);
         XRExperience.init(config);
-        Floor.init(config);
+        Teleportable.init(config);
         XRHandController.init(config);
+        Holdable.init(config);
 
 
         for (const [entity_id, components] of Object.entries(opts.entities)) {
@@ -69,6 +66,8 @@ export const orchestrator = {
                 config.scene.getMeshByName(entity_id)?.dispose(false, true);
             });
         });
+
+
 
     }
 };

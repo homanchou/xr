@@ -2,8 +2,6 @@ import { Config } from "../config";
 import * as Browser from "../browser";
 import { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
 import { WebXRState } from "@babylonjs/core/XR/webXRTypes";
-import { fromBabylonObservable } from "../utils";
-import { takeUntil } from "rxjs";
 
 export const init = async (config: Config) => {
   if (!Browser.xrSupported()) {
@@ -12,33 +10,26 @@ export const init = async (config: Config) => {
 
   await import("@babylonjs/core/Helpers/sceneHelpers");
 
-  const { scene, $xr_entered, $xr_exited, $xr_helper_created } = config;
+  const { scene, $xr_entered, $xr_exited } = config;
 
+  // so that the glasses icon is not rendered until after the modal is dismissed
   config.$room_entered.subscribe(async () => {
-    const xrHelper = await scene.createDefaultXRExperienceAsync({});
-    $xr_helper_created.next(xrHelper);
 
-    xrHelper.baseExperience.onStateChangedObservable.add((state: WebXRState) => {
+    const xr_helper = await scene.createDefaultXRExperienceAsync({});
+    config.$xr_helper_ready.next(xr_helper);
+
+    xr_helper.baseExperience.onStateChangedObservable.add((state: WebXRState) => {
       if (state === WebXRState.IN_XR) {
         $xr_entered.next(true);
       } else if (state === WebXRState.NOT_IN_XR) {
         $xr_exited.next(true);
       }
+
     });
-
-    $xr_entered.subscribe(async () => {
-      fromBabylonObservable(xrHelper.baseExperience.camera.onViewMatrixChangedObservable).pipe(
-        takeUntil($xr_exited)
-      ).subscribe(() => {
-        config.$camera_moved.next(true);
-      });
-    });
-
-
 
     // probably a headset
     if (Browser.isMobileVR()) {
-      await enterXR(xrHelper);
+      await enterXR(xr_helper);
     }
   });
 };

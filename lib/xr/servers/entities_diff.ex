@@ -2,7 +2,7 @@ defmodule Xr.Servers.EntitiesDiff do
   use GenServer
   alias Phoenix.PubSub
 
-  @sync_interval 200
+  @sync_interval 50
   # creates a tuple that will automatically map a string "user_states:#{room_id}" to this new process
   def via_tuple(room_id) do
     {:via, Registry, {Xr.RoomsRegistry, "entities_diff:#{room_id}"}}

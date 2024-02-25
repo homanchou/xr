@@ -152,7 +152,7 @@ defmodule Xr.RoomsTest do
       })
 
       Rooms.create_entity(room.id, Ecto.UUID.generate(), %{
-        "mesh_builder" => "floor",
+        "mesh_builder" => "teleportable",
         "position" => [4, 0, -1]
       })
 

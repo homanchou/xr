@@ -316,41 +316,64 @@ We've got the "user_joined" and "user_left" event going into our room_stream.  W
 Let's add a new typescript file dedicated to handling the presence of avatars at `assets/js/systems/avatar.ts`.  First we need to create a new listener to listen whenever our camera moves then send a message to the room channel.
 
 ```typescript
-import { Config } from "../config";
-import { throttleTime, take } from "rxjs/operators";
-import { truncate } from "../utils";
+import {
+  Config,
+} from "../config";
+
+import {
+  throttleTime,
+  take,
+  filter,
+  skip,
+  takeUntil,
+  scan,
+  map,
+} from "rxjs/operators";
+import { fromBabylonObservable, truncate } from "../utils";
+
+// import { UniversalCamera } from "@babylonjs/core/Cameras/";
+import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
+
+// how often to sync movement
+export const MOVEMENT_SYNC_FREQ = 50; // milliseconds
+
+const head_pos_rot = (cam: UniversalCamera) => {
+  const position = truncate(cam.position.asArray());
+  const rotation = truncate(cam.absoluteRotation.asArray());
+  return position.concat(rotation);
+};
 
 export const init = (config: Config) => {
   
-
-  const { scene, $channel_joined, $camera_moved, channel, $state_mutations } = config;
-
-
-  // create a signal that the camera moved
-  scene.activeCamera.onViewMatrixChangedObservable.add(cam => {
-    config.$camera_moved.next(true);
-  });
-
-  const MOVEMENT_SYNC_FREQ = 200; // milliseconds
+  const {
+    scene,
+    $channel_joined,
+    channel,
+  } = config;
 
   // subscribe just one time to the channel joined event
-  // and create a new subscription that takes all camera movement, 
+  // and create a new subscription that takes all camera movement,
   // throttles it, truncates the numbers and  sends it to the server
-   $channel_joined.pipe(take(1)).subscribe(() => {
-    $camera_moved.pipe(throttleTime(MOVEMENT_SYNC_FREQ)).subscribe(() => {
-      const cam = scene.activeCamera;
-      const position = truncate(cam.position.asArray());
-      const rotation = truncate(cam.absoluteRotation.asArray());
-      const payload = {
-        pose: { head: position.concat(rotation) },
-      };
-      channel.push("i_moved", payload);
-    });
+  $channel_joined.pipe(take(1)).subscribe(() => {
+    // create a signal that the camera moved (this would be the non-xr camera)
+    fromBabylonObservable(scene.activeCamera.onViewMatrixChangedObservable)
+      .pipe(
+        skip(3), // avoid some noise (feedback while setting camera to previous position)
+        throttleTime(MOVEMENT_SYNC_FREQ),
+      )
+      .subscribe((cam) => {
+        //$camera_moved.next(cam as UniversalCamera);
+        channel.push("i_moved", {
+          pose: { head: head_pos_rot(cam as UniversalCamera) },
+        });
+      });
   });
-}
+
+
+
 ```
 
-Babylon.js provides observables. See the 'onWhatever.add' pattern above?  These observables give us a way to trigger a callback function whenever that observable thing happens.  In this case `scene.activeCamera.onViewMatrixChangedObservable` is a Babylon.js observable we can subscribe to whenever the camera's position or direction changes.  We could directly do a `channel.push` from here but there are two issues.  The first issue is that there is a race condition.  We can't use `channel.push` if the channel is not joined.  That is why we created the `$channel_joined` RxJS Subject on the config object so that we could subscribe to when the channel is joined from any system.  The second issue is that it could be far too frequent to use `channel.push` every time the `onViewMatrixChangedObservable` is called since a camera can move every single frame of animation.  We'll limit it by first pushing a signal (any kind of data really) into `config.$camera_moved`.  Then we'll create an RxJS pipe from `$camera_moved` and throttle it to a maximum sampling every `MOVEMENT_SYNC_FREQ`.  Then we'll construct a message to send to `channel.push` in the form of `i_moved` event.  The `cam.position.asArray()` will produce too many significant digits.  The units of position are in meters.  That means if there are 2 significant digits after the decimal point then we have centemeter level precision.  Any further precision is not needed.
+Babylon.js provides observables. See the 'onWhatever.add' pattern above?  These observables give us a way to trigger a callback function whenever that observable thing happens.  In this case `scene.activeCamera.onViewMatrixChangedObservable` is a Babylon.js observable we can subscribe to whenever the camera's position or direction changes.  We could directly do a `channel.push` from here but there are two issues.  The first issue is that there is a race condition.  We can't use `channel.push` if the channel is not joined.  That is why we created the `$channel_joined` RxJS Subject on the config object so that we could subscribe to when the channel is joined from any system.  The second issue is that it could be far too frequent to use `channel.push` every time the `onViewMatrixChangedObservable` is called since a camera can move every single frame of animation.  We'll throttle by a variable `MOVEMENT_SYNC_FREQ` for the number of milliseconds to wait between sending additional movement to the server.  Then we'll construct a message to send to `channel.push` in the form of `i_moved` event.  The `cam.position.asArray()` will produce too many significant digits.  The units of position are in meters.  That means if there are 2 significant digits after the decimal point then we have centemeter level precision.  Any further precision is not needed.
 
 Add a truncate function at `assets/js/utils.ts`
 
@@ -578,7 +601,6 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
   // user_moved
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.update),
-    tap(e => console.log("user moved", e)),
     filter(e => e.eid !== config.user_id),
     filter(componentExists("tag", "avatar")),
   ).subscribe(e => {
@@ -589,7 +611,7 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
     poseUser(e.eid, e.com.pose);
   });
 
-  const headId = (user_id: string) => `head_${user_id}`;
+  const headId = (user_id: string) => `${user_id}:head`;
 
   const removeUser = (user_id: string) => {
     const head = cache.get(headId(user_id));

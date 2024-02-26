@@ -1,7 +1,6 @@
-import { filter } from "rxjs";
+import { filter, take } from "rxjs/operators";
 import { Config, StateOperation, componentExists } from "../config";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
-import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 import { Tags } from "@babylonjs/core/Misc/tags";
 
 export const init = (config: Config) => {
@@ -71,12 +70,30 @@ export const init = (config: Config) => {
    * send a message to the server
    */
   config.$xr_button_changes.pipe(
-    filter(evt => evt.type === "squeeze" && evt.pressed?.previous === false && evt.pressed?.current === true),
-  ).subscribe((evt) => {
+    filter(press_evt => press_evt.type === "squeeze" && press_evt.pressed?.previous === false && press_evt.pressed?.current === true),
+  ).subscribe((press_evt) => {
 
-    const mesh = hold_detection(evt.handedness as "left" | "right");
+    const mesh = hold_detection(press_evt.handedness as "left" | "right");
     if (mesh) {
-      config.channel.push("event", { event_name: "user_picked_up", payload: { target_id: mesh.name, user_id: config.user_id, hand: evt.handedness } });
+      // pre-emptive parenting
+      const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${press_evt.handedness}`);
+      if (hand_mesh) {
+        mesh.setParent(hand_mesh);
+      }
+      // now send a message
+      config.channel.push("event", { event_name: "user_picked_up", payload: { target_id: mesh.name, user_id: config.user_id, hand: press_evt.handedness } });
+      // now listen for a release of the same hand
+      config.$xr_button_changes.pipe(
+        filter(release_evt => release_evt.type === "squeeze" && release_evt.handedness === press_evt.handedness && release_evt.pressed?.previous === true && release_evt.pressed?.current === false),
+        take(1),
+      ).subscribe((release_evt) => {
+        // if this hand was still the parent, then send a release
+        if (mesh.parent && hand_mesh && mesh.parent.name === hand_mesh.name) {
+          mesh.setParent(null);
+
+          config.channel.push("event", { event_name: "user_released", payload: { target_id: mesh.name, user_id: config.user_id, hand: release_evt.handedness } });
+        }
+      });
     }
 
   });

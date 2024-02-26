@@ -30,6 +30,14 @@ export const init = async (config: Config) => {
           input_source.onMeshLoadedObservable.addOnce(() => {
             config.hand_controller[`${handedness}_grip`] = input_source.grip;
           });
+
+          // parent avatar hand to the grip
+          const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
+          if (hand_mesh) {
+            hand_mesh.position.copyFromFloats(0, 0, 0);
+            hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+            hand_mesh.parent = input_source.grip;
+          }
         });
       });
     });

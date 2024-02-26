@@ -27,6 +27,14 @@ defmodule Xr.RoomEvents.StateMutation do
     insert(target_id, :update, %{"parent" => "#{user_id}:#{hand}"}, table)
   end
 
+  def process(
+        "user_released",
+        %{"target_id" => target_id},
+        table
+      ) do
+    insert(target_id, :update, %{"parent" => nil}, table)
+  end
+
   # unhandled event
   def process(_, _, _) do
     {:error, :not_handled}

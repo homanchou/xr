@@ -157,7 +157,7 @@ export const init = (config: Config) => {
     .pipe(
       filter((e) => e.op === StateOperation.update),
       // tap(e => console.log("user moved", e)),
-      // filter(e => e.eid !== config.user_id),
+      filter(e => e.eid !== config.user_id),
       filter(componentExists("tag", "avatar"))
     )
     .subscribe((e) => {

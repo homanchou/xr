@@ -16,23 +16,20 @@ export const init = (config: Config) => {
     filter(componentExists("holdable")),
     filter(evt => (evt.op === StateOperation.create || evt.op === StateOperation.update)),
   ).subscribe((evt) => {
-    const holdable = evt.com["holdable"];
     const mesh = scene.getMeshByName(evt.eid);
     if (!mesh) {
       return;
     }
-    if (holdable) {
+    if (evt.com["holdable"] === true) {
       // add tag
       Tags.AddTagsTo(mesh, "holdable");
-    } else {
+      console.log("add tag holdable", mesh.name);
+    } else if (evt.com["holdable"] === null) {
       // remove tag
       Tags.RemoveTagsFrom(mesh, "holdable");
+      console.log("remove tag holdable", mesh.name);
     }
   });
-
-  // to aid in mesh intersection with right or left hand we'll use this large-ish sphere
-  const detection_sphere = CreateSphere("detection_sphere", { diameter: 0.4, segments: 16 }, scene);
-  detection_sphere.visibility = 0.5;
 
 
   /**
@@ -50,20 +47,24 @@ export const init = (config: Config) => {
       return;
     }
     // move detection sphere to grip position then check for intersection with all meshes with holdable tag
-    detection_sphere.position.copyFrom(grip.position);
+    // console.log("move detector sphere from", detection_sphere.position.asArray(), "to", grip.position.asArray());
+    // detection_sphere.position.copyFrom(grip.position);
+    const detection_sphere = scene.getMeshByName(`${config.user_id}:${handedness}`);
     const meshes = scene.getMeshesByTags("holdable");
 
     for (let i = 0; i < meshes.length; i++) {
       const mesh = meshes[i];
-      console.log("comparing", mesh.name);
-      if (mesh.intersectsMesh(detection_sphere)) {
-        console.log("found mesh");
+      const result = detection_sphere.intersectsMesh(mesh, true);
+      console.log("comparing", mesh.name, mesh.position.asArray(), "with sphere", detection_sphere.position.asArray(), result);
+
+      if (result) {
+
         return mesh;
       }
     }
+
     console.log("no mesh found");
   };
-
 
   /**
    * Whenever we detect a squeeze on a holdable mesh

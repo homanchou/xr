@@ -10,6 +10,7 @@ import * as XRExperience from "./systems/xr-experience";
 import * as Teleportable from "./systems/teleportable";
 import * as XRHandController from "./systems/xr-hand-controller";
 import * as Holdable from "./systems/holdable";
+import * as Parent from "./systems/parent";
 
 import { Components, Config, EntityId, StateMutation, StateOperation, XRButtonChange } from "./config";
 import type { Socket } from "phoenix";
@@ -55,7 +56,7 @@ export const orchestrator = {
         Teleportable.init(config);
         XRHandController.init(config);
         Holdable.init(config);
-
+        Parent.init(config);
 
         for (const [entity_id, components] of Object.entries(opts.entities)) {
             config.$state_mutations.next({ op: StateOperation.create, eid: entity_id, com: components, prev: {} });

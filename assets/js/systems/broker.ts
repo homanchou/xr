@@ -41,7 +41,7 @@ export const init = (config: Config) => {
   // when liveview emits enter_room
   window.addEventListener("live_to_xr", e => {
     config.$room_entered.next(true);
-    
+
     if (e["detail"]["event"] == "enter_room") {
 
       channel

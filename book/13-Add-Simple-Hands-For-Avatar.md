@@ -1,5 +1,46 @@
 ## Add Simple Hands To Avatar
 
+
+
+
+Now we'll subscribe to signals to turn on and off the sending of our XR camera and hand controller movement.  Considering that the user is able to enter and exit immersive-vr session at will we should take care to register and de-register subscriptions accordingly so that we don't create more and more subscriptions accidentally when we repeatedly enter and exit XR.  It's useful to use RxJS observers for this.  Here is a function that converts a Babylon.js observable into an RxJS Observable.
+
+```typescript
+
+/**
+ * Wraps a Babylon Observable into an rxjs Observable
+ *
+ * @param bjsObservable The Babylon Observable you want to observe
+ * @example
+ * ```
+ * import { Engine, Scene, AbstractMesh } from '@babylonjs/core'
+ *
+ * const canvas = document.getElementById('canvas') as HTMLCanvasElement
+ * const engine = new Engine(canvas)
+ * const scene = new Scene(engine)
+ *
+ * const render$: Observable<Scene> = fromBabylonObservable(scene.onAfterRenderObservable)
+ * const onMeshAdded$: Observable<AbstractMesh> = fromBabylonObservable(scene.onNewMeshAddedObservable)
+ * ```
+ */
+export function fromBabylonObservable<T>(
+  bjsObservable: BabylonObservable<T>
+): RxJsObservable<T> {
+  return new RxJsObservable<T>((subscriber) => {
+    if (!(bjsObservable instanceof BabylonObservable)) {
+      throw new TypeError("the object passed in must be a Babylon Observable");
+    }
+
+    const handler = bjsObservable.add((v) => subscriber.next(v));
+
+    return () => bjsObservable.remove(handler);
+  });
+}
+```
+
+This code snippet above came from the Babylon.js forums and documentation.  It allows us to use RxJS semanics for unsubscribing.  We'll use it to subscribe to an XRFrame event whenever we enterXR, and unsubscribe whenever we exit XR.  Within each frame we'll grab the camera and hand positions and send them to the RoomChannel in the form of an `i_moved` event.
+
+
 We are now able to support both the desktop browser as well as the headset browser.  The headset browser also has the ability to start a WebXR session.  In the immersive session the Babylon.js default experience detects the kind of hand controllers that the headset uses and imports a mesh for each of them so the user can see them in VR.  However, the avatar system that we have created only renders a single box for the head right now.  Let's also add some simple boxes to represent the hands.  If there are no hands (which is the case for non-immersive experiences) then we should just remove the hands.
 
 First we'll add another system dedicated to getting data from the hand controllers.  Babylon.js provides observables for when the hand controller is added:
@@ -16,20 +57,16 @@ Let's design the data shape for button changes and add it into the config.ts fil
 
 ```typescript
   ...
-  hand_controller: {
-    left_button: Subject<XRButtonChange>;
-    left_axes: Subject<{ x: number; y: number; }>;
-    left_moved: Subject<number[]>;
-    right_button: Subject<XRButtonChange>;
-    right_axes: Subject<{ x: number; y: number; }>;
-    right_moved: Subject<number[]>;
-  };
+  $xr_button_changes: Subject<XRButtonChange>;
+  $xr_axes: Subject<{ x: number; y: number; handedness: "left" | "right" | "none"; }>;
+  
 }
 
 // values are only populated if they have changed from their previous value
 export type XRButtonChange = {
+  handedness: "left" | "right" | "none";
   id: string; // component id (examples: "x-standard-thumbstick", "xr-standard-trigger", "b-button", "a-button", etc.)
-  type: string; // "trigger" | "squeeze" | "thumbstick" | "button"
+  type: "trigger" | "squeeze" | "thumbstick" | "button" | "touchpad";
   value?: { current: number; previous: number; };
   touched?: { current: boolean; previous: boolean; };
   pressed?: { current: boolean; previous: boolean; };
@@ -38,6 +75,7 @@ export type XRButtonChange = {
     previous: { x: number; y: number; };
   };
 };
+
 ```
 
 ### Create System for Emitting Hand Controller Events
@@ -85,99 +123,53 @@ To do this, inside the subscription to the `onControllerAddedObservable` we crea
     });
   };
 
-  const observe_components = (input_source: WebXRInputSource, $controllerRemoved: Observable<WebXRInputSource>) => {
+
+  const observe_components = (input_source: WebXRInputSource, $controller_removed: Observable<WebXRInputSource>) => {
 
     const handedness = input_source.inputSource.handedness;
-    const button_subject = `${handedness}_button`;
-    const axes_subject = `${handedness}_axes`;
+    // const button_subject = `${handedness}_button`;
+    // const axes_subject = `${handedness}_axes`;
 
     const componentIds = input_source.motionController.getComponentIds() || [];
     // for every button type (component), stream changes to subject
     componentIds.forEach((componentId) => {
       const webXRComponent = input_source.motionController.getComponent(componentId);
       fromBabylonObservable(webXRComponent.onButtonStateChangedObservable).pipe(
-        takeUntil($controllerRemoved)
+        takeUntil($controller_removed)
       ).subscribe((evt) => {
-        config.hand_controller[button_subject].next({
+        config.$xr_button_changes.next({
+          handedness,
           id: webXRComponent.id,
+          type: webXRComponent.type,
           ...evt.changes
         });
       });
 
       if (webXRComponent.type === "thumbstick") {
         fromBabylonObservable(webXRComponent.onAxisValueChangedObservable).pipe(
-          takeUntil($controllerRemoved)
+          takeUntil($controller_removed)
         ).subscribe((evt) => {
-          config.hand_controller[axes_subject].next(evt);
+          config.$xr_axes.next({
+            handedness,
+            ...evt
+          });
         });
       }
-    });
-
-  }; 
-};
-
-```
-
-### Add System to Orchestrator and Test
-
-Add the new system to the `orchestrator.ts` and initialize it like we always do.
-
-We can test this in a desktop browser that has the WebXR emulator extension.  At the bottom of the init function add this little test subscription so we can see data being output (we'll remove it right after we confirmed it works):
-
-```typescript
-config.hand_controller.left_axes.subscribe((evt) => {
-  console.log("left axes", evt);
-});
-```
-
-When you move the joystick on the XR Web Emulator it will send events into the RxJS subject and flow through this test subscription.  In the js console you should see something like this:
-
-```javascript
-left axes {x: 0.08, y: 0.04}
-left axes {x: 0.08, y: 0.04}
-left axes {x: 0.28, y: 0.08}
-left axes {x: 0.28, y: 0.08}
-left axes {x: 0.96, y: 0.27}
-left axes {x: 0.96, y: 0.27}
-left axes {x: 0.98, y: 0.22}
-```
-
-At this point we now have separate data streams for left and right button and joystick events.
-
-### Create Data Stream for Hand Movement
-
-Let's also create a stream of movement for the left and right hand controllers.
-The `inputSource` has an object called `grip` that seems to contain an observer we can use `onAfterWorldMatrixUpdateObservable`.  Unlike the camera's `onViewMatrixChangedObservable`, which does not emit anything when the camera is at rest, the `onAfterWorldMatrixUpdateObservable` appears to get called on every frame regardless if the position changed.  That's ok, we'll just transform the signal a bit so we only produce a signal if the position changes.
-
-```typescript
-
-  const observe_motion = (input_source: WebXRInputSource, $controller_removed: Observable<WebXRInputSource>) => {
-    const handedness = input_source.inputSource.handedness;
-    const movement_bus = `${handedness}_moved`;
-
-    input_source.onMeshLoadedObservable.addOnce(() => {
-      // grip should be available
-
-      config.hand_controller[`${handedness}_grip`] = input_source.grip;
-      fromBabylonObservable(input_source.grip.onAfterWorldMatrixUpdateObservable).pipe(
-        takeUntil($controller_removed),
-        map(data => truncate(data.position.asArray(), 3)), // remove excessive significant digits
-        scan((acc, data) => {
-          const new_sum = data.reduce((a, el) => a + el, 0); // compute running delta between position samples
-          return { diff: new_sum - acc.sum, sum: new_sum, data };
-        }, { diff: 9999, sum: 0, data: [0, 0, 0] }),
-        filter(result => Math.abs(result.diff) > 0.001), // if difference is big enough
-        map(result => result.data)
-      ).subscribe((pos: number[]) => {
-        config.hand_controller[movement_bus].next(pos);
-      });
-
     });
 
   };
 
 ```
-This movement detector gets a TransformNode on every frame.  It pulls the position data from the TransformNode and sends that down the pipe justing RxJS map operator.  Then we use an RxJS scan operator to fold in some state.  We pass in an accumulator with a data field to preserve the position array, a sum field to remember the previous sum, and a diff field to calculate the difference between the previous sample.  In the next pipeline operator we use a filter to only allow samples through that had a diff > 0.001.  Finally we use map to remove the extra fields we created on the payload and return just the position array again.
+
+### Add System to Orchestrator 
+
+Add the new system to the `orchestrator.ts` and initialize it like we always do.
+
+At this point we now have separate data streams for all buttons (including squeeze and trigger) and joystick events.
+
+### Share XR head and hand movement
+
+Now we want to share our xr hand and hand positions and rotation with others.  First let's stash the left and right "grip" meshes that are created by Babylon.js somewhere so that we can pull the position and rotation off of them.
 
 Add this function after the previous component setup function we created:
 
@@ -186,7 +178,9 @@ input_source.onMotionControllerInitObservable.addOnce(mc => {
   mc.onModelLoadedObservable.addOnce(() => {
     observe_components(input_source, $controller_removed);
     /* add it here */
-    observe_motion(input_source, $controller_removed);
+    input_source.onMeshLoadedObservable.addOnce(() => {
+      config.hand_controller[`${handedness}_grip`] = input_source.grip;
+    });
   });
 });
 ```
@@ -202,63 +196,77 @@ Let's update Config to support the two extra properties:
   };
 ```
 
-By exposing the grip on the config, we can pull other information off of it later, such as rotation.
+Now let's combine a payload for head and each hand movement and send it out to the RoomChannel via the "i_moved" event.  We were doing this in avatar.ts.  
 
-Now let's combine all the signals for head and each hand movement and send it out to the RoomChannel via the "i_moved" event.  We were doing this in avatar.ts.  Update the function like so:
+Add this snippet to the init function in avatar.ts
 
 ```typescript
 
-$channel_joined.pipe(take(1)).subscribe(() => {
-
-    const head_pos_rot = () => {
-      const cam = scene.activeCamera;
-      const position = truncate(cam.position.asArray());
-      const rotation = truncate(cam.absoluteRotation.asArray());
-      return position.concat(rotation);
-    };
-
-    const pose = { head: head_pos_rot(), left: null, right: null };
-
-    config.hand_controller.left_moved.subscribe(left_pos => {
-      const rot = truncate(config.hand_controller.left_grip.rotationQuaternion.asArray());
-      pose.left = left_pos.concat(rot);
-    });
-
-    config.hand_controller.right_moved.subscribe(right_pos => {
-      const rot = truncate(config.hand_controller.right_grip.rotationQuaternion.asArray());
-      pose.right = right_pos.concat(rot);
-    });
-
-    config.$camera_moved.subscribe(() => {
-      pose.head = head_pos_rot();
-    });
-
-    config.$xr_exited.subscribe(() => {
-      pose.left = null;
-      pose.right = null;
-    });
-
-    $camera_moved.pipe(mergeWith(config.hand_controller.left_moved, config.hand_controller.right_moved)).pipe(
-      throttleTime(MOVEMENT_SYNC_FREQ),
-    ).subscribe(() => {
-      channel.push("i_moved", { pose });
-    });
-
+  $xr_entered.subscribe(async () => {
+    const xr_camera = scene.activeCamera as UniversalCamera;
+    fromBabylonObservable(
+      xr_helper.baseExperience.sessionManager.onXRFrameObservable
+    )
+      .pipe(
+        takeUntil($xr_exited),
+        throttleTime(MOVEMENT_SYNC_FREQ),
+        scan(
+          (acc, _frame) => {
+            acc.prev = { ...acc.curr };
+            acc.curr.head = head_pos_rot(xr_camera);
+            if (config.hand_controller.left_grip) {
+              acc.curr.left = hand_pos_rot(config.hand_controller.left_grip);
+            }
+            if (config.hand_controller.right_grip) {
+              acc.curr.right = hand_pos_rot(config.hand_controller.right_grip);
+            }
+            return acc;
+          },
+          {
+            prev: {
+              head: [0, 0, 0, 0, 0, 0, 1],
+              left: [0, 0, 0, 0, 0, 0, 1],
+              right: [0, 0, 0, 0, 0, 0, 1],
+            },
+            curr: {
+              head: [0, 0, 0, 0, 0, 0, 1],
+              left: [0, 0, 0, 0, 0, 0, 1],
+              right: [0, 0, 0, 0, 0, 0, 1],
+            },
+          }
+        ),
+        filter(
+          ({ prev, curr }) =>
+            prev.head[0] !== curr.head[0] ||
+            prev.left[0] !== curr.left[0] ||
+            prev.right[0] !== curr.right[0] ||
+            prev.left[1] !== curr.left[1] ||
+            prev.right[1] !== curr.right[1] ||
+            prev.left[2] !== curr.left[2] ||
+            prev.right[2] !== curr.right[2]
+        ),
+        map(({ curr }) => curr)
+      )
+      .subscribe((pose) => {
+        channel.push("i_moved", { pose });
+      });
   });
-  ```
 
-To combine the head and hands we first create a `pose` staging area.  We always have a head position and rotation so we write function to grab that from the current active camera.  Then we create 3 subscriptions, one for each hand and one for head movement to update the `pose` with position and rotation when there is any movement.  If we leave xr we'll set the left and right hand data to null on the `pose`.  Finally we create a subscription based on all three movements and send the combined `pose` but throttled by time.
+```
+
+First we listen to the xr_entered event.  Within that subscription we create a new subscription for every xr frame, but will unsubscribe when we receive an xr_exited event.  For every frame we will throttle by time so we only sample once every MOVEMENT_SYNC_FREQ.  Then we use `scan` to create a state in our pipeline that enables us to stage a payload of { head, left, right } position and rotation arrays.  We further keep a `prev` and `curr` version of those payloads so that we may drop any payloads if there is no change between payloads.  Finally we reshape the data in the pipeline to just the `curr` version and push it out on the channel.
+
+### Render box hands for avatars
 
 Now let's improve the `createSimpleUser` function in `avatar.ts` to render boxes for hands.
 
 ```typescript
 
   
-  const headId = (user_id: string) => `head_${user_id}`;
-  
-  // add some functions for getting the mesh for left and right boxe names
-  const leftId = (user_id: string) => `left_${user_id}`;
-  const rightId = (user_id: string) => `right_${user_id}`;
+  const headId = (user_id: string) => `${user_id}:head`;
+  // add additional functions for getting left and right mesh names
+  const leftId = (user_id: string) => `${user_id}:left`;
+  const rightId = (user_id: string) => `${user_id}:right`;
 
   ....
 
@@ -376,4 +384,4 @@ Test it, jump into a headset and wave your arms around.  If you have your deskto
 
 ### Summary
 
-In this chapter we added simple box hands to our simple box head "avatar".  To grab the data for the hand controllers we set up some more RxJS subjects to stream the data to.  Then we pushed that data to the room channel.  Since we already have in place a pipeline to get that data and draw an avatar, we just extended that function to also create and render box hands.
+In this chapter we added simple box hands to our simple box head "avatar".  To grab the data for the hand controllers we set up some more RxJS subjects to stream the data to.  Then we pushed that movement data to the room channel.  Since we already have in place a pipeline to get that data and draw an avatar, we just extended that function to also create and render box hands.

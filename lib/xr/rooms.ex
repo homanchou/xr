@@ -70,8 +70,19 @@ defmodule Xr.Rooms do
       "mesh_builder" => ["ground", %{"width" => 100, "height" => 100, "subdivisions" => 2}],
       "position" => [0, 0, 0],
       "material" => "grid",
-      "floor" => true
+      "teleportable" => true
     })
+  end
+
+  def create_holdables(room_id, [x, y, z]) do
+    # create a tower of 10 boxes
+    for i <- 1..10 do
+      create_entity(room_id, Xr.Utils.random_string(), %{
+        "mesh_builder" => ["box", %{"size" => 0.5}],
+        "position" => [x, y + i, z],
+        "holdable" => true
+      })
+    end
   end
 
   def generate_random_content(room_id) do
@@ -84,7 +95,8 @@ defmodule Xr.Rooms do
       create_entity(room_id, Xr.Utils.random_string(), %{
         "mesh_builder" => ["box", create_random_box_args()],
         "position" => create_random_position(),
-        "color" => shift_color(color)
+        "color" => shift_color(color),
+        "teleportable" => true
       })
     end
 
@@ -93,6 +105,9 @@ defmodule Xr.Rooms do
       "tag" => "spawn_point",
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
+
+    # create holdables
+    create_holdables(room_id, [0, 0, 0])
   end
 
   # create random positions that do not overlap on the same integer coordinates

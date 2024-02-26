@@ -20,20 +20,24 @@ https://aalonso.dev/blog/accessing-network-apps-running-inside-wsl2-from-other-d
 
 ### Using an SSH Tunnel
 
-Alternatively you can use a service like ngrok serveo to create an ssh tunnel.  Ngrok now requires creating an account.  Serveo is free and requires online one command like so:
+Alternatively you can use a service like ngrok serveo to create an ssh tunnel.  Ngrok is free but you need to install it and it now requires creating an account.  It is stable and will not timeout.
+
+Serveo is free and requires online one command like so:
 
 ```bash
  
  ssh -R 80:localhost:4000 serveo.net
  ```
 
-This creates an endpoint like this https://98232968blahblah493f38eab.serveo.net.  It has the benefit of being served over https which will be a requirement later.
+This creates an endpoint like this https://98232968blahblah493f38eab.serveo.net.  In my experience it will only last a short while.  Which is good enough for testing, but can be annoying as you'll need to repeat the process and get a new url if it expires.
 
-That's rather long to type into the browser on our headset.  You can paste that long address into a URL shortener like:
+Both ngrok and serveo have the benefit of being served over https which will be a requirement later.
+
+They both produce URLs that are long to type into the browser on our headset.  With serveo you can paste that long address into a URL shortener like:
 
 https://www.shorturl.at/shortener.php
 
-It's output is a bit more manageable to type into the browser URL in VR.  Go ahead and try that in the headset browser and see if you can access the website.
+It's output is a bit more manageable to type into the browser URL in VR.  Go ahead and try that in the headset browser and see if you can access the website.  Ngrok URLs don't work with shorturl.  What I did was use glitch.com as a notepad.  I would paste links on it so that I could visit my glitch page in the headset and click on the link.
 
 ### Create XR Experience System
 
@@ -243,58 +247,6 @@ Send signals to them from within the `vr-experience.ts` system:
     });
 ```
 
-Now we'll subscribe to those signals to turn on and off the sending of VR camera movement.  Considering that the user is able to enter and exit immersive-vr session at will we should take care to register and de-register subscriptions accordingly so that we don't create more and more subscriptions accidentally when we repeatedly enter and exit vr.  It's useful to use RxJS observers for this.  Here is a function that converts a Babylon.js observable into an RxJS Observable.
-
-```typescript
-
-/**
- * Wraps a Babylon Observable into an rxjs Observable
- *
- * @param bjsObservable The Babylon Observable you want to observe
- * @example
- * ```
- * import { Engine, Scene, AbstractMesh } from '@babylonjs/core'
- *
- * const canvas = document.getElementById('canvas') as HTMLCanvasElement
- * const engine = new Engine(canvas)
- * const scene = new Scene(engine)
- *
- * const render$: Observable<Scene> = fromBabylonObservable(scene.onAfterRenderObservable)
- * const onMeshAdded$: Observable<AbstractMesh> = fromBabylonObservable(scene.onNewMeshAddedObservable)
- * ```
- */
-export function fromBabylonObservable<T>(
-  bjsObservable: BabylonObservable<T>
-): RxJsObservable<T> {
-  return new RxJsObservable<T>((subscriber) => {
-    if (!(bjsObservable instanceof BabylonObservable)) {
-      throw new TypeError("the object passed in must be a Babylon Observable");
-    }
-
-    const handler = bjsObservable.add((v) => subscriber.next(v));
-
-    return () => bjsObservable.remove(handler);
-  });
-}
-```
-
-This code snippet above came from the Babylon.js forums and documentation.  It allows us to use RxJS semanics for unsubscribing.  We'll use it like this:
-
-```typescript
-
-    $xr_entered.subscribe(async () => {
-      fromBabylonObservable(xrHelper.baseExperience.camera.onViewMatrixChangedObservable).pipe(
-        takeUntil($xr_exited)
-      ).subscribe(() => {
-        config.$camera_moved.next(true);
-      });
-    });
-
-```
-
-In the snippet above whenever we get a single that xr mode has been entered, we start a new subscription on the xrHelper's baseExperience camera.  But we keep taking data (takeUntil) we get an $xr_exited signal, at which time we unsubscribe from the xr camera.  That way if we enter xr again, we aren't doubling up on subscriptions because this code automatically removes the previous subscription via the `takeUntil`.  
-
-
 
 ### Allow Teleport on Ground
 
@@ -310,7 +262,7 @@ In `rooms.exs` we can add a floors component like so:
       "mesh_builder" => ["ground", %{"width" => 100, "height" => 100, "subdivisions" => 2}],
       "position" => [0, 0, 0],
       "material" => "grid",
-      "floor" => true,
+      "teleportable" => true,
     })
   end
 ```
@@ -334,15 +286,15 @@ config.$room_entered.subscribe(async () => {
     ...
 ```
 
-If we assigned the xrHelper to config.xrHelper, that could work to share the xrHelper with other systems but we'd need to be very careful to remember not to deconstruct xrHelper like this in other systems:
+We'll put it in config.xr_helper so that it's available to other systems, but we but we'd need to be very careful to remember not to deconstruct xrHelper like this in other systems:
 
 ```typescript
 const init = (config) => {
-  const { xrHelper } = config
+  const { xr_helper } = config
 }
 ```
 
-And that's because it won't be populated until $room_entered emits a signal AND the sync promise resolves.  That could be a confusing trap to fall into later.  We need a better mechansim to wait for when the xrHelper is ready before we use it.  We can use another RxJS Subject for this.
+And that's because it won't be populated until $room_entered emits a signal AND the sync promise resolves.  That could be a confusing gotcha to fall into later.  We need a better mechansim to wait for when the xrHelper is ready before we use it.  We can use another RxJS Subject for this.
 
 ```typescript
   $xr_helper_created: Subject<WebXRDefaultExperience>;
@@ -352,12 +304,11 @@ Construct it in `orchestrator.ts`
 
 ```typescript
 ...
+            xr_helper?: WebXRDefaultExperience,
             $xr_helper_created: new Subject<WebXRDefaultExperience>(),
             $xr_entered: new Subject<boolean>(),
             $xr_exited: new Subject<boolean>(),
 ```
-
-The nice thing about using RxJS Subjects is that they are a lot easier to construct than promises to wait for something, and you can create the Subject and add subscriptions before we've decided where the source of data comes from.
 
 Now back in `xr-experience.ts` let's pass the xrHelper into the Subject when it is ready.  Here is the updated file:
 
@@ -366,7 +317,6 @@ import { Config } from "../config";
 import * as Browser from "../browser";
 import { WebXRDefaultExperience } from "@babylonjs/core/XR/webXRDefaultExperience";
 import { WebXRState } from "@babylonjs/core/XR/webXRTypes";
-import { fromBabylonObservable } from "../utils";
 import { takeUntil } from "rxjs";
 
 export const init = async (config: Config) => {
@@ -390,16 +340,6 @@ export const init = async (config: Config) => {
       }
     });
 
-    $xr_entered.subscribe(async () => {
-      fromBabylonObservable(xrHelper.baseExperience.camera.onViewMatrixChangedObservable).pipe(
-        takeUntil($xr_exited)
-      ).subscribe(() => {
-        config.$camera_moved.next(true);
-      });
-    });
-
-
-
     // probably a headset
     if (Browser.isMobileVR()) {
       await enterXR(xrHelper);
@@ -414,6 +354,8 @@ export const enterXR = async (xrHelper: WebXRDefaultExperience) => {
   );
 };
 ```
+
+Now if a system needs to use xr_helper they can subscribe to the xr_helper_ready Subject.
 
 Let's create that floor system we talked about:
 
@@ -457,7 +399,7 @@ export const init = (config: Config) => {
 
       window["teleportation"] = teleportation;
       // grab all existing entities that are a floor and add them into the teleporation feature manager
-      const floor_meshes = scene.getMeshesByTags("floor");
+      const floor_meshes = scene.getMeshesByTags("teleportable");
       teleportation["_floorMeshes"] = floor_meshes;
     });
 
@@ -471,7 +413,7 @@ export const init = (config: Config) => {
   const add_entity_as_floor = (eid: string) => {
     const mesh = scene.getMeshByName(eid);
     if (mesh) {
-      Tags.AddTagsTo(mesh, "floor");
+      Tags.AddTagsTo(mesh, "teleportable");
     }
     if (teleportation) {
       teleportation.addFloorMesh(mesh);
@@ -481,7 +423,7 @@ export const init = (config: Config) => {
   const remove_entity_as_floor = (eid: string) => {
     const mesh = scene.getMeshByName(eid);
     if (mesh) {
-      Tags.RemoveTagsFrom(mesh, "floor");
+      Tags.RemoveTagsFrom(mesh, "teleportable");
     }
     if (teleportation) {
       if (mesh) {
@@ -495,14 +437,14 @@ export const init = (config: Config) => {
 
   $state_mutations.pipe(
     filter(evt => (evt.op === StateOperation.create)),
-    filter(componentExists("floor")),
+    filter(componentExists("teleportable")),
   ).subscribe((evt) => {
     add_entity_as_floor(evt.eid);
   });
 
   $state_mutations.pipe(
     filter(evt => (evt.op === StateOperation.delete)),
-    filter(componentExists("floor")),
+    filter(componentExists("teleportable")),
   ).subscribe((evt) => {
     remove_entity_as_floor(evt.eid);
   });

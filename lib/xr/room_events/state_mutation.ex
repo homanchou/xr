@@ -24,7 +24,7 @@ defmodule Xr.RoomEvents.StateMutation do
     # const leftId = (user_id: string) => `${user_id}:left`;
     # const rightId = (user_id: string) => `${user_id}:right`;
 
-    insert("#{user_id}:#{hand}", :update, %{"parenting" => target_id}, table)
+    insert(target_id, :update, %{"parent" => "#{user_id}:#{hand}"}, table)
   end
 
   # unhandled event

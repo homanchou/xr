@@ -50,6 +50,11 @@ This creates two files.
 * creating lib/xr_web/channels/user_socket.ex
 * creating assets/js/user_socket.js
 ```
+
+Note:
+
+You can follow the guides here: https://hexdocs.pm/phoenix/channels.html for how to setup and secure the UserSocket and RoomChannel.  If you want to see how that works you can follow that guide then return to this book to see how to re-use the live socket instead of creating a new socket.
+
 We're going to merge some of the javascript code in `user_socket.js` into `app.ts` in moment.  
 
 ### Create a Room Channel
@@ -154,6 +159,7 @@ Add the following snippet to `app.ts` after the liveSocket is created.  This cod
 ```javascript
  
   liveSocket.connect(); // make sure we're connected first
+  liveSocket.connect(); // when sharing liveSocket it seems like this needs to be connected twice if you don't have a liveview on the page.
   const room_id = window.location.pathname.match(/^\/rooms\/([^\/]+)$/)?.[1];
   const channel = liveSocket.channel(`room:${room_id}`, {})
   channel.join()

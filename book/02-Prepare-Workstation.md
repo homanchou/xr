@@ -79,14 +79,16 @@ This is my recommended code editor.  You can install a different one if you pref
 
 Install Elixir plugins for vscode
 
-These help with syntax highlighting and code completion.  I recommend Googling for the latest recommended extensions and installing those.  
+These help with syntax highlighting, auto-formatting and code completion.  I recommend searching for the latest recommended extensions and installing those.  
 
 At the time of this writing I'm using:
 - jakebecker.elixir-ls
 - phoenixframework.phoenix
 - bradlc.vscode-tailwindcss
 
-This is my vscode settings.json
+Find and install each of those extensions.  Then in your vscode settings, turn on "format on save".
+
+For reference, here is my vscode settings.json
 
 ```json
 {

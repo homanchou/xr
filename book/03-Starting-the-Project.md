@@ -13,7 +13,27 @@ The command below will create a project folder for us.  I named my project xr, b
  mix phx.new xr --binary-id
 ```
 
-This will take a moment to run.  When it is done it will create a folder called `xr` for us that is our new project home.  It will also spit out some getting started instructions, but if we run `mix ecto.create` without having a database to connect to we'll get some errors.
+This will take a moment to run.  When it is done it will create a folder called `xr` for us that is our new project home.  
+
+In your terminal navigate into the new product folder:
+
+```bash
+cd xr
+```
+
+mix.exs contains a list of dependencies (packages) that your project will use.  To fetch them and compile them run:
+
+```bash
+mix deps.get
+```
+
+Then
+
+```bash
+mix deps.compile
+```
+
+It will also spit out some getting started instructions, but if we run `mix ecto.create` without having a database to connect to we'll get some errors.
 
 Let's ignore the lengthly output for just a moment.  We'll need to make sure Phoenix has access to a Postgres database before we can proceed with the instructions.
 
@@ -302,12 +322,28 @@ The following command will create a package.json file and a node_modules folder 
 
 Depending on your version of node you might need to run `npm init` first.
 
+Install esbuild with npm
+
 ```bash
-npm install esbuild @jgoz/esbuild-plugin-typecheck @types/phoenix_live_view @types/phoenix @babylonjs/core @babylonjs/gui @babylonjs/materials @babylonjs/inspector --save-dev
+npm install esbuild @jgoz/esbuild-plugin-typecheck --save-dev
 ```
+
+Install babylon packages
+
+```bash
+npm install @babylonjs/core @babylonjs/gui @babylonjs/materials @babylonjs/inspector --save
+```
+
+Install the Phoneix socket, liveview and channel libraries
 
 ```bash
 npm install ../deps/phoenix ../deps/phoenix_html ../deps/phoenix_live_view --save
+```
+
+Install some types to play nice with typescript
+
+```bash
+npm install  @types/phoenix_live_view @types/phoenix --save-dev
 ```
 
 Next let's create a custom esbuild script and remove the default esbuild dependency that comes with Phoenix.  This build script does the same thing that Phoenix's Esbuild was doing for us, but we'll be able to customize it.

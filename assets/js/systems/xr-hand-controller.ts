@@ -4,6 +4,7 @@ import { fromBabylonObservable, truncate } from "../utils";
 import { filter, map, take, takeUntil, scan, tap, throttleTime } from "rxjs/operators";
 import type { WebXRInputSource } from "@babylonjs/core/XR/webXRInputSource";
 import { Observable } from "rxjs/internal/Observable";
+import { Quaternion } from "@babylonjs/core/Maths/math";
 
 export const init = async (config: Config) => {
 
@@ -35,7 +36,11 @@ export const init = async (config: Config) => {
           const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
           if (hand_mesh) {
             hand_mesh.position.copyFromFloats(0, 0, 0);
-            hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+            if (hand_mesh.rotationQuaternion) {
+              hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+            } else {
+              hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
+            }
             hand_mesh.parent = input_source.grip;
           }
         });

@@ -39,7 +39,7 @@ Channel(B)->>ClientB: recieves msg
 
 ### Create a User Socket
 
-Ok, enough theory let's create this socket thing.  Fortunately phoenix includes a generator for that too.  Run the following command in your terminal in your projects root folder but don't follow the instructions it spits out in the terminal.  We'll be doing something slightly different since we already have a liveview socket so we can piggy back on.  In other words the generator created a new js client and wants us to add a new endpoint, however we can just share the liveview socket that so that our front-end client doesn't need to join two different sockets.
+Ok, enough theory let's create this socket thing.  Fortunately phoenix includes a generator for that too.  Run the following command in your terminal in your projects root folder but don't follow the instructions it spits out in the terminal.  
 
 ```bash
 mix phx.gen.socket User
@@ -53,9 +53,9 @@ This creates two files.
 
 Note:
 
-You can follow the guides here: https://hexdocs.pm/phoenix/channels.html for how to setup and secure the UserSocket and RoomChannel.  If you want to see how that works you can follow that guide then return to this book to see how to re-use the live socket instead of creating a new socket.
+You are welcome to follow the official guides here: https://hexdocs.pm/phoenix/channels.html for how to setup and secure the UserSocket and RoomChannel.  This chapter takes a slightly modified approach and piggybacks the channel off of the existing liveview socket.
 
-We're going to merge some of the javascript code in `user_socket.js` into `app.ts` in moment.  
+We're going to merge some of the advice in the auto-generated javascript code in `user_socket.js` into `app.ts` in moment.  
 
 ### Create a Room Channel
 
@@ -159,12 +159,17 @@ Add the following snippet to `app.ts` after the liveSocket is created.  This cod
 ```javascript
  
   liveSocket.connect(); // make sure we're connected first
-  liveSocket.connect(); // when sharing liveSocket it seems like this needs to be connected twice if you don't have a liveview on the page.
+
+  // the following is throw-away code, but just to test out our channel piggybacking on
+  // a liveview socket
   const room_id = window.location.pathname.match(/^\/rooms\/([^\/]+)$/)?.[1];
-  const channel = liveSocket.channel(`room:${room_id}`, {})
-  channel.join()
-    .receive("ok", resp => { console.log("Joined successfully", resp) })
-    .receive("error", resp => { console.log("Unable to join", resp) })
+  if (room_id) {
+    liveSocket.connect(); // when sharing liveSocket it seems like this needs to be connected twice if you don't have a liveview to connect to on the page.
+    const channel = liveSocket.channel(`room:${room_id}`, {})
+    channel.join()
+      .receive("ok", resp => { console.log("Joined successfully", resp) })
+      .receive("error", resp => { console.log("Unable to join", resp) })
+  }
 
 ```
 If you now navigate to any room you previously created and inspect the browser's console logs you should see:

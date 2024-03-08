@@ -38,10 +38,7 @@ export function fromBabylonObservable<T>(
 }
 ```
 
-This code snippet above came from the Babylon.js forums and documentation.  It allows us to use RxJS semanics for unsubscribing.  We'll use it to subscribe to an XRFrame event whenever we enterXR, and unsubscribe whenever we exit XR.  Within each frame we'll grab the camera and hand positions and send them to the RoomChannel in the form of an `i_moved` event.
-
-
-We are now able to support both the desktop browser as well as the headset browser.  The headset browser also has the ability to start a WebXR session.  In the immersive session the Babylon.js default experience detects the kind of hand controllers that the headset uses and imports a mesh for each of them so the user can see them in VR.  However, the avatar system that we have created only renders a single box for the head right now.  Let's also add some simple boxes to represent the hands.  If there are no hands (which is the case for non-immersive experiences) then we should just remove the hands.
+This code snippet above came from the Babylon.js forums (and was later added to their official documentation).  It allows us to use RxJS observables so we can take advantage of RxJS pipes/filters etc.  We'll use it to subscribe to an XRFrame event whenever we enterXR, and unsubscribe whenever we exit XR.  Within each frame we'll grab the camera and hand positions and send them to the RoomChannel in the form of an `i_moved` event.
 
 First we'll add another system dedicated to getting data from the hand controllers.  Babylon.js provides observables for when the hand controller is added:
 
@@ -254,7 +251,7 @@ Add this snippet to the init function in avatar.ts
 
 ```
 
-First we listen to the xr_entered event.  Within that subscription we create a new subscription for every xr frame, but will unsubscribe when we receive an xr_exited event.  For every frame we will throttle by time so we only sample once every MOVEMENT_SYNC_FREQ.  Then we use `scan` to create a state in our pipeline that enables us to stage a payload of { head, left, right } position and rotation arrays.  We further keep a `prev` and `curr` version of those payloads so that we may drop any payloads if there is no change between payloads.  Finally we reshape the data in the pipeline to just the `curr` version and push it out on the channel.
+First we listen to the xr_entered event.  Within that subscription we create a new subscription for every xr frame, but will unsubscribe when we receive an xr_exited event.  For every frame we will throttle by time so we only sample once every MOVEMENT_SYNC_FREQ.  Then we use `scan` to create a state in our pipeline that enables us to stage a payload of { head, left, right } position and rotation arrays.  We initialize the scan with default values for the head and hands like [0,0,0,0,0,0,1].  The first 3 zeros are for position and the last 4 digits are for zero rotations expressed as a quaternion.  We further keep a `prev` and `curr` version of those payloads so that we may filter out any payloads if there is no change between payloads.  Finally we reshape the data in the pipeline to just the `curr` version and push it out on the channel.
 
 ### Render box hands for avatars
 

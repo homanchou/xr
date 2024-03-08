@@ -2,42 +2,15 @@
 
 Up until now we've been testing on a desktop browser.  In order to experience what we've built on our local testing server in the browser in the headset we need to have an ip address that we can type into the browser that comes with our head mounted display.  The Quest comes with a Chromium compatible browser.
 
-The address `http://localhost:4000` is a special address that only works on the machine your server is running on.  Your headset won't be able to access that (unless you were somehow running a server in your headset).
-
-### Using internal network ip address
-
-To get your internal network ip address you can run a command on your linux/unix terminal like this:
-
-```bash
-ifconfig
-```
-
-Which would print out the local ip address of your machine.  That won't work if you're running your server inside the windows subsystem for linux because WSL sets up a NAT that is separate than that of the host machine.  
-
-Here's a good article about how to circumvent that if you are interested on that topic:
-
-https://aalonso.dev/blog/accessing-network-apps-running-inside-wsl2-from-other-devices-in-your-lan-1e1p?ref=reddit-post
+The address `http://localhost:4000` is a special address that only works on the machine your server is running on.  In order for the headset to access the development server we'll need to expose an ip served over https in order for XR to work.
 
 ### Using an SSH Tunnel
 
-Alternatively you can use a service like ngrok serveo to create an ssh tunnel.  Ngrok is free but you need to install it and it now requires creating an account.  It is stable and will not timeout.
+The easiest solution I have found that works in the headset is to use a service like ngrok to create an ssh tunnel.  Ngrok is free but you need to create an account and install the ngrok executable.  
 
-Serveo is free and requires online one command like so:
+https://ngrok.com/docs/getting-started/
 
-```bash
- 
- ssh -R 80:localhost:4000 serveo.net
- ```
-
-This creates an endpoint like this https://98232968blahblah493f38eab.serveo.net.  In my experience it will only last a short while.  Which is good enough for testing, but can be annoying as you'll need to repeat the process and get a new url if it expires.
-
-Both ngrok and serveo have the benefit of being served over https which will be a requirement later.
-
-They both produce URLs that are long to type into the browser on our headset.  With serveo you can paste that long address into a URL shortener like:
-
-https://www.shorturl.at/shortener.php
-
-It's output is a bit more manageable to type into the browser URL in VR.  Go ahead and try that in the headset browser and see if you can access the website.  Ngrok URLs don't work with shorturl.  What I did was use glitch.com as a notepad.  I would paste links on it so that I could visit my glitch page in the headset and click on the link.
+But one nice thing is that it gives you a URL with https and you can share the URL with other testers outside of your home network.
 
 ### Create XR Experience System
 
@@ -70,11 +43,11 @@ import * as XRExperience from "./systems/xr-experience";
 ...
 ```
 
-If you visit a room in the browser now you should see a pair of glasses in the lower right corner of the screen.  You'll need to install an XR emulator for the desktop browser to enable this on your desktop.  When you click on the glasses the very first time, the browser will have a prompt to ask you permission to enable Web XR.
+If you visit a room in the browser now you should see a pair of glasses in the lower right corner of the screen.  You'll need to install an XR emulator for the desktop browser in order to see the glasses icon on your desktop browser.  It should work automatically for a headset like the Oculus Quest.  When you click on the glasses the very first time (first time per site that requests XR), the browser will open a prompt to ask you permission to enable Web XR.  Confirm that you want to allow entering XR.
 
 ### Prevent Immersive VR Button until first-interaction.
 
-The default XR experience helper places a glasses button that sits on-top of our first-user-interaction modal, which allows the user to jump into an immersive-xr experience before they dismiss the modal.  We could adjust our modal's z-index stylings so that our modal prevents clicking on the glasses, but the mere presentation of the glasses being on the screen at all would still be confusing.  It's cleaner to just hide the glasses until the user enters the room.
+The default XR experience helper places a glasses button that sits on-top of our first-user-interaction modal, which allows the user to jump into an immersive-xr experience before they dismiss the modal.  That's a distraction from our modal.  We could adjust our modal's z-index stylings so that our modal prevents clicking on the glasses, but the mere presentation of the glasses being on the screen at all would still be confusing.  It's cleaner to just hide the glasses until the user enters the room.
 
 Since we have the RxJS Subject for when the user has chosen to join the room, we can subscribe to that and enable the default XR Experience in that callback:
 
@@ -212,9 +185,9 @@ export const enterXR = async (xrHelper: WebXRDefaultExperience) => {
 };
 ```
 
-### Enable VR Camera to send movement data
+### Creating Signals for Entering and Exiting VR
 
-If you move your head around while wearing the headset then check the server logs you'll be surprised that there aren't any user moved events hitting the room channel at all.  This is because the WebXR default experience creates a brand new camera that is a different camera then the one we created in the scene by default.  Therefore the new camera doesn't have any subscription to listen to it's data.  To send data from the XR camera we need to duplicate that subscription that we previously created for our regular camera.
+If you move your head around while wearing the headset then check the server logs you may be wondering why there aren't any user moved events hitting the room channel at all.  This is because the WebXR default experience creates a brand new XR camera that is a different camera then the one we created in the scene by default.  Therefore the new camera doesn't have any subscription to listen to it's data yet.  To send data from the XR camera we need to duplicate that subscription that we previously created for our regular camera.  However we can only create that subscription when the xr camera is ready.  To enable us to create subscriptions and possibly remove subscriptions when we leave xr, let's create some RxJS subjects for that.
 
 Add these new signals to `config.ts` so we can easily subscribe to when we're entering or exiting XR from anywhere in the codebase.
 

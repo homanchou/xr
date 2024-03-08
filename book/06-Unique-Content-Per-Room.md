@@ -477,7 +477,7 @@ Also define a function that can create a random color:
     position = Enum.random(0..2)
     # modify the value at that position
     offset =
-      case Enum.at(color, position) + Enum.random(-500..500) / 1000 do
+      case Enum.at(color, position) + Float.round(Enum.random(-500..500) / 1000, 3) do
         offset when offset < 0 -> 0
         offset when offset > 1 -> 1
         offset -> offset
@@ -510,14 +510,16 @@ export const init = (config: Config) => {
   ).subscribe((evt) => {
     const value = evt.com["color"];
     const mesh = scene.getMeshByName(evt.eid);
+    const color = new Color3(
+      value[0],
+      value[1],
+      value[2]
+    );
+    const materialName = color.toHexString();
     if (mesh) {
-      let material = new StandardMaterial(value, scene);
+      let material = new StandardMaterial(materialName, scene);
       material.alpha = 1;
-      material.diffuseColor = new Color3(
-        value[0],
-        value[1],
-        value[2]
-      );
+      material.diffuseColor = color;
       mesh.material = material;
     }
 

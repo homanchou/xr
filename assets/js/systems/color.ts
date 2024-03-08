@@ -14,14 +14,16 @@ export const init = (config: Config) => {
   ).subscribe((evt) => {
     const value = evt.com["color"];
     const mesh = scene.getMeshByName(evt.eid);
+    const color = new Color3(
+      value[0],
+      value[1],
+      value[2]
+    );
+    const materialName = color.toHexString();
     if (mesh) {
-      let material = new StandardMaterial(value, scene);
+      let material = new StandardMaterial(materialName, scene);
       material.alpha = 1;
-      material.diffuseColor = new Color3(
-        value[0],
-        value[1],
-        value[2]
-      );
+      material.diffuseColor = color;
       mesh.material = material;
     }
 

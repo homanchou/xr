@@ -74,12 +74,13 @@ defmodule Xr.Rooms do
     })
   end
 
-  def create_holdables(room_id, [x, y, z]) do
+  def create_holdables(room_id) do
+    [x, y, z] = [0, 1, 0]
     # create a tower of 10 boxes
     for i <- 1..10 do
       create_entity(room_id, Xr.Utils.random_string(), %{
         "mesh_builder" => ["box", %{"size" => 0.5}],
-        "position" => [x, y + i, z],
+        "position" => [x + i - 5, y, z + i - 5],
         "holdable" => true
       })
     end
@@ -107,7 +108,7 @@ defmodule Xr.Rooms do
     })
 
     # create holdables
-    create_holdables(room_id, [0, 0, 0])
+    create_holdables(room_id)
   end
 
   # create random positions that do not overlap on the same integer coordinates
@@ -128,7 +129,7 @@ defmodule Xr.Rooms do
     position = Enum.random(0..2)
     # modify the value at that position
     offset =
-      case Enum.at(color, position) + Enum.random(-500..500) / 1000 do
+      case Enum.at(color, position) + Float.round(Enum.random(-500..500) / 1000, 3) do
         offset when offset < 0 -> 0
         offset when offset > 1 -> 1
         offset -> offset

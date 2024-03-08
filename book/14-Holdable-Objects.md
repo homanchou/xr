@@ -3,21 +3,22 @@
 Next we will implement the ability to grab an object and hold it in our hand.  The approach is:
 
 1. Listen for when the squeeze button is pressed
-2. If the hand mesh that squeezed the button is also intersecting a target mesh then emit a room event that user is holding target mesh
-3. In a system that receives a state update message involving a holdable component the make the target mesh a child of the hand mesh.
+2. If the hand mesh that squeezed the button is also intersecting a target mesh then emit a room event that a user is holding target mesh
+3. Convert the room event into a state_diff event.
+4. Create a system to receive the state update message to make the target mesh a child of the hand mesh.
 
 ### Create Grabbable Objects
 
-Now we need to place some objects in the scene that we can grab.  Open up `rooms.exs` and add this function to create a high column of cubes that we'll make holdable.
+First let's place some objects in the scene that we can grab.  Open up `rooms.exs` and add this function to create several cubes that we'll make holdable.
 
 ```elixir
-
-  def create_holdables(room_id, [x, y, z]) do
+  def create_holdables(room_id) do
+    [x, y, z] = [0, 1, 0]
     # create a tower of 10 boxes
     for i <- 1..10 do
       create_entity(room_id, Xr.Utils.random_string(), %{
         "mesh_builder" => ["box", %{"size" => 0.5}],
-        "position" => [x, y + i, z],
+        "position" => [x + i - 5, y, z + i - 5],
         "holdable" => true
       })
     end
@@ -28,7 +29,7 @@ Call this function in our `generate_random_content` function:
 
 ```elixir
     # create holdables
-    create_holdables(room_id, [0, 0, 0])
+    create_holdables(room_id)
 ```
 
 ### Detect when Grip intersects a Grabbable Object

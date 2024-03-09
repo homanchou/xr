@@ -124,3 +124,34 @@ config.$hud_text.pipe(
     guiText.text = array.join("\n");
   });
 ```
+
+### Clear Screen After 5 Seconds
+
+We'll give ourselves 5 seconds to read the messages before we clear the screen.  That is if messages come in faster than 5 seconds between messages then they will accumulate on the screen (keeping the last 10).  But if there is a break, than after 5 seconds we'll wipe the screen clean.
+
+```typescript
+config.$hud_text.pipe(
+    scan((acc, text) => {
+      acc.buffer.push(text);
+      if (acc.buffer.length > 10) { acc.buffer.shift(); }
+      // cancel previous timeout
+      if (acc.timeout) {
+        clearTimeout(acc.timeout);
+      }
+      acc.timeout = setTimeout(() => {
+        acc.buffer = [];
+        guiText.text = "";
+      }, 5000);
+      return acc;
+    }, { buffer: [], timeout: null }),
+
+  ).subscribe(payload => {
+    guiText.text = payload.buffer.join("\n");
+  });
+```
+
+### Summary
+
+In this chapter we enabled the ability to post text onto headset by inserting a message into `config.$hud_text.next("my string")`.  This will make it easier to debug the headset by sending trace messages here where we can read them inside the headset.
+
+

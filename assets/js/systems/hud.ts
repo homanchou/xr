@@ -6,8 +6,8 @@ import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture
 import { TextBlock } from "@babylonjs/gui/2D/controls/textBlock";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { scan } from "rxjs/internal/operators/scan";
-import { concat, concatMap, concatWith, filter, merge, mergeAll, mergeWith, switchMap, timeout } from "rxjs/operators";
-import { timer } from "rxjs";
+import { concat, concatMap, concatWith, filter, map, merge, mergeAll, mergeWith, switchMap, tap, timeout } from "rxjs/operators";
+import { interval, timer } from "rxjs";
 
 let plane: AbstractMesh;
 let guiText: TextBlock;
@@ -18,28 +18,24 @@ export const init = (config: Config) => {
   createTextureWall();
   parentPlaneToCamera(config);
 
-  // config.$hud_text.pipe(
-  //   scan((acc, text) => {
-  //     acc.push(text);
-  //     if (acc.length > 10) { acc.shift(); }
-  //     return acc;
-  //   }, []),
-  // ).subscribe((array) => {
-  //   guiText.text = array.join("\n");
-  // });
-  // config.$hud_text.next("here there!");
-
   config.$hud_text.pipe(
-    timeout({ each: 5000, with: () => ("error") }),
     scan((acc, text) => {
-      acc.push(text);
-      if (acc.length > 10) { acc.shift(); }
+      acc.buffer.push(text);
+      if (acc.buffer.length > 10) { acc.buffer.shift(); }
+      // cancel previous timeout
+      if (acc.timeout) {
+        clearTimeout(acc.timeout);
+      }
+      acc.timeout = setTimeout(() => {
+        acc.buffer = [];
+        guiText.text = "";
+      }, 5000);
       return acc;
-    }, []),
-  ).subscribe((array) => {
-    guiText.text = array.join("\n");
+    }, { buffer: [], timeout: null }),
+
+  ).subscribe(payload => {
+    guiText.text = payload.buffer.join("\n");
   });
-  config.$hud_text.next("here there!");
 
 
 };
@@ -55,7 +51,7 @@ const createTextureWall = () => {
 
   const texture = AdvancedDynamicTexture.CreateForMesh(plane, 2024, 2024, false);
   texture.hasAlpha = true;
-  guiText = new TextBlock("hud_text", "Hello worrrrlddd!!!");
+  guiText = new TextBlock("hud_text", "");
   guiText.color = "white";
   guiText.fontSize = 100;
   guiText.textWrapping = true;

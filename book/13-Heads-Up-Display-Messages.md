@@ -150,8 +150,22 @@ config.$hud_text.pipe(
   });
 ```
 
+### Trap Unexpected Errors and Send Them to HUD
+
+This function window.onerror defines a handler when an error bubbles up to the window object.  It may not be pretty, but it's something that at least gives us a clue that some kind of error happened and we can dig into it further.
+
+```typescript
+
+  window.onerror =
+    function (msg, source, lineNo, columnNo, error) {
+      const line = `${msg} ${source} ${lineNo} ${columnNo} ${error}`;
+      config.$hud_text.next(line);
+      return true;
+    };
+```
+
 ### Summary
 
-In this chapter we enabled the ability to post text onto headset by inserting a message into `config.$hud_text.next("my string")`.  This will make it easier to debug the headset by sending trace messages here where we can read them inside the headset.
+In this chapter we enabled the ability to post text onto headset by inserting a message into `config.$hud_text.next("my string")`.  This will make it easier to debug the headset by sending trace messages here where we can read them inside the headset.  For unexpected errors we added a window.onerror handler that will attempt to print the error to the HUD display.
 
 

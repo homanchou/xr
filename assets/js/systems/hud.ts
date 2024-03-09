@@ -38,6 +38,14 @@ export const init = (config: Config) => {
   });
 
 
+  window.onerror =
+    function (msg, source, lineNo, columnNo, error) {
+      const line = `${msg} ${source} ${lineNo} ${columnNo} ${error}`;
+      config.$hud_text.next(line);
+      return true;
+    };
+
+
 };
 
 const createTextureWall = () => {

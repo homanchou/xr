@@ -441,4 +441,4 @@ import "@babylonjs/loaders/glTF";
 
 ### Summary
 
-In this chapter we enabled the default WebXR Experience that comes with Babylon.js.  We launch it after the user dismisses the enter room modal.  We also add user-agent detection to try to determine if the client is a VR headset and if so, jump into immersive VR after they dismiss the modal.  Next we added the ability to teleport around the scene.  We first added a floor component to the backend.  We then added a new floor system that enables the teleportation feature that comes with Babylon.js.  
+In this chapter we enabled the default WebXR Experience that comes with Babylon.js.  We launch it after the user dismisses the enter room modal.  We also add user-agent detection to try to determine if the client is a VR headset and if so, jump into immersive VR after they dismiss the modal.  Next we added the ability to teleport around the scene using the teleportation feature that comes with Babylon.js.  To define meshes that are "teleportable", we added a "teleportable" component and a system of the same name to handle it.  

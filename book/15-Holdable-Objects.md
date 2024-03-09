@@ -60,6 +60,7 @@ export const init = (config: Config) => {
     const holdable = evt.com["holdable"];
     const mesh = scene.getMeshByName(evt.eid);
     if (!mesh) {
+      
       return;
     }
     if (holdable) {

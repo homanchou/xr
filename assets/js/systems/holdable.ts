@@ -2,10 +2,20 @@ import { filter, take } from "rxjs/operators";
 import { Config, StateOperation, componentExists } from "../config";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { Tags } from "@babylonjs/core/Misc/tags";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder";
 
 export const init = (config: Config) => {
 
   const { scene, $state_mutations } = config;
+
+
+
+  // to aid in mesh intersection with right or left hand we'll use this large-ish sphere
+  const detection_sphere = CreateSphere("detection_sphere", { diameter: 0.2, segments: 16 }, scene);
+  detection_sphere.isVisible = false;
+
+
+
 
   /**
    * Whenever we create or update an entity with a holdable component
@@ -46,9 +56,9 @@ export const init = (config: Config) => {
       return;
     }
     // move detection sphere to grip position then check for intersection with all meshes with holdable tag
-    // console.log("move detector sphere from", detection_sphere.position.asArray(), "to", grip.position.asArray());
-    // detection_sphere.position.copyFrom(grip.position);
-    const detection_sphere = scene.getMeshByName(`${config.user_id}:${handedness}`);
+    detection_sphere.position.copyFrom(grip.position);
+    // we need to update the matrix or else the intersection will not work
+    detection_sphere.computeWorldMatrix(true);
     const meshes = scene.getMeshesByTags("holdable");
 
     for (let i = 0; i < meshes.length; i++) {

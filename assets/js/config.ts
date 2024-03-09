@@ -67,6 +67,7 @@ export type Config = {
     left_grip?: AbstractMesh;
     right_grip?: AbstractMesh;
   };
+  $hud_text: Subject<string>;
 };
 
 // values are only populated if they have changed from their previous value

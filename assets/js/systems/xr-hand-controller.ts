@@ -33,16 +33,16 @@ export const init = async (config: Config) => {
           });
 
           // parent avatar hand to the grip
-          const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
-          if (hand_mesh) {
-            hand_mesh.position.copyFromFloats(0, 0, 0);
-            if (hand_mesh.rotationQuaternion) {
-              hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
-            } else {
-              hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
-            }
-            hand_mesh.parent = input_source.grip;
-          }
+          // const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
+          // if (hand_mesh) {
+          //   hand_mesh.position.copyFromFloats(0, 0, 0);
+          //   if (hand_mesh.rotationQuaternion) {
+          //     hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+          //   } else {
+          //     hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
+          //   }
+          //   hand_mesh.parent = input_source.grip;
+          // }
         });
       });
     });

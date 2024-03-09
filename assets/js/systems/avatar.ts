@@ -193,6 +193,7 @@ export const init = (config: Config) => {
     user_id: string,
     pose: { head: number[]; left?: number[]; right?: number[]; }
   ) => {
+    console.log("in create simple user", user_id, pose);
     let head = cache.get(headId(user_id));
     if (!head) {
       head = CreateBox(
@@ -228,6 +229,7 @@ export const init = (config: Config) => {
     user_id: string,
     pose: { head: number[]; left?: number[]; right?: number[]; }
   ) => {
+    console.log("in pose user", user_id, pose);
     const head = cache.get(headId(user_id));
     if (head) {
       //position is first 3 elements of pose array

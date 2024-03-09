@@ -8,6 +8,7 @@ import * as Material from "./systems/material";
 import * as Avatar from "./systems/avatar";
 import * as XRExperience from "./systems/xr-experience";
 import * as Teleportable from "./systems/teleportable";
+import * as Hud from "./systems/hud";
 import * as XRHandController from "./systems/xr-hand-controller";
 import * as Holdable from "./systems/holdable";
 import * as Parent from "./systems/parent";
@@ -37,7 +38,8 @@ export const orchestrator = {
             $xr_exited: new Subject<boolean>(),
             $xr_button_changes: new Subject<XRButtonChange & { handedness: "left" | "right"; }>(),
             $xr_axes: new Subject<{ x: number; y: number; } & { handedness: "left" | "right"; }>(),
-            hand_controller: {}
+            hand_controller: {},
+            $hud_text: new Subject<string>(),
         };
 
         // debug
@@ -54,6 +56,7 @@ export const orchestrator = {
         Material.init(config);
         XRExperience.init(config);
         Teleportable.init(config);
+        Hud.init(config);
         XRHandController.init(config);
         Holdable.init(config);
         Parent.init(config);

@@ -20,30 +20,23 @@ export const init = async (config: Config) => {
         filter((controller) => controller.inputSource.handedness === handedness),
         take(1)
       );
-      // wait until model is ready
-      input_source.onMotionControllerInitObservable.addOnce(mc => {
-        mc.onModelLoadedObservable.addOnce(() => {
-          console.log("setting up hand controllers");
-          observe_components(input_source, $controller_removed);
-          // observe_motion(input_source, $controller_removed);
-          // observe_squeeze_and_trigger(input_source, $controller_removed);
-          // cache the grip so we can easily get to the position and rotation
-          input_source.onMeshLoadedObservable.addOnce(() => {
-            config.hand_controller[`${handedness}_grip`] = input_source.grip;
-          });
 
-          // parent avatar hand to the grip
-          const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
-          if (hand_mesh) {
-            hand_mesh.position.copyFromFloats(0, 0, 0);
-            if (hand_mesh.rotationQuaternion) {
-              hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
-            } else {
-              hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
-            }
-            hand_mesh.parent = input_source.grip;
+      input_source.onMotionControllerInitObservable.addOnce(mc => {
+        config.hand_controller[`${handedness}_grip`] = input_source.grip;
+
+        observe_components(input_source, $controller_removed);
+        // parent avatar hand to the grip
+        const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
+        if (hand_mesh) {
+          hand_mesh.position.copyFromFloats(0, 0, 0);
+          if (hand_mesh.rotationQuaternion) {
+            hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+          } else {
+            hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
           }
-        });
+          hand_mesh.parent = input_source.grip;
+        }
+
       });
     });
   };

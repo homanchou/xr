@@ -101,6 +101,7 @@ export const init = (config: Config) => {
           ),
           filter(
             ({ prev, curr }) =>
+              // there is some difference between prev and curr
               prev.head[0] !== curr.head[0] ||
               prev.left[0] !== curr.left[0] ||
               prev.right[0] !== curr.right[0] ||
@@ -108,6 +109,13 @@ export const init = (config: Config) => {
               prev.right[1] !== curr.right[1] ||
               prev.left[2] !== curr.left[2] ||
               prev.right[2] !== curr.right[2]
+          ),
+          filter(
+            ({ prev, curr }) =>
+              // all three positions have come online, e.g. not the default dummy positions
+              curr.head[0] !== 0 &&
+              curr.left[0] !== 0 &&
+              curr.right[0] !== 0
           ),
           map(({ curr }) => curr)
         )

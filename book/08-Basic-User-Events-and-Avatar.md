@@ -611,7 +611,12 @@ Finally we can match on the incoming state_mutations info. Back in `avatar.ts` l
     }
     createSimpleUser(e.eid, e.com.pose);
   });
+```
 
+This matches any state_mutation event that creates a new entity having the component of tag with a value of avatar.  When that event was for ourselves, we use it to move our camera because we're resuming the previous position or initializing our location to the room's spawn point.  We also create our own avatar.  
+
+
+```typescript
   // user_left
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.delete),
@@ -619,6 +624,12 @@ Finally we can match on the incoming state_mutations info. Back in `avatar.ts` l
   ).subscribe(e => {
     removeUser(e.eid);
   });
+
+```
+
+We're matching on $state_mutation event that involves an entity being deleted that also has a component with tag with a value of avatar.  We simple remove the avatar mesh.
+
+```typescript
 
   // user_moved
   $state_mutations.pipe(
@@ -632,6 +643,14 @@ Finally we can match on the incoming state_mutations info. Back in `avatar.ts` l
     }
     poseUser(e.eid, e.com.pose);
   });
+
+```
+
+For user movement we're matching on when an entity is updated that is not ourselves and has a component of tag equal to avatar.  For now we're only concerned with updating other's avatars and not our own because we can't really even see our own head anyway.  
+
+Then we add some convenience functions for creating the avatars, removing them and posing them.
+
+```typescript
 
   const headId = (user_id: string) => `${user_id}:head`;
 
@@ -675,7 +694,7 @@ Finally we can match on the incoming state_mutations info. Back in `avatar.ts` l
 
 ```
 
-You should be able to test this two browser windows.  Use the mouse to click and drag to move the camera, use the cursor keys to navigate.  You should be able to see each other represented as a small white rectangular box.
+You should be able to test observing each others presence using two browser windows.  Use the mouse to click and drag to move the camera, use the cursor keys to navigate.  You should be able to see each other represented as a small white rectangular box.
 
 ### Summary
 

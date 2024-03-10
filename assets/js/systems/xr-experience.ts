@@ -15,7 +15,11 @@ export const init = async (config: Config) => {
   // so that the glasses icon is not rendered until after the modal is dismissed
   config.$room_entered.subscribe(async () => {
 
-    const xr_helper = await scene.createDefaultXRExperienceAsync({});
+    const xr_helper = await scene.createDefaultXRExperienceAsync({
+      inputOptions: {
+        doNotLoadControllerMeshes: true
+      }
+    });
     config.$xr_helper_ready.next(xr_helper);
 
     xr_helper.baseExperience.onStateChangedObservable.add((state: WebXRState) => {

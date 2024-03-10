@@ -1,9 +1,10 @@
-## Add Simple Hands To Avatar
+## Add Ability To Subscribe To Hand Controller Components
 
+Now that we're able to jump into immersive-vr we can see the world with 6 degrees of freedom in the headset.  But we have some more work to do to allow others to see our head and hands.  We'll need to add the ability to get the positions and rotations of each hand.  We'll also need the ability to listen for what buttons, triggers or squeezes the user is executing on the hand controllers.  In this section we'll dive into obtaining all this useful information, then emitting user movement that includes both hands, then finally reacting to that on the receiving side by drawing boxes for hands.
 
+### Convert Babylon Observers to RxJS Observers
 
-
-Now we'll subscribe to signals to turn on and off the sending of our XR camera and hand controller movement.  Considering that the user is able to enter and exit immersive-vr session at will we should take care to register and de-register subscriptions accordingly so that we don't create more and more subscriptions accidentally when we repeatedly enter and exit XR.  It's useful to use RxJS observers for this.  Here is a function that converts a Babylon.js observable into an RxJS Observable.
+We'll begin by setting up more RxJS Observers which are useful for all kinds of signal processing.  Babylon.js provides observers for whenever hand controllers are added.  We can take advantage of those observers to run our code which will constantly listen for movement or button pushes etc.  Considering that the user is able to enter and exit immersive-vr session at will we should take care to register and de-register subscriptions accordingly so that we don't create more and more subscriptions accidentally when we repeatedly enter and exit XR.  It's useful to use RxJS observers for this.  Here is a function that converts a Babylon.js observable into an RxJS Observable.
 
 ```typescript
 
@@ -39,6 +40,9 @@ export function fromBabylonObservable<T>(
 ```
 
 This code snippet above came from the Babylon.js forums (and was later added to their official documentation).  It allows us to use RxJS observables so we can take advantage of RxJS pipes/filters etc.  We'll use it to subscribe to an XRFrame event whenever we enterXR, and unsubscribe whenever we exit XR.  Within each frame we'll grab the camera and hand positions and send them to the RoomChannel in the form of an `i_moved` event.
+
+
+### Create xr-hand-controller system
 
 First we'll add another system dedicated to getting data from the hand controllers.  Babylon.js provides observables for when the hand controller is added:
 
@@ -113,9 +117,7 @@ To do this, inside the subscription to the `onControllerAddedObservable` we crea
       );
       // wait until model is ready
       input_source.onMotionControllerInitObservable.addOnce(mc => {
-        mc.onModelLoadedObservable.addOnce(() => {
-          observe_components(input_source, $controllerRemoved);
-        });
+        observe_components(input_source, $controllerRemoved);
       });
     });
   };
@@ -172,13 +174,8 @@ Add this function after the previous component setup function we created:
 
 ```typescript
 input_source.onMotionControllerInitObservable.addOnce(mc => {
-  mc.onModelLoadedObservable.addOnce(() => {
+    config.hand_controller[`${handedness}_grip`] = input_source.grip;
     observe_components(input_source, $controller_removed);
-    /* add it here */
-    input_source.onMeshLoadedObservable.addOnce(() => {
-      config.hand_controller[`${handedness}_grip`] = input_source.grip;
-    });
-  });
 });
 ```
 
@@ -192,6 +189,8 @@ Let's update Config to support the two extra properties:
     right_grip?: AbstractMesh;
   };
 ```
+
+### Avatar system shall send head and hands position and rotation
 
 Now let's combine a payload for head and each hand movement and send it out to the RoomChannel via the "i_moved" event.  We were doing this in avatar.ts.  
 
@@ -234,6 +233,7 @@ Add this snippet to the init function in avatar.ts
         ),
         filter(
           ({ prev, curr }) =>
+            // there is some difference between prev and curr
             prev.head[0] !== curr.head[0] ||
             prev.left[0] !== curr.left[0] ||
             prev.right[0] !== curr.right[0] ||
@@ -241,6 +241,13 @@ Add this snippet to the init function in avatar.ts
             prev.right[1] !== curr.right[1] ||
             prev.left[2] !== curr.left[2] ||
             prev.right[2] !== curr.right[2]
+        ),
+        filter(
+          ({ prev, curr }) =>
+            // all three positions have come online, e.g. not the default dummy positions
+            curr.head[0] !== 0 &&
+            curr.left[0] !== 0 &&
+            curr.right[0] !== 0
         ),
         map(({ curr }) => curr)
       )
@@ -251,11 +258,11 @@ Add this snippet to the init function in avatar.ts
 
 ```
 
-First we listen to the xr_entered event.  Within that subscription we create a new subscription for every xr frame, but will unsubscribe when we receive an xr_exited event.  For every frame we will throttle by time so we only sample once every MOVEMENT_SYNC_FREQ.  Then we use `scan` to create a state in our pipeline that enables us to stage a payload of { head, left, right } position and rotation arrays.  We initialize the scan with default values for the head and hands like [0,0,0,0,0,0,1].  The first 3 zeros are for position and the last 4 digits are for zero rotations expressed as a quaternion.  We further keep a `prev` and `curr` version of those payloads so that we may filter out any payloads if there is no change between payloads.  Finally we reshape the data in the pipeline to just the `curr` version and push it out on the channel.
+First we listen to the xr_entered event.  Within that subscription we create a new subscription for every xr frame, but will unsubscribe when we receive an xr_exited event.  For every frame we will throttle by time so we only sample once every MOVEMENT_SYNC_FREQ.  Then we use `scan` to create a state in our pipeline that enables us to stage a payload of { head, left, right } position and rotation arrays.  We initialize the scan with default values for the head and hands like [0,0,0,0,0,0,1].  The first 3 zeros are for position and the last 4 digits are for zero rotations expressed as a quaternion.  This is just a dummy position and rotation so we can avoid dealing with null values.  But we should never send this value out because they should be overwritten as soon as the hand controllers become available over the next few frames.  We further keep a `prev` and `curr` version of those payloads so that we may filter out any payloads if there is no change between payloads.  Finally we reshape the data in the pipeline to just the `curr` version and push it out on the channel.
 
 ### Render box hands for avatars
 
-Now let's improve the `createSimpleUser` function in `avatar.ts` to render boxes for hands.
+Now let's improve the `createSimpleUser` function in `avatar.ts` to render boxes for hands.  The incoming message we get on $state_mutation Subject concerns a single entity that is also the user_id.  But for now, we'll break this into 3 independement meshes named like `${user_id}:head`, `${user_id}:left` and `${user_id}:right`.
 
 ```typescript
 
@@ -291,7 +298,10 @@ Now let's improve the `createSimpleUser` function in `avatar.ts` to render boxes
   };
 
 ```
-And update the poseUser function to handle moving hands to new locations
+
+The createSimpleUser function will keep a cache so we can quickly get to these messages to update them.  If the head, left box or right box does not exist in the cache it will create them.
+
+After all 3 meshes are created we call poseUser function to moving meshes to the current locations.
 
 ```typescript
 
@@ -353,7 +363,9 @@ And update the poseUser function to handle moving hands to new locations
 
 ```
 
-While we're at it update function that would delete a user if they left:
+The poseUser function is meant to handle the case where the user has dropped out of xr and returned to 2D mode.  In that case we still get user movement data but it will not include left and right hands.  The poseUser function converts the array of numbers into position Vector3 and rotation Quaternion and updates the avatar meshes accordingly. 
+
+Finally we dispose of the avatar mesh parts and delete the cache if the user leaves the room.
 
 ```typescript
 
@@ -377,8 +389,49 @@ While we're at it update function that would delete a user if they left:
 
 ```
 
-Test it, jump into a headset and wave your arms around.  If you have your desktop computer in front of you as well you can observe your headset "self" on the desktop while peaking under the headset.  You should see three colorless boxes representing head and hands.
+With these function in place two users that have entered the room should be able to see each other's "head" and "hand" boxes.  To test this, I usually sit in front of my desktop computer with my headset high up on my forehead while I peak at my screen from beneath the headset.  Then I enter the room on both the browser on my desktop as well as the browser in the headset.  Then I'll grab my controllers and move them up and down and peak at the browser on the desktop looking at the avatar of my headset.  Try this out.  You should be able to see your headset avatars hands move as you move your controllers around.
+
+### Viewing Your Own Avatar
+
+The default babylon.js xr experience helper detects what kind of headset we're wearing and loads hand controllers that look like the Quest product.  That's not what other's see, since our avatar system is just rendering a box for each hand.  If we want to see what others see, we should hide the Quest controllers and see our boxes for hands.  We also want to make sure our boxes for hands move immediately when we move, and not be subject to the network delays of waiting for the server to tell us where our hands were previously.
+
+To hide the default mesh controllers at this in the xr-experience.ts when we construct the helper.
+
+In xr-experience.ts:
+
+```typescript
+const xr_helper = await scene.createDefaultXRExperienceAsync({
+      inputOptions: {
+        doNotLoadControllerMeshes: true
+      }
+    });
+```
+
+Then to see our boxes move as quickly as our controllers are moving, let's parent the box hands to the grip as soon as the controllers are ready.  
+
+In xr-hand-controller.ts:
+
+```typescript
+
+input_source.onMotionControllerInitObservable.addOnce(mc => {
+  config.hand_controller[`${handedness}_grip`] = input_source.grip;
+
+  observe_components(input_source, $controller_removed);
+  // parent avatar hand to the grip
+  const hand_mesh = config.scene.getMeshByName(`${config.user_id}:${handedness}`);
+  if (hand_mesh) {
+    hand_mesh.position.copyFromFloats(0, 0, 0);
+    if (hand_mesh.rotationQuaternion) {
+      hand_mesh.rotationQuaternion.copyFromFloats(0, 0, 0, 1);
+    } else {
+      hand_mesh.rotationQuaternion = new Quaternion(0, 0, 0, 1);
+    }
+    hand_mesh.parent = input_source.grip;
+  }
+
+});
+```
 
 ### Summary
 
-In this chapter we added simple box hands to our simple box head "avatar".  To grab the data for the hand controllers we set up some more RxJS subjects to stream the data to.  Then we pushed that movement data to the room channel.  Since we already have in place a pipeline to get that data and draw an avatar, we just extended that function to also create and render box hands.
+In this chapter we added simple box hands to our simple box head "avatar".  To grab the data for the hand controllers we set up some more RxJS observables based off of Babylon.js observables.  We constructed a combined payload of head and hand movement and sent that to the RoomChannel.  That data comes back to the front-end in the form of an entities_diff event which we handle in the avatar.ts system.  We modified the avatar system to handle drawing some hands.  Finally we also draw and update our own avatar hands, but we don't listen to entity updates for ourselves because our headset framerate is much higher than the updates we get from the server.  Instead we parent our box hands to the controller grip meshes.

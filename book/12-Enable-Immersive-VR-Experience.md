@@ -1,16 +1,26 @@
 ## Enable Immersive VR Experience
 
-Up until now we've been testing on a desktop browser.  In order to experience what we've built on our local testing server in the browser in the headset we need to have an ip address that we can type into the browser that comes with our head mounted display.  The Quest comes with a Chromium compatible browser.
+Up until now we've been developing on a desktop by running the server on our local machine and then pointing our browser at `http://localhost:4000`.  In order to test the experience on our headset, we'll need to point the browser in the headset to a suitable ip address.
 
-The address `http://localhost:4000` is a special address that only works on the machine your server is running on.  In order for the headset to access the development server we'll need to expose an ip served over https in order for XR to work.
+The address `http://localhost:4000` is a special address that only works on the machine the server is running on.  In order for the headset to access the development server, and because we need https to launch the xr experience, we'll use an ssh tunnel.
 
 ### Using an SSH Tunnel
 
-The easiest solution I have found that works in the headset is to use a service like ngrok to create an ssh tunnel.  Ngrok is free but you need to create an account and install the ngrok executable.  
+The easiest solution I have found that works in the headset is to use a service like Ngrok to create an ssh tunnel.  Ngrok is free.  Follow their docs to create an account and install the ngrok executable.  
 
 https://ngrok.com/docs/getting-started/
 
-But one nice thing is that it gives you a URL with https and you can share the URL with other testers outside of your home network.
+Once the ngrok utility is installed (and you've logged in via the command line), you can create a tunnel like this:
+
+```bash
+ngrok http 4000
+```
+
+This command will spit out a lengthy but public domain name.  The nice thing is that we now have a public URL to give to external testers outside of your home network.
+
+### Tip for saving some typing
+
+In order to save some typing of long URLs into the Quest browser, I utilize another service called glitch.me.  glitch is a service that allows you to host simple web projects.  I created myself a project that is a simple index.html page with some links.  On my desktop machine I edit the index.html page and add the lengthy URL that ngrok provides me.  Then in the Quest browser I navigate to my well known glitch.me page and the link is present on the page for me to click.  If you know of another way to share links that you can easily click on inside the Quest let me know.
 
 ### Create XR Experience System
 

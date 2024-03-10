@@ -136,8 +136,6 @@ export const init = (config: Config) => {
         const cam = scene.activeCamera as UniversalCamera;
         cam.position.fromArray(e.com.pose.head.slice(0, 3));
         cam.rotationQuaternion = Quaternion.FromArray(e.com.pose.head.slice(3));
-
-        // return;
       }
       createSimpleUser(e.eid, e.com.pose);
     });

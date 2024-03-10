@@ -2,7 +2,13 @@
 
 When we first join the room our camera is placed at the spawn_point.  If we then move about the space, travel to a new location then refresh the window, we might expect to resume our previous position but instead we're always teleported back to the original spawn_point.
 
-To address this issue we'll add a helper function to `rooms.ex` to lookup an entity's state:
+This is because in presence.ex, when we join the room, we always lookup the spawn point and inject that into our user_joined event, which comes back to us in the form of an entities_diff event which then is transformed into a state_mutations event and finally is matched in avatar.ts and sets our camera back to the spawn point location.
+
+To address this issue we should let the server cache our current location continuously, and then when we join the room the next time, use the previous data we have cached on the server if it exists.  If it doesn't then we'll fall back to using the spawn point.  
+
+### Create Get Entity State Function
+
+First we'll add a helper function to `rooms.ex` to lookup an entity's state:
 
 ```elixir
 
@@ -177,14 +183,17 @@ Finally let's use the soft_delete function when we are processing the "entities_
 
 We now have the ability to retain the previous camera position and rotation after a browser refresh.  
 
-### No Persistance Between Games
+### When to persist and when to reset
 
-It makes sense to pick-up where we left off we are playing a game and then get a momentary net split.  Our browser hangs and we just want to refresh the page to try to fix the issue.  However this memory ought to be erased between games.  The memory of who was in the room and what entities were moved should be reset.  That way the game can be played again from the start.  Imagine if there is an escape room where we already solved it with a team.  We picked up every key and opened every door but now we want to reset the room so others can play it.
+During the course of one game, or even setting aside browser games for a moment, when I encounter issues on a webpage, my goto action to try to fix the state is trying a reload of the page.  Sometimes this fixes it, sometimes not, depending on the issue.  My intuition is that when there are subtle errors or issues with our xr-experience, such as an audio issue, or some other glitch, users will try a full page refresh in an attempt to fix the issue.  When that happens, we generally just want to pick-up right where they left off.  The server-side state persistance helps preserve any and all changes that have occured since the game was started.
 
-The components table serves as a live game memory.  It is updated by every entities_diff message in realtime as the game goes on.  But after the game is over, we can reset the components table back to the beginning.  We'll need another table to hold an initial snapshot to restore the components table from.
+However, when the game is played to completion, and we want to restart the game either for ourselves or for the next round of players, then we need a way to fully reset the state of the world back to the original settings.
 
+The components table in our postgres database serves as a live in-progress game memory.  It is constantly updated by every entities_diff message in realtime as the game goes on.  But after the game is over, we want to be able to reset the components table back to the beginning.  We'll need another table to hold an initial snapshot to restore the components table from.
 
-The Babylon.js community has the concept of a snippet server that allows saving and retreiving of json payloads for things like GUIs, animations, node materials etc.  Inspired by this idea, let's create a snippets table.  This table hold immutable read-only versions of any kinds of payloads we want to store and retrieve.
+The Babylon.js community has the concept of a snippet server that allows saving and retreiving of json payloads for things like GUIs, animations, node materials etc.  Inspired by this idea, let's create a snippets table.  This table hold immutable read-only versions of any kinds of payloads we want to store and retrieve.  By taking a snapshot of the original state of the components table and saving that as JSON data into a snippets table, we can then "reset" the room state by deleting all the data in a room then rehydrating the components table using the saved snippet.
+
+### Create Snippets Table
 
 Run this generator:
 
@@ -344,7 +353,8 @@ def show(conn, %{"id" => id}) do
     end
 ```
 
+The `Xr.Servers.RoomsSupervisor.start_room(room.id)` is an idempotent function.  Meaning that it can run multiple times.  If the room hasn't been started yet, it will return `{:ok, pid}`.  But if the room was already started then it will return something else.  It doesn't matter what it is.  The point is, if and only if the was some tuple starting with :ok, then we interpret that to mean that we're starting the room over.  Whenever we start a new room server we can trust that we're getting a fresh state.  
 
 ### Summary
 
-In this chapter we added the ability to retain a user's previous position and rotation after a full page refresh.  We add this ability to query the user's entity value by introducing soft_delete.  We added a deleted_at column to the components table.  We modified helper functions to support new queries and update functions.  We also introduced the concept of a snapshot snippet table so we can export the contents of the components table into the snippet table and also be able to go the other direction.  We now create a snapshot of the random box data when a new room is created and override the components table with this snapshot when the genserver is started.
+In this chapter we added the ability to retain a user's previous position and rotation after a full page refresh.  We add this ability to query the user's entity value from the postgres database (even though the user left the room), by introducing soft_delete.  We added a deleted_at column to the components table.  We modified helper functions to support new queries and update functions.  We also introduced the concept of a snapshot snippet table so we can export the contents of the components table into the snippet table and also be able to go the other direction to restore components table from a snippet.  We added the feature to create a snapshot of the random box initial content when a new room is created and override the components table with this snapshot when the genserver is started.

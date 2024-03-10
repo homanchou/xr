@@ -1,7 +1,7 @@
 
 ## Meeting Room Communications
 
-Now that we have a page for a particular room at `/rooms/some-room-id-randomly-generated` let's see if we can send messages back and forth between another browser connected to the same room URL.
+Now that we have a page for a particular room at `/rooms/some-room-id-randomly-generated` let's work on some networking capabilities and see if we can send messages back and forth between another browser connected to the same room URL.
 
 We don't have much of a UI in our room yet, but don't worry we don't need it yet.  Let's just get the backend mechanics set up so we can send and receive messages.
 

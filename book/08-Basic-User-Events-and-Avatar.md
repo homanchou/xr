@@ -25,11 +25,13 @@ Create a new entity called `spawn_point` in the `generate_random_content` functi
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
 ```
-We'd like to re-use common component names since we'll have a suite of systems that are listening for particular component names.  We also need to be able to somehow tag (aka label) this entity as a "spawn_point".  Since the entity itself is just an id with no other information, all data is stored in some kind of component so we added a "spawn_point" tag just so we can find this entity later by one of its component names.
+Since the entity itself is just an id with no other information, all data is stored in some kind of component so we added a tag component just so we can find this entity later by one of its component names.
 
 The spawn_point for now is just a random point in 3D space between -10 and 10 on the x and z axis and slightly above y = 0 which is a common place to put the floor.  We may change this later for multi-leveled rooms.
 
-In order to find a particular entity that has a particular component, or a particular component that matches a particular value let's define some additional helper functions in `rooms.ex`
+In order to find a particular entity that has a particular component, or a particular component that matches a particular value let's define some additional helper functions.  These helper functions will come in handy later when we need to find the particular entity in the room that is the spawn_point, in order to get the position to assign to the user's location when the user first joins the room.
+
+Add these query helper functions to `rooms.ex`
 
 ```elixir
   def find_entities_having_component(room_id, component_name, component_value) do
@@ -75,9 +77,9 @@ In order to find a particular entity that has a particular component, or a parti
   end
 ```
 
-These queries first look in the components table for any component matching a name or name and value.  Then that result is used to find all components for entity_ids that were found.  The result is that we get everything about entities where the entities had a particular component.  This is similar to when we call `Xr.Rooms.entities(room_id)` getting a map of all entities except we're filtering by the matching criteria.  We also return a tuple of {:ok, result} vs {:error, :not_found}.
+These queries first look in the components table for any component matching a name or name and value.  Then that result is used to gather all the components for entity_ids that were found.  The result is that we get everything about entities where the entities had a particular component.  This is similar to when we call `Xr.Rooms.entities(room_id)` getting a map of all entities except we're filtering by the matching criteria.  We also return a tuple of {:ok, result} vs {:error, :not_found}, which is useful in determining if there was an entity matched or not.
 
-To help with these queries, let's add two more indexes to the components table.  Create a new migration (I just added to my existing migration since I didn't push my code to any build system yet):
+To makes these queries more efficient, let's add two more indexes to the components table.  Create a new migration (In my case I just added the indexes to my existing migration since I didn't push my code to any build system yet):
 
 ```elixir
     create index(:components, [:room_id, :entity_id])
@@ -487,7 +489,9 @@ The "entities_diff" event comes in groups of creates, updates and deletes, so we
 
 In the receiving system, say we want to match when an avatar is deleted.  We'll want to use the `componentExists` function to see if the `StateMutation` has a component name "tag" = "avatar" in the components object.  However, we won't successfully match unless we make a slight tweak because on a delete situation our payload hardly includes any components at all.  And the same is true for entity update mutations, because the event will only include the components that were updated, which may not include the components it was originally created with, like "tag" = "avatar.  
 
-Therefore we need a frontend cache of the state.  That way we can look up the previous state right before we change it and then send the current component and also previous components to any subscribers.  
+### Create Front-end State To Cache Coponents
+
+In order to match on whether an incoming update involves a particular component, but may not have that component in the incoming message, we'll need a frontend cache of the state.  That way we can look up the previous state right before the new event is modifying it and then send the current component and also previous components to any subscribers.  The subscribers can then match on the component name or value from both the current payload as well as the previous entity state, which contains any previous components we have stashed in the cache.
 
 That's what this line does.
 ```typescript
@@ -522,7 +526,27 @@ export const componentExists = (component_name: string, component_value?: any) =
 };
 ```
 
-Now let's add a simple Map database.  Create file `assets/js/systems/state.ts`:
+Now let's add a simple Map database to contain the cache.  
+
+In config.ts:
+
+```typescript
+export type EntityId = string;
+export type Components = { [component_name: string]: any; };
+
+// define state on Config type
+  state: Map<EntityId, Components>;
+```
+
+In orchestrator.ts initialize the state:
+
+```typescript
+ ....
+ state: new Map<EntityId, Components>(),
+ ...
+```
+
+Create a new system file for state `assets/js/systems/state.ts`:
 
 
 ```typescript
@@ -571,7 +595,7 @@ import * as State from "./systems/state";
 
 ### Create Simple Avatar Mesh
 
-Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
+Finally we can match on the incoming state_mutations info. Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
 
 ```typescript
 
@@ -581,11 +605,9 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
     filter(componentExists("tag", "avatar")),
   ).subscribe(e => {
     if (e.eid === config.user_id) {
-      // the user_joined event contains spawn point, set the camera there
       const cam = scene.activeCamera as FreeCamera;
       cam.position.fromArray(e.com.pose.head.slice(0, 3));
       cam.rotationQuaternion = Quaternion.FromArray(e.com.pose.head.slice(3));
-      return;
     }
     createSimpleUser(e.eid, e.com.pose);
   });
@@ -621,10 +643,7 @@ Back in `avatar.ts` let's create some subscriptions on `$state_mutations`.
     }
   };
 
-
-
   const createSimpleUser = (user_id: string, pose: { head: number[]; }) => {
-
 
     let head = cache.get(headId(user_id));
     if (!head) {

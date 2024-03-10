@@ -12,8 +12,8 @@ export const init = (config: Config) => {
 
   // to aid in mesh intersection with right or left hand we'll use this large-ish sphere
   const detection_sphere = CreateSphere("detection_sphere", { diameter: 0.2, segments: 16 }, scene);
-  detection_sphere.isVisible = false;
-
+  // detection_sphere.isVisible = false;
+  detection_sphere.visibility = 0.3;
 
 
 

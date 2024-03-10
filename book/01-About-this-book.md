@@ -5,7 +5,7 @@ This book is a step-by-step guide to building a website that is also a platform 
 
 ### Who is this book for?
 
-I wish I could say this book is for everyone that wants to create their own VR enabled website.  Though... software developers that have some experience with full stack web development will probably have the easiest time following this guide.  
+I wish I could say this book is for everyone that wants to create their own VR enabled website.  Though... software developers that have some experience with full stack web development will probably have the easiest time following this guide.  It will be especially useful if you have had experience with web frameworks like Ruby on Rails or Phoenix for Elixir.
 
 I assume that the reader is already comfortable with using command lines at a terminal and website concepts like HTML, CSS, and Databases.  It will be helpful to know how to use Git and Docker and some working knowledge of javascript/typescript, Elixir and Phoenix.  I don't spend much time explaining those fundamentals because there are plenty of resources for that already.  Sometimes I explain a little more than I need to, but most times I don't otherwise this guide would be too long.  
 

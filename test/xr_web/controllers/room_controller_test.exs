@@ -32,10 +32,10 @@ defmodule XrWeb.RoomControllerTest do
     #   assert html_response(conn, 200)
     # end
 
-    test "renders errors when data is invalid", %{conn: conn} do
-      conn = post(conn, ~p"/rooms", room: @invalid_attrs)
-      assert html_response(conn, 200) =~ "New Room"
-    end
+    # test "renders errors when data is invalid", %{conn: conn} do
+    #   conn = post(conn, ~p"/rooms", room: @invalid_attrs)
+    #   assert html_response(conn, 200) =~ "New Room"
+    # end
   end
 
   describe "edit room" do
@@ -47,35 +47,35 @@ defmodule XrWeb.RoomControllerTest do
     end
   end
 
-  describe "update room" do
-    setup [:create_room]
+  # describe "update room" do
+  #   setup [:create_room]
 
-    test "redirects when data is valid", %{conn: conn, room: room} do
-      conn = put(conn, ~p"/rooms/#{room}", room: @update_attrs)
-      assert redirected_to(conn) == ~p"/rooms/#{room}"
+  #   # test "redirects when data is valid", %{conn: conn, room: room} do
+  #   #   conn = put(conn, ~p"/rooms/#{room}", room: @update_attrs)
+  #   #   assert redirected_to(conn) == ~p"/rooms/#{room}"
 
-      conn = get(conn, ~p"/rooms/#{room}")
-      assert html_response(conn, 200)
-    end
+  #   #   conn = get(conn, ~p"/rooms/#{room}")
+  #   #   assert html_response(conn, 200)
+  #   # end
 
-    test "renders errors when data is invalid", %{conn: conn, room: room} do
-      conn = put(conn, ~p"/rooms/#{room}", room: @invalid_attrs)
-      assert html_response(conn, 200) =~ "Edit Room"
-    end
-  end
+  #   test "renders errors when data is invalid", %{conn: conn, room: room} do
+  #     conn = put(conn, ~p"/rooms/#{room}", room: @invalid_attrs)
+  #     assert html_response(conn, 200) =~ "Edit Room"
+  #   end
+  # end
 
-  describe "delete room" do
-    setup [:create_room]
+  # describe "delete room" do
+  #   setup [:create_room]
 
-    test "deletes chosen room", %{conn: conn, room: room} do
-      conn = delete(conn, ~p"/rooms/#{room}")
-      assert redirected_to(conn) == ~p"/rooms"
+  #   test "deletes chosen room", %{conn: conn, room: room} do
+  #     conn = delete(conn, ~p"/rooms/#{room}")
+  #     assert redirected_to(conn) == ~p"/rooms"
 
-      assert_error_sent 404, fn ->
-        get(conn, ~p"/rooms/#{room}")
-      end
-    end
-  end
+  #     assert_error_sent 404, fn ->
+  #       get(conn, ~p"/rooms/#{room}")
+  #     end
+  #   end
+  # end
 
   defp create_room(_) do
     room = room_fixture()

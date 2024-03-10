@@ -138,11 +138,11 @@ defmodule Xr.RoomsTest do
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point")
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end
@@ -151,11 +151,11 @@ defmodule Xr.RoomsTest do
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point", true)
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end
@@ -164,7 +164,7 @@ defmodule Xr.RoomsTest do
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 

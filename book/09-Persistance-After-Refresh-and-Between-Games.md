@@ -37,7 +37,7 @@ def emit_joined(room_id, user_id) do
 
       default_user_state = %{
         "color" => Xr.Rooms.create_random_color(),
-        "tag" => "avatar",
+        "avatar" => true,
         "pose" => %{
           "head" => Rooms.get_head_position_near_spawn_point(room_id) ++ default_rotation
         },

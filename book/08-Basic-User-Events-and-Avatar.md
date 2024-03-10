@@ -21,7 +21,7 @@ Create a new entity called `spawn_point` in the `generate_random_content` functi
 ```elixir
     # create spawn_point
     create_entity(room_id, Xr.Utils.random_string(), %{
-      "tag" => "spawn_point",
+      "spawn_point" => true,
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
 ```
@@ -94,7 +94,7 @@ Let's also add a convenience function for looking up the spawn point and getting
 ```elixir
 def get_head_position_near_spawn_point(room_id) do
   # grab the entities that have spawn_point as a component
-  case Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point") do
+  case Xr.Rooms.find_entities_having_component(room_id, "spawn_point", true) do
     # grabs position from first spawn_point's position component
     {:ok, entities_map} ->
       {_entity_id, %{"position" => [x, y, z]}} =
@@ -124,11 +124,11 @@ We can test these new functions by adding to the `rooms_test.exs` file:
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point")
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end
@@ -137,11 +137,11 @@ We can test these new functions by adding to the `rooms_test.exs` file:
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "tag", "spawn_point")
+      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point", true)
       assert entity |> Map.keys() |> Enum.count() == 1
       assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
     end
@@ -150,7 +150,7 @@ We can test these new functions by adding to the `rooms_test.exs` file:
       room = room_fixture()
 
       Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "tag" => "spawn_point",
+        "spawn_point" => true,
         "position" => [0, 0, 0]
       })
 
@@ -281,7 +281,7 @@ defmodule XrWeb.Presence do
     default_rotation = [0, 0, 0, 1]
 
     default_user_state = %{
-      "tag" => "avatar",
+      "avatar" => true,
       "pose" => %{
         "head" => Rooms.get_head_position_near_spawn_point(room_id) ++ default_rotation
       },
@@ -487,7 +487,7 @@ Modified `broker.ts`:
 ```
 The "entities_diff" event comes in groups of creates, updates and deletes, so we know the operation.  This way components can listen for the type of operation in the event.  
 
-In the receiving system, say we want to match when an avatar is deleted.  We'll want to use the `componentExists` function to see if the `StateMutation` has a component name "tag" = "avatar" in the components object.  However, we won't successfully match unless we make a slight tweak because on a delete situation our payload hardly includes any components at all.  And the same is true for entity update mutations, because the event will only include the components that were updated, which may not include the components it was originally created with, like "tag" = "avatar.  
+In the receiving system, say we want to match when an avatar is deleted.  We'll want to use the `componentExists` function to see if the `StateMutation` has a component named "avatar" in the components object.  However, we won't successfully match unless we make a slight tweak because on a delete situation our payload hardly includes any components at all.  And the same is true for entity update mutations, because the event will only include the components that were updated.  Since "avatar" is not a change, it won't be in the event so we can filter by it using RxJS filters.  To fix this we need to supply the full list of components of every entity so that we can match on any component that is part of the entity.
 
 ### Create Front-end State To Cache Coponents
 
@@ -602,7 +602,7 @@ Finally we can match on the incoming state_mutations info. Back in `avatar.ts` l
   // user_joined
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.create),
-    filter(componentExists("tag", "avatar")),
+    filter(componentExists("avatar")),
   ).subscribe(e => {
     if (e.eid === config.user_id) {
       const cam = scene.activeCamera as FreeCamera;
@@ -620,7 +620,7 @@ This matches any state_mutation event that creates a new entity having the compo
   // user_left
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.delete),
-    filter(componentExists("tag", "avatar")),
+    filter(componentExists("avatar")),
   ).subscribe(e => {
     removeUser(e.eid);
   });
@@ -635,7 +635,7 @@ We're matching on $state_mutation event that involves an entity being deleted th
   $state_mutations.pipe(
     filter(e => e.op === StateOperation.update),
     filter(e => e.eid !== config.user_id),
-    filter(componentExists("tag", "avatar")),
+    filter(componentExists("avatar")),
   ).subscribe(e => {
     console.log("other user moved");
     if (!cache.has(e.eid)) {

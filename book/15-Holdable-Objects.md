@@ -1,15 +1,17 @@
 ## Pick-up objects
 
-Next we will implement the ability to grab an object and hold it in our hand.  The approach is:
+Next we will implement the ability to grab an object and hold it in our hand.  The sequence of steps is:
 
-1. Listen for when the squeeze button is pressed
-2. If the hand mesh that squeezed the button is near a target mesh then emit a room event that a user is holding target mesh
-3. Convert the room event into a state_diff event.
-4. Create a system to receive the state update message to make the target mesh a child of the hand mesh.
-
+1. Listen for when the squeeze button is pressed in either the left or right hand controllers
+2. If there is a holdable mesh near the grip of the hand controller then emit a room event that a user is holding target mesh
+3. The server receives the room event and converts it int a state_diff event.
+4. The front end recieves the state_diff event and parents the holdable mesh underneath the hand mesh of the avatar.
+   
 ### Create Grabbable Objects
 
-First let's place some objects in the scene that we can grab.  Open up `rooms.exs` and add this function to create several cubes that we'll make holdable.
+First let's define what are grabble objects.  In order to determine what mesh is "near" our hand that is squeezing the grip button, we'll use mesh intersection.  The API for mesh intersection testing takes two meshes and see if they intersect.  That means every time we squeeze the grip button we'll need to compare our hand with every other mesh in the room to see if there is an intersection.  To reduce some of the meshes we need to compare against we can tag these special meshes as "holdable" and only compare against those meshes.
+
+Let's begin by placing some objects in the scene that we can grab and hold.  Open up `rooms.exs` and add this function to create several cubes that we'll make holdable.
 
 ```elixir
   def create_holdables(room_id) do

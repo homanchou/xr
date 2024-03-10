@@ -103,7 +103,7 @@ defmodule Xr.Rooms do
 
     # create spawn_point
     create_entity(room_id, Xr.Utils.random_string(), %{
-      "tag" => "spawn_point",
+      "spawn_point" => true,
       "position" => [Enum.random(-10..10), 0.1, Enum.random(-10..10)]
     })
 
@@ -359,7 +359,7 @@ defmodule Xr.Rooms do
 
   def get_head_position_near_spawn_point(room_id) do
     # grab the entities that have spawn_point as a component
-    case Xr.Rooms.find_entities_having_component(room_id, "tag", "spawn_point") do
+    case Xr.Rooms.find_entities_having_component(room_id, "spawn_point", true) do
       # grabs position from first spawn_point's position component
       {:ok, entities_map} ->
         {_entity_id, %{"position" => [x, y, z]}} =

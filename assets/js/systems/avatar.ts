@@ -135,8 +135,7 @@ export const init = (config: Config) => {
   $state_mutations
     .pipe(
       filter((e) => e.op === StateOperation.create),
-
-      filter(componentExists("tag", "avatar"))
+      filter(componentExists("avatar"))
     )
     .subscribe((e) => {
       if (e.eid === config.user_id) {
@@ -152,7 +151,7 @@ export const init = (config: Config) => {
   $state_mutations
     .pipe(
       filter((e) => e.op === StateOperation.delete),
-      filter(componentExists("tag", "avatar"))
+      filter(componentExists("avatar"))
     )
     .subscribe((e) => {
       removeUser(e.eid);
@@ -164,7 +163,7 @@ export const init = (config: Config) => {
       filter((e) => e.op === StateOperation.update),
       // tap(e => console.log("user moved", e)),
       filter(e => e.eid !== config.user_id),
-      filter(componentExists("tag", "avatar"))
+      filter(componentExists("avatar"))
     )
     .subscribe((e) => {
       if (!cache.has(headId(e.eid))) {

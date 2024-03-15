@@ -17,9 +17,9 @@ export const init = (config) => {
 }
 ```
 
-The config object will be a resource the system can use to obtain and share data with other components while remaining decoupled from them.  No system will import or reference another system.  The config object will contain any variables the system needs and will also contain a message bus for systems to push data to any interested subscribers.
+The config object (to be defined) will be a resource the system can use to obtain and share data with other components while remaining decoupled from them.  No system will import or reference another system.  The config object will contain any variables the system needs and will also contain a message bus for systems to push data to any interested subscribers.
 
-All systems will be initialized by an orchestrator, that imports all the systems.  The orchestrator will create the config object and call each system's init function.
+All systems must be initialized by an orchestrator, which in turn imports and initializes (invokes init) on all the systems.  The orchestrator will also create the config object in order to pass it into each system's init function.
 
 ```typescript
 import * as my_system from "./systems/my_system"
@@ -37,21 +37,28 @@ const orchestrator = {
 orchestrator.init( /* seed with variables from server */)
 ```
 
-The order in which the systems are initialized is important because the earlier systems may populate attributes in the config that the latter systems depend on.  Any subscriptions created in the system are also order dependent.
+The order in which the systems are initialized is important because the earlier systems may populate attributes in the config that the latter systems depend on.  Any subscriptions created in the system are also order dependent, more on that in later chapters.
 
-Finally, we need to include orchestrator in our bundler entry point so that the code will run.  Currently, if the code is not imported into app.ts or imported within any descendants of those imports, then the code is not "reachable".  If we import orchestrator directly into app.ts that would inflat our bundled app.js file size for every page on the website, even those pages that don't need Babylon.js.  Instead, we should split the code up so that we only bring in the hefty bundles of js when it is necessary.
+The whole idea of spliting code up into these systems is so that we have some iota of organization for adding features to our games.  
 
-All we need to do is create an another bundle just for orchestrator and only include it when we're on the show room URL.  
+If we import orchestrator directly into app.ts that would inflat our bundled app.js file size for every page on the website, even those pages that aren't for VR.  Instead, we should split the code up so that we only bring in the hefty bundles of VR js specifically when we enter a "show" room URL /rooms/:room-id.
+
+All we need to do is create an another bundle just for orchestrator and only include it when we're viewing a room.  
 
 #### Create 2nd Entry Point for Orchestrator
 
-Open up `build.js` our custom esbuild script and add another entry point:
+The first thing we'll do is create a second bundle of js.  That way app.js can be included on every webpage, whereas the bundle for orchestrator.js will only be included as necessary on our VR page.
+
+Recall that `build.js` is the build script that is run whenever our typescript files change in order to bundle our typescript into javascript in the `priv/static/assets` folder.  Open up `build.js` and add another entry point:
 
 ```javascript
 let opts = {
   entryPoints: ["js/app.ts", "js/orchestrator.ts"],
   bundle: true,
 ```
+
+This will cause our build script to look for `js/orchestrator.ts` as a second entry point, creating two separate bundles of javascript.
+
 
 #### Create Orchestrator
 
@@ -65,6 +72,7 @@ export const orchestrator = {
     }
 }
 ```
+
 
 #### Add Orchestrator to the Root Layout
 
@@ -110,7 +118,7 @@ Open up the room's `show.html.heex` and replace it with:
 </body>
 ```
 
-This will share some variables such as the room_id and user_id with the frontend by making them available in `room_vars` object.  We also added a bit of styling to the body so that we fill the screen.
+This will share some variables such as the room_id and user_id (yet to be defined) with the frontend by making them available in `room_vars` object.  We also added a bit of styling to the body so that we fill the screen.
 
 #### Config
 
@@ -155,7 +163,6 @@ export const init = (config: Config) => {
     .join()
     .receive("ok", (resp) => {
       console.log("Joined successfully", resp);
-      config.$channel_joined.next(true);
     })
     .receive("error", (resp) => {
       console.log("Unable to join", resp);
@@ -208,7 +215,7 @@ const scene = new Scene(engine);
 
 // create a birds-eye-view pointed at the origin
 const default_position = new Vector3(0, 15, 50);
-const camera = new FreeCamera("my head", default_position, scene);
+const camera = new UniversalCamera("my head", default_position, scene);
 
 // This targets the camera to scene origin
 camera.setTarget(Vector3.Zero());
@@ -264,7 +271,7 @@ The `scene.ts` contains typical Babylon.js getting started boilerplate to setup 
 
 #### Add Systems To Orchestrator
 
-To tie all the systems together, we need to import each system into orchestrator.  Orchestrator's init function will also create the config object and pass it into every system's init function.
+To tie all the systems together, we need to import each system into orchestrator.  Orchestrator's init function will also create the config object and pass it into every system's init function.  Replace `orchestrator.ts` with the following contents:
 
 ```typescript
 import * as Scene from "./systems/scene";

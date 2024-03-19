@@ -14,6 +14,22 @@ They also have a free tier with a dummy database so we can try before we buy.
 
 First sign-up for an account at https://www.gigalixir.com/
 
+## Install the Gigalixir CLI
+
+https://www.gigalixir.com/docs/cli
+
+```bash
+pip3 install -U gigalixir --user
+```
+
+## Login using the CLI
+
+```bash
+gigalixir login
+```
+
+After that you'll be able to create applications and run commands to control your account from the command line.
+
 ## Add Buildpacks
 
 Buildpacks specify what versions of software we need in their servers (containers?) in the cloud.
@@ -24,7 +40,43 @@ These are my versions
 echo "elixir_version=1.15.7" > elixir_buildpack.config
 echo "erlang_version=26.2" >> elixir_buildpack.config
 echo "node_version=21.5.0" > phoenix_static_buildpack.config
+```
 
+Gigalixer works with git so you'll need to commit the buildpack files.
+
+```bash
 git add elixir_buildpack.config phoenix_static_buildpack.config
 git commit -m "set elixir, erlang, and node version"
+```
+
+### Add deploy script
+
+Add this line into our existing assets/package.json to tell the buildpacks how to compile the assets:
+
+```bash
+  "scripts": {
+    "deploy": "cd .. && mix assets.deploy && rm -f _build/esbuild"
+  }
+```
+
+### Create gigalixir app
+
+Now create a gigalixir app, you can also pass a name using the -n flag.  You can also use the --cloud and --region to choose the cloud provider and region.  I'll create mine in the aws cloud in the us-west-2 region.
+
+```bash
+gigalixir create -n $APP_NAME --cloud aws --region us-west-2
+```
+
+For now I'll create a free tier database:
+
+```bash
+gigalixir pg:create --free
+```
+
+# Deploy
+
+Push code to gigalixir via git to deploy:
+
+```bash
+git push -u gigalixir main
 ```

@@ -80,3 +80,39 @@ Push code to gigalixir via git to deploy:
 ```bash
 git push -u gigalixir main
 ```
+
+This should compile and upload a slug.  Your app will now be hosted at:
+
+https:[your-app-name].gigalixirapp.com
+
+## Run migrations
+
+To run migrations it needs ssh keys:
+
+```bash
+gigalixir account:ssh_keys:add "$(cat ~/.ssh/YOUR-PUBLIC-KEY.pub)"
+```
+
+Then run
+
+```bash
+gigalixir ps:migrate
+```
+
+## Set host
+
+In runtime.exs find this line:
+
+```elixir
+host = System.get_env("PHX_HOST") || "example.com"
+```
+
+Since gigalixir provides us a host name like `YOUR-APP-NAME.gigalixirapp.com/` we can update the host variable by setting PHX_HOST.
+
+```bash
+gigalixir config:set PHX_HOST=YOUR-APP-NAME.gigalixirapp.com
+```
+
+
+
+If you are cloning your repo onto another computer and wish to setup gigalixir on there you just need to add the gigalixir cli then

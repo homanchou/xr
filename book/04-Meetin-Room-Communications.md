@@ -326,7 +326,7 @@ end
 
 ### Add User Token to Frontend
 
-Now we need to pass this token to JavaScript. We could add a snippet of javascript to set the token on the window object, but I'm paranoid that the evaluation order of script tags makes this vulnerable to race conditions.  I'll side step the paranoia by just injecting the token into the HTML at `root.html.heex` layout.  This is also what Phoenix itself does with the csrf_token.
+Now we need to pass this token to JavaScript. Let's injecting the token into the HTML at `root.html.heex` layout.  This is also what Phoenix itself does with the csrf_token.
 
 ```html
 <meta name="user-token" content={assigns[:user_token]} />

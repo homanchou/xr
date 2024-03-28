@@ -50,6 +50,9 @@ RUN mkdir config
 COPY config/config.exs config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
+# note: lib contains heex templates which can also impact the tailwind compilation
+COPY lib lib
+
 COPY priv priv
 
 COPY assets assets
@@ -69,14 +72,6 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | b
 
 # this command fixes node not found, by sourcing nvm.sh
 RUN . $NVM_DIR/nvm.sh && mix assets.deploy
-
-# moved this below assets, since if lib changes up higher, all subsequent layers
-# will be rebuilt, but if only lib changes below assets and assets don't change
-# then we don't need to rebuild them
-COPY lib lib
-
-# compile assets
-# RUN mix assets.deploy
 
 # Compile the release
 RUN mix compile

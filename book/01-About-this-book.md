@@ -1,15 +1,19 @@
 
 ## What this book is about
 
-This book is a how-to guide to building a fully featured VR website platform.  The journey begins from creating the project folder from scratch, taking us from humble beginnings to eventually being able to play multi-player games in VR headsets, all through the browser.
+This book is a how-to guide for building a multiplayer VR enabled website on top of Phoenix Elixir web framework and Babylon.js javascript game engine.  After finishing this book you'll be able to have full control and customization of your own VR website.  
+
+The journey begins from creating the project folder from scratch, taking us from humble beginnings to eventually being able to play multi-player games in VR headsets, all through the browser.
 
 We will build immersive experiences using Babylon.js (3D engine for the browser), Elixir (serverside language/runtime), WebRTC (voice chat and video streams) and Phoenix Channels (websocket communications).  Each chapter will build up capabilities that you would expect in a VR immersive world such as seeing each other's avatar, persisting changes made to a scene, hearing each other talk, being able to grab and throw things etc.  
 
 ## Why this book?
 
-I wanted to document my journey in trying to figure out how to make a VR enabled website.  I don't have a background in Unity or game development, but I've been developing full stack Model-View-Controller (MVC) style websites for a long time and started tinkering with Phoneix Elixir web development.  I wanted to see if it was possible to create multi-player VR web based games while embracing the web-development skills that I already had.
+3D immersive experiences in the browser today are either small toy demos created using PlayCanvas, Three.js, Babylon.js, or they are full fledged platforms like Mozilla Hubs or FrameVR.  No one is talking about adding VR to their existing website.  This probably because this is a pretty niche demand right now.
 
-Hopefully this book gives you some ideas for building your own VR enabled websites.  You can cherry pick the bits you like and leave behind designs that you disagree with.  My wish is that this book is easier to understand than just randomly digging into the code, and that readers have such a great understanding of the overall project that they feel comfortable contributing back to my open-source project.  
+I don't have a background in Unity or game development, but I've been developing full stack Model-View-Controller (MVC) style websites for a long time and started tinkering with Phoneix Elixir web development.  I wanted to see if it was possible to create multi-player VR web based games while embracing the web-development skills that I already had.
+
+Hopefully this unpopular book (consider this a long blog post) gives you some ideas for building your own VR enabled websites.  You can cherry pick the bits you like and leave behind designs that you disagree with.  My wish is that this book is easier to understand than just randomly digging into the code, and that readers have such a great understanding of the overall project that they feel comfortable contributing back to my open-source project.  
 
 ### Who is this book for?
 

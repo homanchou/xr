@@ -8,9 +8,42 @@ This sounds like a job for event sourcing.
 
 Event sourcing is simply recording all events as facts in a cronological ledger.  This historical record of all the facts is a "stream" of data called the event stream.  All clients are constantly producing events, just by entering the room and moving around.  So all clients are event producers.  From the event stream we can build "projections" or alternate representations of the state of the world.  In fact, each client is also consumer of all events that all clients have created and will create a projection of the state of the world.  Each client can be thought of as rendering an independent simulation of their world and the only thing keeping all the clients in sync is the data that is streamed to them.  
 
+
+## Defining events schema
+
+Our events will have an event name and a payload for the event.  
+
+Here are some examples of events that look like they could be published by a client:
+
+```javascript
+"item_picked_up", { "user" => "bob", "item" => "cup5" }
+"user_pressed_switch", { "user" => "tom", "switch" => "door_trigger" }
+"user_moved", { "user" => "bob", "position" => [1,2,3] }
+```
+
+This seems pretty flexible and straight forward.  It even tells a story and if we read from beginning to end we can replay an entire scene.
+
+It will also be useful to be able to order events (we'll add tiemstamps) and also a sequence number in case two events arrive at the same time.  Finally all events belong to to a room so we'll have a room_id.  But all of these events can be added on the server side.
+
+## Send events somewhere to be saved
+
+To publish events within the server side, we can just use Phoenix PubSub.  
+
+```elixir
+PubSub.broadcast(Xr.PubSub, "stream:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
+```
+In this example "stream:123" is the name of a topic.  And to subscribe and receive events from a particular topic we can just do this in a process:
+
+```elixir
+PubSub.subscribe(Xr.PubSub, "stream:123")
+```
+
+Let's create a GenServer that will receive messages on a `stream:#{room_id}` topic and just temporarily
+ store the events in the GenServer memory for now. 
+
 ## Create the Events table
 
-Let's begin by building a database table that will serve as a journal for all the events that happen in a single room.  The table will need a uuid for each event, a sequence id to order the event, timestamps, a room_id to associate all the events belonging to a room, an event name and a payload for the event.
+Saving the events into the GenServer is going to make us run out of memory, so we'll need to flush that cache to a database table that will serve as a journal for all the events that happen in a single room.  The table will need a uuid for each event, a sequence id to order the event, timestamps, a room_id to associate all the events belonging to a room, an event name and a payload for the event.
 
 This generator will create an events table and add it under the rooms context.  It will also create some basic HTML CRUD pages, but we won't end up using most of them.
 

@@ -10,10 +10,14 @@
 <.table id="rooms" rows={@rooms} row_click={&JS.navigate(~p"/rooms/#{&1}")}>
   <:col :let={room} label="Name"><%= room.name %></:col>
   <:col :let={room} label="Description"><%= room.description %></:col>
+
   <:action :let={room}>
-    <div class="sr-only">
-      <.link navigate={~p"/rooms/#{room}"}>Show</.link>
-    </div>
+    <.link navigate={~p"/rooms/#{room}"}>Enter</.link>
+  </:action>
+  <:action :let={room}>
+    <.link navigate={~p"/rooms/#{room}/events"}>Events</.link>
+  </:action>
+  <:action :let={room}>
     <.link navigate={~p"/rooms/#{room}/edit"}>Edit</.link>
   </:action>
   <:action :let={room}>

@@ -173,4 +173,8 @@ defmodule Xr.RoomsTest do
       assert position != [0, 0, 0]
     end
   end
+
+  describe "events" do
+    alias Xr.Rooms.Event
+  end
 end

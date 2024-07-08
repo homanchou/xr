@@ -447,4 +447,37 @@ defmodule Xr.Rooms do
         end
     end
   end
+
+  alias Xr.Rooms.Event
+
+  @doc """
+  Returns the list of events.
+
+  ## Examples
+
+      iex> list_events()
+      [%Event{}, ...]
+
+  """
+  def list_room_events(room_id) do
+    Repo.all(from e in Event, where: e.room_id == ^room_id, order_by: e.sequence)
+  end
+
+  @doc """
+  Creates a event.
+
+  ## Examples
+
+      iex> create_event(%{field: value})
+      {:ok, %Event{}}
+
+      iex> create_event(%{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_event(attrs \\ %{}) do
+    %Event{}
+    |> Event.changeset(attrs)
+    |> Repo.insert()
+  end
 end

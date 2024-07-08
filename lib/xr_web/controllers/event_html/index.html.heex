@@ -1,0 +1,25 @@
+<.header>
+  Listing Events
+  <:actions>
+    <.link href={~p"/events/new"}>
+      <.button>New Event</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.table id="events" rows={@events} row_click={&JS.navigate(~p"/events/#{&1}")}>
+  <:col :let={event} label="Sequence"><%= event.sequence %></:col>
+  <:col :let={event} label="Event name"><%= event.event_name %></:col>
+  <:col :let={event} label="Payload"><%= event.payload %></:col>
+  <:action :let={event}>
+    <div class="sr-only">
+      <.link navigate={~p"/events/#{event}"}>Show</.link>
+    </div>
+    <.link navigate={~p"/events/#{event}/edit"}>Edit</.link>
+  </:action>
+  <:action :let={event}>
+    <.link href={~p"/events/#{event}"} method="delete" data-confirm="Are you sure?">
+      Delete
+    </.link>
+  </:action>
+</.table>

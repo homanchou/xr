@@ -41,7 +41,10 @@ defmodule XrWeb.Router do
 
     get "/", PageController, :home
 
-    resources "/rooms", RoomController
+    resources "/rooms", RoomController do
+      resources "/events", EventController, only: [:index]
+    end
+
     # live "/rooms", RoomLive.Index, :index
     # live "/rooms/new", RoomLive.Index, :new
     # live "/rooms/:id/edit", RoomLive.Index, :edit

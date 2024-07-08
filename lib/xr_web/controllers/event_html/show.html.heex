@@ -1,0 +1,17 @@
+<.header>
+  Event <%= @event.id %>
+  <:subtitle>This is a event record from your database.</:subtitle>
+  <:actions>
+    <.link href={~p"/events/#{@event}/edit"}>
+      <.button>Edit event</.button>
+    </.link>
+  </:actions>
+</.header>
+
+<.list>
+  <:item title="Sequence"><%= @event.sequence %></:item>
+  <:item title="Event name"><%= @event.event_name %></:item>
+  <:item title="Payload"><%= @event.payload %></:item>
+</.list>
+
+<.back navigate={~p"/events"}>Back to events</.back>

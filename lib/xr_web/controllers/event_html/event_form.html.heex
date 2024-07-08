@@ -1,0 +1,10 @@
+<.simple_form :let={f} for={@changeset} action={@action}>
+  <.error :if={@changeset.action}>
+    Oops, something went wrong! Please check the errors below.
+  </.error>
+  <.input field={f[:sequence]} type="number" label="Sequence" />
+  <.input field={f[:event_name]} type="text" label="Event name" />
+  <:actions>
+    <.button>Save Event</.button>
+  </:actions>
+</.simple_form>

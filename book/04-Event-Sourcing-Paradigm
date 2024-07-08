@@ -1,0 +1,152 @@
+# The Event Sourcing Paradigm
+
+At this point we have a barebones Phoenix project, which has a room schema and CRUD pages.  A room has an id, name and description.  The Phoenix generators created some basic CRUD pages which allow us to create, update and delete rooms using the HTML forms provided.  Now what?
+
+Let's take a step back and examine the hard problem we're trying solve.  Each client/player (I will use client and player interchangeably) will visit the "show" path for the room `/rooms/:id` and expect to "see" something.  They will also expect to "see" each other.  And when players manipulate the environment (pick up and throw an object, kill a monster, open a door, pickup a key), we expect other players to see those changes in their own respective browsers.  So the big problem definition we have is a syncronization problem between the clients.  How do we provide all clients with the current state of the world, take input changes from all clients, and syncronize those changes back out to each client?
+
+This sounds like a job for event sourcing.
+
+Event sourcing is simply recording all events as facts in a cronological ledger.  This historical record of all the facts is a "stream" of data called the event stream.  All clients are constantly producing events, just by entering the room and moving around.  So all clients are event producers.  From the event stream we can build "projections" or alternate representations of the state of the world.  In fact, each client is also consumer of all events that all clients have created and will create a projection of the state of the world.  Each client can be thought of as rendering an independent simulation of their world and the only thing keeping all the clients in sync is the data that is streamed to them.  
+
+## Create the Events table
+
+Let's begin by building a database table that will serve as a journal for all the events that happen in a single room.  The table will need a uuid for each event, a sequence id to order the event, timestamps, a room_id to associate all the events belonging to a room, an event name and a payload for the event.
+
+This generator will create an events table and add it under the rooms context.  It will also create some basic HTML CRUD pages, but we won't end up using most of them.
+
+```bash
+mix phx.gen.html Rooms Event events room_id:references:rooms sequence:integer event_name:string payload:map --binary-id
+```
+
+Make the following changes to the migration file:
+
+```elixir
+defmodule Xr.Repo.Migrations.CreateEvents do
+  use Ecto.Migration
+
+  def change do
+    create table(:events, primary_key: false) do
+      add :id, :binary_id, primary_key: true
+      add :sequence, :integer, null: false, default: 0
+      add :event_name, :string, null: false
+      add :payload, :map, default: %{}
+      add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
+
+      timestamps(type: :utc_datetime)
+    end
+
+    create index(:events, [:room_id])
+  end
+end
+
+```
+
+Run the migration:
+
+```bash
+mix ecto.migrate
+```
+
+## Add an Events UI Page
+
+Place a nested router under rooms, because events only make sense under the context of a room:
+
+```diff
+ 
+-    resources "/rooms", RoomController
++    resources "/rooms", RoomController do
++      resources "/events", EventController, only: [:index]
++    end
++
+```
+
+Update the HTML on the rooms index page to link to the events index controller so we have the ability to view any events we create in a room.
+
+```diff
+diff --git a/lib/xr_web/controllers/room_html/index.html.heex b/lib/xr_web/controllers/room_html/index.html.heex
+index acc5700..d898f67 100644
+--- a/lib/xr_web/controllers/room_html/index.html.heex
++++ b/lib/xr_web/controllers/room_html/index.html.heex
+@@ -10,10 +10,14 @@
+ <.table id="rooms" rows={@rooms} row_click={&JS.navigate(~p"/rooms/#{&1}")}>
+   <:col :let={room} label="Name"><%= room.name %></:col>
+   <:col :let={room} label="Description"><%= room.description %></:col>
++
++  <:action :let={room}>
++    <.link navigate={~p"/rooms/#{room}"}>Enter</.link>
++  </:action>
++  <:action :let={room}>
++    <.link navigate={~p"/rooms/#{room}/events"}>Events</.link>
++  </:action>
+   <:action :let={room}>
+-    <div class="sr-only">
+-      <.link navigate={~p"/rooms/#{room}"}>Show</.link>
+-    </div>
+     <.link navigate={~p"/rooms/#{room}/edit"}>Edit</.link>
+   </:action>
+   <:action :let={room}>
+```
+
+## Create some events every time the room is created
+
+
+The generator added some functions to the rooms.ex context file.  We can remove those and replace with just this:
+
+```elixir
+  alias Xr.Rooms.Event
+
+  @doc """
+  Returns the list of events.
+
+  ## Examples
+
+      iex> list_events()
+      [%Event{}, ...]
+
+  """
+  def list_room_events(room_id) do
+    Repo.all(from e in Event, where: e.room_id == ^room_id, order_by: e.sequence)
+  end
+
+  @doc """
+  Creates a event.
+
+  ## Examples
+
+      iex> create_event(%{field: value})
+      {:ok, %Event{}}
+
+      iex> create_event(%{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_event(attrs \\ %{}) do
+    %Event{}
+    |> Event.changeset(attrs)
+    |> Repo.insert()
+  end
+  ```
+
+  When we list events it only makes sense to do so in the context of a room, so we need a list_room_events function that takes a room_id.  Next we can get rid of any update or delete event functions because events will be immutable and never change.  They are facts that happened at a point in time.
+
+  Let's also remove all the event tests from the rooms test file and fix the function name in the EventController.
+
+```elixir
+defmodule XrWeb.EventController do
+  use XrWeb, :controller
+
+  alias Xr.Rooms
+
+  def index(conn, %{"room_id" => room_id}) do
+    events = Rooms.list_room_events(room_id)
+    render(conn, :index, events: events)
+  end
+end
+
+```
+
+
+
+Our room doesn't look 3D yet.  It's just a record in a table now.  To render a 3D scene, we need some things to render.  Suppose different rooms contained different objects like different colored boxes.  Then when we go to the "show" path `/rooms/:id`, instead of showing the room name and description, we can render a Babylon.js 3D scene with all the objects in the room.  But we'll need to store different content for each room, so we'll need a table for that.
+
+But before we even get to that, let's take a step back and 

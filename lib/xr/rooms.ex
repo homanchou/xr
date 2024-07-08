@@ -480,4 +480,18 @@ defmodule Xr.Rooms do
     |> Event.changeset(attrs)
     |> Repo.insert()
   end
+
+  @doc """
+  Batch insert a list of events
+  """
+
+  def insert_events(_room_id, []) do
+    :noop
+  end
+
+  def insert_events(room_id, attributes_for_events) do
+    # add a room_id for all events
+    events = Enum.map(attributes_for_events, fn e -> Map.put(e, :room_id, room_id) end)
+    Repo.insert_all(Event, events)
+  end
 end

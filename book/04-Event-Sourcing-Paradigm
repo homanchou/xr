@@ -30,16 +30,102 @@ It will also be useful to be able to order events (we'll add tiemstamps) and als
 To publish events within the server side, we can just use Phoenix PubSub.  
 
 ```elixir
-PubSub.broadcast(Xr.PubSub, "stream:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
+PubSub.broadcast(Xr.PubSub, "room_stream:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
 ```
 In this example "stream:123" is the name of a topic.  And to subscribe and receive events from a particular topic we can just do this in a process:
 
 ```elixir
-PubSub.subscribe(Xr.PubSub, "stream:123")
+PubSub.subscribe(Xr.PubSub, "room_stream:123")
 ```
 
 Let's create a GenServer that will receive messages on a `stream:#{room_id}` topic and just temporarily
  store the events in the GenServer memory for now. 
+
+
+Create a new folder at `lib/xr/servers` where we'll put our genserver code.
+
+At a new file there called `event_dispatcher.ex` and paste the following:
+
+```elixir
+defmodule Xr.Servers.EventDispatcher do
+  use GenServer
+  alias Phoenix.PubSub
+
+  def start_link(room_id) do
+    GenServer.start_link(__MODULE__, {:ok, room_id})
+  end
+
+  def init({:ok, room_id}) do
+    # subscribe to the room stream
+    PubSub.subscribe(Xr.PubSub, "room_stream:#{room_id}")
+
+    {:ok, %{room_id: room_id, events: [], next_sequence: 0}}
+  end
+
+  # responds to incoming message from the room stream
+  def handle_info({event_name, payload}, state) do
+    state = %{
+      state
+      | next_sequence: state.next_sequence + 1,
+        events: [
+          %{sequence: state.next_sequence, event_name: event_name, payload: payload}
+          | state.events
+        ]
+    }
+
+    {:noreply, state}
+  end
+end
+
+```
+
+Here is a corresponding test that illustrates that this GenServer stashes events into its state right now:
+
+```elixir
+defmodule Xr.Servers.EventDispatcherTest do
+  use ExUnit.Case, async: true
+
+  alias Xr.Servers.EventDispatcher
+  alias Phoenix.PubSub
+
+  test "receives and stores events in its state" do
+    room_id = "abc"
+
+    # Start the EventDispatcher GenServer
+    {:ok, pid} = EventDispatcher.start_link(room_id)
+
+    # Broadcast an event
+    Phoenix.PubSub.broadcast(
+      Xr.PubSub,
+      "room_stream:#{room_id}",
+      {"user_moved", %{"user_id" => "tom2", "position" => [1, 2, 3]}}
+    )
+
+    # Broadcast another event
+    Phoenix.PubSub.broadcast(
+      Xr.PubSub,
+      "room_stream:#{room_id}",
+      {"user_moved", %{"user_id" => "bob", "position" => [11, 12, 13]}}
+    )
+
+    # Allow some time for the message to be processed
+    :timer.sleep(100)
+
+    # Fetch the state of the GenServer
+    state = :sys.get_state(pid)
+
+    assert state.room_id == room_id
+    assert state.next_sequence == 2
+    assert length(state.events) == 2
+
+    event = hd(state.events)
+    assert event.sequence == 1
+    assert event.event_name == "user_moved"
+    assert event.payload == %{"user_id" => "bob", "position" => [11, 12, 13]}
+  end
+end
+```
+
 
 ## Create the Events table
 
@@ -74,11 +160,102 @@ end
 
 ```
 
+Make the following changes to the schema file:
+
+```elixir
+defmodule Xr.Rooms.Event do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+  schema "events" do
+    field :payload, :map
+    field :sequence, :integer
+    field :event_name, :string
+    field :room_id, :string
+
+    timestamps(type: :utc_datetime)
+  end
+
+  @doc false
+  def changeset(event, attrs) do
+    event
+    |> cast(attrs, [:sequence, :event_name, :payload])
+    |> validate_required([:sequence, :event_name])
+  end
+end
+
+```
+
 Run the migration:
 
 ```bash
 mix ecto.migrate
 ```
+
+## Modify GenServer to batch save 
+
+Now we have a table.  Let's modify the GenServer to periodically stash the events into the events table.  The generator that we ran earlier created some functions in the rooms context.  Most of them we do not need. 
+
+Edit the rooms.ex context file and remove the update and delete event functions so that you're left with this:
+
+```elixir
+  alias Xr.Rooms.Event
+
+  @doc """
+  Returns the list of events.
+
+  ## Examples
+
+      iex> list_events()
+      [%Event{}, ...]
+
+  """
+  def list_room_events(room_id) do
+    Repo.all(from e in Event, where: e.room_id == ^room_id, order_by: e.sequence)
+  end
+
+  @doc """
+  Creates a event.
+
+  ## Examples
+
+      iex> create_event(%{field: value})
+      {:ok, %Event{}}
+
+      iex> create_event(%{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def create_event(attrs \\ %{}) do
+    %Event{}
+    |> Event.changeset(attrs)
+    |> Repo.insert()
+  end
+  ```
+
+When we list events it only makes sense to do so in the context of a room, so we replaced the list_events function with a list_room_events function that takes a room_id.  
+Be sure to also remove all the event tests from the rooms test file and fix the function name in the EventController.
+
+```elixir
+defmodule XrWeb.EventController do
+  use XrWeb, :controller
+
+  alias Xr.Rooms
+
+  def index(conn, %{"room_id" => room_id}) do
+    events = Rooms.list_room_events(room_id)
+    render(conn, :index, events: events)
+  end
+end
+
+```
+
+Next let's use the create_event function in the GenServer.
+
+
+
 
 ## Add an Events UI Page
 
@@ -122,64 +299,3 @@ index acc5700..d898f67 100644
 
 ## Create some events every time the room is created
 
-
-The generator added some functions to the rooms.ex context file.  We can remove those and replace with just this:
-
-```elixir
-  alias Xr.Rooms.Event
-
-  @doc """
-  Returns the list of events.
-
-  ## Examples
-
-      iex> list_events()
-      [%Event{}, ...]
-
-  """
-  def list_room_events(room_id) do
-    Repo.all(from e in Event, where: e.room_id == ^room_id, order_by: e.sequence)
-  end
-
-  @doc """
-  Creates a event.
-
-  ## Examples
-
-      iex> create_event(%{field: value})
-      {:ok, %Event{}}
-
-      iex> create_event(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def create_event(attrs \\ %{}) do
-    %Event{}
-    |> Event.changeset(attrs)
-    |> Repo.insert()
-  end
-  ```
-
-  When we list events it only makes sense to do so in the context of a room, so we need a list_room_events function that takes a room_id.  Next we can get rid of any update or delete event functions because events will be immutable and never change.  They are facts that happened at a point in time.
-
-  Let's also remove all the event tests from the rooms test file and fix the function name in the EventController.
-
-```elixir
-defmodule XrWeb.EventController do
-  use XrWeb, :controller
-
-  alias Xr.Rooms
-
-  def index(conn, %{"room_id" => room_id}) do
-    events = Rooms.list_room_events(room_id)
-    render(conn, :index, events: events)
-  end
-end
-
-```
-
-
-
-Our room doesn't look 3D yet.  It's just a record in a table now.  To render a 3D scene, we need some things to render.  Suppose different rooms contained different objects like different colored boxes.  Then when we go to the "show" path `/rooms/:id`, instead of showing the room name and description, we can render a Babylon.js 3D scene with all the objects in the room.  But we'll need to store different content for each room, so we'll need a table for that.
-
-But before we even get to that, let's take a step back and 

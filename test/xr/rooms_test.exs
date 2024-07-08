@@ -60,8 +60,6 @@ defmodule Xr.RoomsTest do
   # end
 
   describe "entities" do
-    alias Xr.Rooms.Room
-
     import Xr.RoomsFixtures
 
     # when a room is created we need a function to call
@@ -175,6 +173,40 @@ defmodule Xr.RoomsTest do
   end
 
   describe "events" do
+    import Xr.RoomsFixtures
+
     alias Xr.Rooms.Event
+
+    test "batch inserts a list of events" do
+      room = room_fixture()
+      room_id = room.id
+
+      events_attrs = [
+        %{
+          sequence: 0,
+          event_name: "user_joined",
+          payload: %{"user_id" => "user1"},
+          inserted_at: ~U[2023-07-07T12:34:56Z],
+          updated_at: ~U[2023-07-07T12:34:56Z]
+        },
+        %{
+          sequence: 10,
+          event_name: "user_left",
+          payload: %{"user_id" => "user2"},
+          inserted_at: ~U[2023-07-07T12:34:56Z],
+          updated_at: ~U[2023-07-07T12:34:56Z]
+        }
+      ]
+
+      Xr.Rooms.insert_events(room_id, events_attrs)
+
+      inserted_events = from(e in Event, where: e.room_id == ^room_id) |> Repo.all()
+
+      assert length(inserted_events) == 2
+
+      assert Enum.any?(inserted_events, fn e -> e.event_name == "user_joined" end)
+      assert Enum.any?(inserted_events, fn e -> e.event_name == "user_left" end)
+      assert Enum.all?(inserted_events, fn e -> e.room_id == room_id end)
+    end
   end
 end

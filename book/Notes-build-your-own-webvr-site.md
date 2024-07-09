@@ -397,7 +397,7 @@ defmodule Xr.Repo.Migrations.CreateRooms do
       add :name, :string
       add :description, :string
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
   end
 end
@@ -1405,7 +1405,7 @@ defmodule Xr.Repo.Migrations.CreateComponents do
       add :component, :map
       add :room_id, references(:rooms, on_delete: :delete_all, type: :binary_id)
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
 
     create index(:components, [:room_id, :entity_id])

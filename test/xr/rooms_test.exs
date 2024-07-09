@@ -186,15 +186,15 @@ defmodule Xr.RoomsTest do
           sequence: 0,
           event_name: "user_joined",
           payload: %{"user_id" => "user1"},
-          inserted_at: ~U[2023-07-07T12:34:56Z],
-          updated_at: ~U[2023-07-07T12:34:56Z]
+          inserted_at: ~U[2023-07-07T12:34:56.000000Z],
+          updated_at: ~U[2023-07-07T12:34:56.000000Z]
         },
         %{
           sequence: 10,
           event_name: "user_left",
           payload: %{"user_id" => "user2"},
-          inserted_at: ~U[2023-07-07T12:34:56Z],
-          updated_at: ~U[2023-07-07T12:34:56Z]
+          inserted_at: ~U[2023-07-07T12:34:56.000000Z],
+          updated_at: ~U[2023-07-07T12:34:56.000000Z]
         }
       ]
 

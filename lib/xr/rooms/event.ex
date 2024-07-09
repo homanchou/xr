@@ -10,7 +10,7 @@ defmodule Xr.Rooms.Event do
     field :event_name, :string
     field :room_id, :string
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :utc_datetime_usec)
   end
 
   @doc false

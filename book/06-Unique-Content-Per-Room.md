@@ -52,7 +52,7 @@ defmodule Xr.Repo.Migrations.CreateComponents do
       add :component_name, :string, null: false
       add :component, :map, null: false, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
 
     create index(:components, [:entity_id, :component_name], unique: true)

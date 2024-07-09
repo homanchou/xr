@@ -1,12 +1,12 @@
 # The Event Sourcing Paradigm
 
-At this point we have a barebones Phoenix project, which has a room schema and CRUD pages.  A room has an id, name and description.  The Phoenix generators created some basic CRUD pages which allow us to create, update and delete rooms using the HTML forms provided.  Now what?
+At this point we have a barebones Phoenix project, with a rooms table.  Now what?
 
-Let's take a step back and examine the hard problem we're trying solve.  Each client/player (I will use client and player interchangeably) will visit the "show" path for the room `/rooms/:id` and expect to "see" something.  They will also expect to "see" each other.  And when players manipulate the environment (pick up and throw an object, kill a monster, open a door, pickup a key), we expect other players to see those changes in their own respective browsers.  So the big problem definition we have is a syncronization problem between the clients.  How do we provide all clients with the current state of the world, take input changes from all clients, and syncronize those changes back out to each client?
+Let's take a step back and examine the hard problem we're trying solve.  Each client/player (I will use client and player interchangeably) will visit the "show" path for the room `/rooms/:id` and expect to "see" something: A state of the world.  They will also expect to "see" each other.  And when players manipulate the environment (pick up and throw an object, kill a monster, open a door, pickup a key), we expect other players to see those changes in their own respective browsers.  So the big problem definition we have is a syncronization problem between the clients.  How do we provide all clients with the current state of the world, take input changes from all clients, and syncronize those changes back out to each client?
 
 This sounds like a job for event sourcing.
 
-Event sourcing is simply recording all events as facts in a cronological ledger.  This historical record of all the facts is a "stream" of data called the event stream.  All clients are constantly producing events, just by entering the room and moving around.  So all clients are event producers.  From the event stream we can build "projections" or alternate representations of the state of the world.  In fact, each client is also consumer of all events that all clients have created and will create a projection of the state of the world.  Each client can be thought of as rendering an independent simulation of their world and the only thing keeping all the clients in sync is the data that is streamed to them.  
+Event sourcing is simply recording all events as facts in a cronological ledger.  This historical record of all the facts is a "stream" of data called the event stream.  All clients are constantly producing events, just by entering the room and moving around. And all clients are also receiving the collective stream of room events so that they can update their local simulation of the world.  
 
 
 ## Defining events schema
@@ -21,26 +21,39 @@ Here are some examples of events that look like they could be published by a cli
 "user_moved", { "user" => "bob", "position" => [1,2,3] }
 ```
 
-This seems pretty flexible and straight forward.  It even tells a story and if we read from beginning to end we can replay an entire scene.
+These events consist of an event_name and some kind of payload.  This seems pretty flexible and straight forward.  It even tells a story and if we read from beginning to end we can replay an entire scene.
 
-It will also be useful to be able to order events (we'll add tiemstamps) and also a sequence number in case two events arrive at the same time.  Finally all events belong to to a room so we'll have a room_id.  But all of these events can be added on the server side.
+It will also be useful to be able to order events (we'll add timestamps) and also a sequence number in case two events arrive at the same time.  Finally all events belong to to a room so we'll have a room_id.  But all of these events can be added on the server side.
 
 ## Send events somewhere to be saved
 
-To publish events within the server side, we can just use Phoenix PubSub.  
+To publish events within the server side, we can just use Phoenix PubSub and send a tuple {event_name, payload}.  
 
 ```elixir
 PubSub.broadcast(Xr.PubSub, "room_stream:123", {"user_moved", %{"user_id" => "tom", "pose" => ...}})
 ```
-In this example "stream:123" is the name of a topic.  And to subscribe and receive events from a particular topic we can just do this in a process:
+In this example "room_stream:123" is the name of a topic.  And to subscribe and receive events from a particular topic we can just do this in a process:
 
 ```elixir
 PubSub.subscribe(Xr.PubSub, "room_stream:123")
 ```
 
-Let's create a GenServer that will receive messages on a `stream:#{room_id}` topic and just temporarily
- store the events in the GenServer memory for now. 
+We're going to create a genserver at `lib/xr/servers/event_dispatcher.ex` to subscribe to the PubSub topic for a room.  Then batch the events every 100ms to a database table of events.  The GenServer will use a local registry so that the GenServer cannot be started twice.  We'll also create a supervisor to supervise the genserver.  Here is the finished code snippets.
 
+
+## Add Local Registry for Unique GenServer Names
+
+This GenServer is un-named right now, so we can't talk to it unless we have its pid.  But let's say we don't know its pid and we'd like to lookup this particular GenServer by a name.  A registry let's us do that.  The registry inserts a mapping between a name and a pid and also ensures that we won't accidentally start two of the same servers for the same room.  
+
+Create a Registry by adding this line in the `applications.ex` children's list after the `Endpoint`:
+
+```elixir
+ {Registry, keys: :unique, name: Xr.RoomsRegistry},
+```
+
+Now we can name each process that is created from any GenServer we create using the `via_tuple` API.  Add this via_tuple function to our GenServer
+
+## Add Event Dispatcher GenServer
 
 Create a new folder at `lib/xr/servers` where we'll put our genserver code.
 
@@ -51,15 +64,29 @@ defmodule Xr.Servers.EventDispatcher do
   use GenServer
   alias Phoenix.PubSub
 
+  # 100ms or 10 times per second
+  @flush_interval 100
+
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "event_dispatcher:#{room_id}"}}
+  end
+
   def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id})
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
   end
 
   def init({:ok, room_id}) do
     # subscribe to the room stream
     PubSub.subscribe(Xr.PubSub, "room_stream:#{room_id}")
 
-    {:ok, %{room_id: room_id, events: [], next_sequence: 0}}
+    # create interval timer
+
+    :timer.send_interval(@flush_interval, self(), :flush)
+
+    # get max sequence from events table
+    last_sequence = Xr.Rooms.max_sequence(room_id) || 0
+
+    {:ok, %{room_id: room_id, events: [], next_sequence: last_sequence + 1}}
   end
 
   # responds to incoming message from the room stream
@@ -68,16 +95,65 @@ defmodule Xr.Servers.EventDispatcher do
       state
       | next_sequence: state.next_sequence + 1,
         events: [
-          %{sequence: state.next_sequence, event_name: event_name, payload: payload}
+          %{
+            sequence: state.next_sequence,
+            event_name: event_name,
+            payload: payload,
+            inserted_at: DateTime.utc_now(),
+            updated_at: DateTime.utc_now()
+          }
           | state.events
         ]
     }
 
     {:noreply, state}
   end
+
+  def handle_info(:flush, state) do
+    Xr.Rooms.insert_events(state.room_id, state.events)
+
+    {:noreply, %{state | events: []}}
+  end
 end
 
 ```
+
+## Add Supervisor
+
+Here is the supervisor at `lib/xr/servers/rooms_supervisor.ex`:
+
+```elixir
+defmodule Xr.Servers.RoomsSupervisor do
+  use DynamicSupervisor
+
+  def start_link(_arg) do
+    DynamicSupervisor.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  def init(:ok) do
+    DynamicSupervisor.init(strategy: :one_for_one)
+  end
+
+  def start_room(room_id) do
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EventDispatcher, room_id})
+  end
+
+  def stop_room(room_id) do
+    DynamicSupervisor.terminate_child(
+      __MODULE__,
+      Xr.Servers.EntitiesDiff.via_tuple(room_id) |> GenServer.whereis()
+    )
+
+    DynamicSupervisor.terminate_child(
+      __MODULE__,
+      Xr.Servers.EntitiesState.via_tuple(room_id) |> GenServer.whereis()
+    )
+  end
+end
+
+
+```
+
 
 Here is a corresponding test that illustrates that this GenServer stashes events into its state right now:
 
@@ -129,8 +205,6 @@ end
 
 ## Create the Events table
 
-Saving the events into the GenServer is going to make us run out of memory, so we'll need to flush that cache to a database table that will serve as a journal for all the events that happen in a single room.  The table will need a uuid for each event, a sequence id to order the event, timestamps, a room_id to associate all the events belonging to a room, an event name and a payload for the event.
-
 This generator will create an events table and add it under the rooms context.  It will also create some basic HTML CRUD pages, but we won't end up using most of them.
 
 ```bash
@@ -151,12 +225,13 @@ defmodule Xr.Repo.Migrations.CreateEvents do
       add :payload, :map, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:events, [:room_id])
+    create index(:events, [:room_id, :sequence], unique: true)
   end
 end
+
 
 ```
 
@@ -175,7 +250,7 @@ defmodule Xr.Rooms.Event do
     field :event_name, :string
     field :room_id, :string
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :utc_datetime_usec)
   end
 
   @doc false
@@ -185,6 +260,7 @@ defmodule Xr.Rooms.Event do
     |> validate_required([:sequence, :event_name])
   end
 end
+
 
 ```
 
@@ -201,6 +277,7 @@ Now we have a table.  Let's modify the GenServer to periodically stash the event
 Edit the rooms.ex context file and remove the update and delete event functions so that you're left with this:
 
 ```elixir
+
   alias Xr.Rooms.Event
 
   @doc """
@@ -217,23 +294,23 @@ Edit the rooms.ex context file and remove the update and delete event functions 
   end
 
   @doc """
-  Creates a event.
-
-  ## Examples
-
-      iex> create_event(%{field: value})
-      {:ok, %Event{}}
-
-      iex> create_event(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
+  Batch insert a list of events
   """
-  def create_event(attrs \\ %{}) do
-    %Event{}
-    |> Event.changeset(attrs)
-    |> Repo.insert()
+
+  def insert_events(_room_id, []) do
+    :noop
   end
-  ```
+
+  def insert_events(room_id, attributes_for_events) do
+    # add a room_id for all events
+    events = Enum.map(attributes_for_events, fn e -> Map.put(e, :room_id, room_id) end)
+    Repo.insert_all(Event, events)
+  end
+
+  def max_sequence(room_id) do
+    Repo.one(from e in Event, where: e.room_id == ^room_id, select: max(e.sequence))
+  end
+```
 
 When we list events it only makes sense to do so in the context of a room, so we replaced the list_events function with a list_room_events function that takes a room_id.  
 Be sure to also remove all the event tests from the rooms test file and fix the function name in the EventController.
@@ -252,9 +329,23 @@ end
 
 ```
 
-Next let's use the create_event function in the GenServer.
+## Launch EventDispatcher GenServer when we enter the room
 
+```elixir
+  def show(conn, %{"id" => id}) do
+    case Rooms.get_room(id) do
+      nil ->
+        conn
+        |> put_flash(:error, "No such room \"#{id}\"")
+        |> redirect(to: ~p"/rooms")
 
+      room ->
+        Xr.Servers.RoomsSupervisor.start_room(room.id)
+
+        render(conn, :show, orchestrator: true, room: room, entities: initial_snapshot.data)
+    end
+  end
+```
 
 
 ## Add an Events UI Page
@@ -297,5 +388,6 @@ index acc5700..d898f67 100644
    <:action :let={room}>
 ```
 
-## Create some events every time the room is created
+## Summary
 
+In this chapter we created a registry for rooms, a rooms supervisor, a GenServer to handle room events, and an events table to stash events.  We also created a frontend display to show some events.

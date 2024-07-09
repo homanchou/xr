@@ -5,8 +5,12 @@ defmodule Xr.Servers.EventDispatcher do
   # 100ms or 10 times per second
   @flush_interval 100
 
+  def via_tuple(room_id) do
+    {:via, Registry, {Xr.RoomsRegistry, "event_dispatcher:#{room_id}"}}
+  end
+
   def start_link(room_id) do
-    GenServer.start_link(__MODULE__, {:ok, room_id})
+    GenServer.start_link(__MODULE__, {:ok, room_id}, name: via_tuple(room_id))
   end
 
   def init({:ok, room_id}) do
@@ -17,7 +21,10 @@ defmodule Xr.Servers.EventDispatcher do
 
     :timer.send_interval(@flush_interval, self(), :flush)
 
-    {:ok, %{room_id: room_id, events: [], next_sequence: 0}}
+    # get max sequence from events table
+    last_sequence = Xr.Rooms.max_sequence(room_id) || 0
+
+    {:ok, %{room_id: room_id, events: [], next_sequence: last_sequence + 1}}
   end
 
   # responds to incoming message from the room stream
@@ -30,8 +37,8 @@ defmodule Xr.Servers.EventDispatcher do
             sequence: state.next_sequence,
             event_name: event_name,
             payload: payload,
-            inserted_at: DateTime.utc_now(:second),
-            updated_at: DateTime.utc_now(:second)
+            inserted_at: DateTime.utc_now(),
+            updated_at: DateTime.utc_now()
           }
           | state.events
         ]

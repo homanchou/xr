@@ -9,10 +9,7 @@ defmodule Xr.Utils do
   to_room_stream pipes an event to the room stream on Phoneix pubsub
   """
   def to_room_stream(room_id, event_name, payload) do
-    Phoenix.PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", %{
-      "event" => event_name,
-      "payload" => payload
-    })
+    Phoenix.PubSub.broadcast(Xr.PubSub, "room_stream:#{room_id}", {event_name, payload})
   end
 
   @doc """

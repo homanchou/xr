@@ -147,7 +147,7 @@ defmodule Xr.Repo.Migrations.CreateRooms do
       add :name, :string
       add :description, :string
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
   end
 end
@@ -176,7 +176,7 @@ defmodule Xr.Rooms.Room do
     field :name, :string
     field :description, :string
 
-    timestamps(type: :utc_datetime)
+    timestamps(type: :utc_datetime_usec)
   end
 
   @doc false

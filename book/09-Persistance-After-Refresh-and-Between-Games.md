@@ -65,7 +65,7 @@ We can create a new migration (I'm just updating the same one since I'm lazy and
 
 ```elixir
     ...
-    add :deleted_at, :utc_datetime, null: true, default: nil
+    add :deleted_at, :utc_datetime_usec, null: true, default: nil
     ...
 ```
 
@@ -215,7 +215,7 @@ defmodule Xr.Repo.Migrations.CreateSnippets do
       add :data, :map, null: false, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
 
     create index(:snippets, [:room_id])

@@ -9,9 +9,9 @@ defmodule Xr.Repo.Migrations.CreateEvents do
       add :payload, :map, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
 
-      timestamps(type: :utc_datetime)
+      timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:events, [:room_id])
+    create index(:events, [:room_id, :sequence], unique: true)
   end
 end

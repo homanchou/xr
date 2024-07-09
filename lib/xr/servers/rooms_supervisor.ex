@@ -10,8 +10,9 @@ defmodule Xr.Servers.RoomsSupervisor do
   end
 
   def start_room(room_id) do
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesDiff, room_id})
-    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesState, room_id})
+    DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EventDispatcher, room_id})
+    # DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesDiff, room_id})
+    # DynamicSupervisor.start_child(__MODULE__, {Xr.Servers.EntitiesState, room_id})
   end
 
   def stop_room(room_id) do

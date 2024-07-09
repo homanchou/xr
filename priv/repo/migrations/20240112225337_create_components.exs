@@ -8,8 +8,8 @@ defmodule Xr.Repo.Migrations.CreateComponents do
       add :component_name, :string, null: false
       add :component, :map, null: false, default: %{}
       add :room_id, references(:rooms, on_delete: :delete_all, type: :string)
-      add :deleted_at, :utc_datetime, null: true, default: nil
-      timestamps(type: :utc_datetime)
+      add :deleted_at, :utc_datetime_usec, null: true, default: nil
+      timestamps(type: :utc_datetime_usec)
     end
 
     create index(:components, [:room_id, :entity_id])

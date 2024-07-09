@@ -464,24 +464,6 @@ defmodule Xr.Rooms do
   end
 
   @doc """
-  Creates a event.
-
-  ## Examples
-
-      iex> create_event(%{field: value})
-      {:ok, %Event{}}
-
-      iex> create_event(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def create_event(attrs \\ %{}) do
-    %Event{}
-    |> Event.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
   Batch insert a list of events
   """
 
@@ -493,5 +475,9 @@ defmodule Xr.Rooms do
     # add a room_id for all events
     events = Enum.map(attributes_for_events, fn e -> Map.put(e, :room_id, room_id) end)
     Repo.insert_all(Event, events)
+  end
+
+  def max_sequence(room_id) do
+    Repo.one(from e in Event, where: e.room_id == ^room_id, select: max(e.sequence))
   end
 end

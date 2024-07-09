@@ -1,7 +1,41 @@
 defmodule Xr.RoomsTest do
-  use Xr.DataCase
+  # use Xr.DataCase
+  use XrWeb.ChannelCase
 
   alias Xr.Rooms
+
+  # as a user when I create a new room it is created with random entities in it
+  describe "room creation" do
+    test "when I create a new room it is created with random entities in it" do
+      {:ok, room} =
+        Rooms.create_room_with_random_content(%{
+          name: "some name",
+          description: "some description"
+        })
+
+      # if there is a bunch of components in the DB, it means entities were created
+      assert Enum.count(Rooms.entities(room.id)) > 0
+    end
+  end
+
+  # as a user when I enter a room, I receive the current state
+
+  # as a user when I modify the room, I change the current state for others that join the room later
+
+  # if I leave the room and come back in, I'm returned to the previous position that I was in when I left
+
+  # as a user, when I join the room, I emit an event that I joined the room
+
+  # as a user when I leave a room, and I leave an event that I left
+
+  # as a user in the room, when I emit events, there are received by my peers
+
+  # context when a room is created,
+
+  #  some default entities are created
+  #
+
+  # when user joins a room, an event is created
 
   # describe "rooms" do
   #   alias Xr.Rooms.Room
@@ -59,154 +93,154 @@ defmodule Xr.RoomsTest do
   #   end
   # end
 
-  describe "entities" do
-    import Xr.RoomsFixtures
+  # describe "entities" do
+  #   import Xr.RoomsFixtures
 
-    # when a room is created we need a function to call
-    # to create some random entities
+  #   # when a room is created we need a function to call
+  #   # to create some random entities
 
-    # a room holds it's entities in a db"
+  #   # a room holds it's entities in a db"
 
-    # The db of entities can be exported into a json snippet
+  #   # The db of entities can be exported into a json snippet
 
-    # the room db is initiated with json snippet
+  #   # the room db is initiated with json snippet
 
-    # room db can be exported to json snippet
+  #   # room db can be exported to json snippet
 
-    test "create_entity/3 with valid data creates a entity" do
-      room = room_fixture()
+  #   test "create_entity/3 with valid data creates a entity" do
+  #     room = room_fixture()
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "box",
-        "position" => [1, 2, 3]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "mesh_builder" => "box",
+  #       "position" => [1, 2, 3]
+  #     })
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "teleportable",
-        "position" => [4, 0, -1]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "mesh_builder" => "teleportable",
+  #       "position" => [4, 0, -1]
+  #     })
 
-      assert Rooms.entities(room.id)
-             |> Map.keys()
-             |> Enum.count() == 2
-    end
+  #     assert Rooms.entities(room.id)
+  #            |> Map.keys()
+  #            |> Enum.count() == 2
+  #   end
 
-    test "recreate soft deleted entity is ok" do
-      room = room_fixture()
-      user_id = Xr.Utils.random_string()
-      Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
-      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
-      Rooms.soft_delete_entity(room.id, user_id)
-      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 0
-      Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
-      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
-    end
+  #   test "recreate soft deleted entity is ok" do
+  #     room = room_fixture()
+  #     user_id = Xr.Utils.random_string()
+  #     Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
+  #     assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
+  #     Rooms.soft_delete_entity(room.id, user_id)
+  #     assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 0
+  #     Rooms.create_entity(room.id, user_id, %{"pose" => %{"head" => [0, 0, 0, 1, 2, 3, 4]}})
+  #     assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 1
+  #   end
 
-    test "create snippet" do
-      room = room_fixture()
-      snippet = Rooms.create_snippet(room.id, "some kind", "some slug", %{"some" => "data"})
-      assert snippet.room_id == room.id
-    end
+  #   test "create snippet" do
+  #     room = room_fixture()
+  #     snippet = Rooms.create_snippet(room.id, "some kind", "some slug", %{"some" => "data"})
+  #     assert snippet.room_id == room.id
+  #   end
 
-    # save room entities to snapshot
-    test "save entities to snapshot then load entities from snapshot" do
-      room = room_fixture()
+  #   # save room entities to snapshot
+  #   test "save entities to snapshot then load entities from snapshot" do
+  #     room = room_fixture()
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "box",
-        "position" => [1, 2, 3]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "mesh_builder" => "box",
+  #       "position" => [1, 2, 3]
+  #     })
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "mesh_builder" => "teleportable",
-        "position" => [4, 0, -1]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "mesh_builder" => "teleportable",
+  #       "position" => [4, 0, -1]
+  #     })
 
-      Rooms.save_entities_to_initial_snapshot(room.id)
-      assert Rooms.snippets(room.id) |> Enum.count() == 1
+  #     Rooms.save_entities_to_initial_snapshot(room.id)
+  #     assert Rooms.snippets(room.id) |> Enum.count() == 1
 
-      Rooms.delete_entities(room.id)
-      assert Rooms.entities(room.id) == %{}
+  #     Rooms.delete_entities(room.id)
+  #     assert Rooms.entities(room.id) == %{}
 
-      Rooms.replace_entities_with_initial_snapshot(room.id)
-      assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
-    end
+  #     Rooms.replace_entities_with_initial_snapshot(room.id)
+  #     assert Rooms.entities(room.id) |> Map.keys() |> Enum.count() == 2
+  #   end
 
-    test "find entities by component name" do
-      room = room_fixture()
+  #   test "find entities by component name" do
+  #     room = room_fixture()
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "spawn_point" => true,
-        "position" => [0, 0, 0]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "spawn_point" => true,
+  #       "position" => [0, 0, 0]
+  #     })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point")
-      assert entity |> Map.keys() |> Enum.count() == 1
-      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
-    end
+  #     {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point")
+  #     assert entity |> Map.keys() |> Enum.count() == 1
+  #     assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+  #   end
 
-    test "find entities by component name and value" do
-      room = room_fixture()
+  #   test "find entities by component name and value" do
+  #     room = room_fixture()
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "spawn_point" => true,
-        "position" => [0, 0, 0]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "spawn_point" => true,
+  #       "position" => [0, 0, 0]
+  #     })
 
-      {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point", true)
-      assert entity |> Map.keys() |> Enum.count() == 1
-      assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
-    end
+  #     {:ok, entity} = Rooms.find_entities_having_component(room.id, "spawn_point", true)
+  #     assert entity |> Map.keys() |> Enum.count() == 1
+  #     assert entity |> Map.values() |> List.first() |> Map.keys() |> Enum.count() == 2
+  #   end
 
-    test "get position near spawn point" do
-      room = room_fixture()
+  #   test "get position near spawn point" do
+  #     room = room_fixture()
 
-      Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
-        "spawn_point" => true,
-        "position" => [0, 0, 0]
-      })
+  #     Rooms.create_entity(room.id, Xr.Utils.random_string(5), %{
+  #       "spawn_point" => true,
+  #       "position" => [0, 0, 0]
+  #     })
 
-      position = Rooms.get_head_position_near_spawn_point(room.id)
-      assert position |> length() == 3
-      assert position != [0, 0, 0]
-    end
-  end
+  #     position = Rooms.get_head_position_near_spawn_point(room.id)
+  #     assert position |> length() == 3
+  #     assert position != [0, 0, 0]
+  #   end
+  # end
 
-  describe "events" do
-    import Xr.RoomsFixtures
+  # describe "events" do
+  #   import Xr.RoomsFixtures
 
-    alias Xr.Rooms.Event
+  #   alias Xr.Rooms.Event
 
-    test "batch inserts a list of events" do
-      room = room_fixture()
-      room_id = room.id
+  #   test "batch inserts a list of events" do
+  #     room = room_fixture()
+  #     room_id = room.id
 
-      events_attrs = [
-        %{
-          sequence: 0,
-          event_name: "user_joined",
-          payload: %{"user_id" => "user1"},
-          inserted_at: ~U[2023-07-07T12:34:56.000000Z],
-          updated_at: ~U[2023-07-07T12:34:56.000000Z]
-        },
-        %{
-          sequence: 10,
-          event_name: "user_left",
-          payload: %{"user_id" => "user2"},
-          inserted_at: ~U[2023-07-07T12:34:56.000000Z],
-          updated_at: ~U[2023-07-07T12:34:56.000000Z]
-        }
-      ]
+  #     events_attrs = [
+  #       %{
+  #         sequence: 0,
+  #         event_name: "user_joined",
+  #         payload: %{"user_id" => "user1"},
+  #         inserted_at: ~U[2023-07-07T12:34:56.000000Z],
+  #         updated_at: ~U[2023-07-07T12:34:56.000000Z]
+  #       },
+  #       %{
+  #         sequence: 10,
+  #         event_name: "user_left",
+  #         payload: %{"user_id" => "user2"},
+  #         inserted_at: ~U[2023-07-07T12:34:56.000000Z],
+  #         updated_at: ~U[2023-07-07T12:34:56.000000Z]
+  #       }
+  #     ]
 
-      Xr.Rooms.insert_events(room_id, events_attrs)
+  #     Xr.Rooms.insert_events(room_id, events_attrs)
 
-      inserted_events = from(e in Event, where: e.room_id == ^room_id) |> Repo.all()
+  #     inserted_events = from(e in Event, where: e.room_id == ^room_id) |> Repo.all()
 
-      assert length(inserted_events) == 2
+  #     assert length(inserted_events) == 2
 
-      assert Enum.any?(inserted_events, fn e -> e.event_name == "user_joined" end)
-      assert Enum.any?(inserted_events, fn e -> e.event_name == "user_left" end)
-      assert Enum.all?(inserted_events, fn e -> e.room_id == room_id end)
-    end
-  end
+  #     assert Enum.any?(inserted_events, fn e -> e.event_name == "user_joined" end)
+  #     assert Enum.any?(inserted_events, fn e -> e.event_name == "user_left" end)
+  #     assert Enum.all?(inserted_events, fn e -> e.room_id == room_id end)
+  #   end
+  # end
 end

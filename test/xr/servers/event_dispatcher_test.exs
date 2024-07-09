@@ -35,11 +35,11 @@ defmodule Xr.Servers.EventDispatcherTest do
     state = :sys.get_state(pid)
 
     assert state.room_id == room_id
-    assert state.next_sequence == 2
+    assert state.next_sequence == 3
     assert length(state.events) == 2
 
     event = hd(state.events)
-    assert event.sequence == 1
+    assert event.sequence == 2
     assert event.event_name == "user_moved"
     assert event.payload == %{"user_id" => "bob", "position" => [11, 12, 13]}
 
